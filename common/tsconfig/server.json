@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "display": "Server",
+    "extends": "./base.json",
+    "compilerOptions": {
+        "incremental": true,
+        "lib": ["ES2022"],
+        "module": "CommonJS",
+        "target": "ES2022",
+        "strict": false,
+        "pretty": true,
+        "allowUnusedLabels": false,
+        "allowUnreachableCode": false,
+        "exactOptionalPropertyTypes": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUncheckedIndexedAccess": true
+    }
+}

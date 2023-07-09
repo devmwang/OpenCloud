@@ -1,0 +1,18 @@
+{
+    "name": "opencloud",
+    "private": true,
+    "scripts": {
+        "build": "turbo run build",
+        "dev": "turbo run dev",
+        "lint": "turbo run lint",
+        "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    },
+    "devDependencies": {
+        "@turbo/gen": "^1.10.7",
+        "eslint": "^8.44.0",
+        "eslint-config-custom": "workspace:*",
+        "prettier": "^3.0.0",
+        "turbo": "^1.10.7"
+    },
+    "packageManager": "pnpm@7.15.0"
+}

@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// Models
+model User {
+    id                   String         @id @default(cuid())
+    username             String         @unique
+    firstName            String?
+    lastName             String?
+    password             String
+    role                 Role           @default(USER)
+    rootFolderId         String?
+    refreshTokens        RefreshToken[]
+    uploadTokens         UploadToken[]
+    accessControlRuleIds String[]
+    createdAt            DateTime       @default(now())
+
+    @@map("Users")
+}
+
+model AccessRule {
+    id     String           @id @default(cuid())
+    name   String
+    type   AllowDisallow
+    method AccessRuleMethod
+    match  String
+
+    @@map("AccessRules")
+}
+
+model RefreshToken {
+    id        String   @id @default(cuid())
+    user      User     @relation(fields: [userId], references: [id])
+    userId    String
+    valid     Boolean  @default(true)
+    createdAt DateTime @default(now())
+
+    @@map("RefreshTokens")
+}
+
+model UploadToken {
+    id                   String     @id @default(cuid())
+    user                 User       @relation(fields: [userId], references: [id])
+    userId               String
+    description          String?
+    folderId             String
+    fileAccess           FileAccess
+    createdAt            DateTime   @default(now())
+    accessControlRuleIds String[]
+
+    @@map("UploadTokens")
+}
+
+model Folder {
+    id             String     @id @default(cuid())
+    folderName     String
+    ownerId        String
+    type           FolderType @default(STANDARD)
+    parentFolder   Folder?    @relation("NestedFolder", fields: [parentFolderId], references: [id])
+    parentFolderId String?
+    childFolders   Folder[]   @relation("NestedFolder")
+    childFiles     File[]
+    createdAt      DateTime   @default(now())
+
+    @@map("Folders")
+}
+
+model File {
+    id           String     @id @default(cuid())
+    fileName     String
+    fileSize     Int?
+    fileType     String
+    ownerId      String
+    fileAccess   FileAccess @default(PRIVATE)
+    parentFolder Folder     @relation(fields: [parentId], references: [id])
+    parentId     String
+    createdAt    DateTime   @default(now())
+
+    @@map("Files")
+}
+
+// Enums
+enum AllowDisallow {
+    ALLOW
+    DISALLOW
+}
+
+enum AccessRuleMethod {
+    IP_ADDRESS
+}
+
+enum Role {
+    ADMIN
+    USER
+}
+
+enum FolderType {
+    ROOT
+    STANDARD
+}
+
+enum FileAccess {
+    PRIVATE
+    PROTECTED
+    PUBLIC
+}
