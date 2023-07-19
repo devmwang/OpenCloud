@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, FileAccess } from "@prisma/client";
 import fs from "fs";
 import path from "path";
 import util from "util";
@@ -91,7 +91,7 @@ async function createFileDetails(
     fileType: string,
     ownerId: string,
     parentFolderId: string,
-    fileAccess: "PRIVATE" | "PROTECTED" | "PUBLIC",
+    fileAccess: FileAccess,
 ) {
     // Create file in db
     const fileDetails = await prisma.file.create({
