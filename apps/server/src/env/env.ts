@@ -5,6 +5,7 @@ export const env = createEnv({
     server: {
         AUTH_SECRET: z.string(),
         DATABASE_URL: z.string().url(),
+        FILE_STORE_PATH: z.string(),
     },
     clientPrefix: "",
     client: {},
