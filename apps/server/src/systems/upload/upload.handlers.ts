@@ -111,7 +111,7 @@ async function createFileDetails(
 
 async function coreUploadHandler(prisma: PrismaClient, ownerId: string, fileId: string, file: BusboyFileStream) {
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
-    const filePath = folderPath + "/" + fileId;
+    const filePath = path.join(folderPath, fileId);
 
     // Verify correct folder structure exists, otherwise create it
     if (!fs.existsSync(folderPath)) {
