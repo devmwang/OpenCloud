@@ -12,6 +12,8 @@ import FastifyMultipart from "@fastify/multipart";
 import FastifyStatic from "@fastify/static";
 import path from "path";
 
+import { env } from "@/env/env";
+
 import prismaPlugin from "@/utils/prisma";
 import authenticationPlugin from "@/utils/authentication";
 import accessControlPlugin from "@/utils/access-control";
@@ -54,7 +56,7 @@ void server.register(FastifyMultipart, {
 });
 
 void server.register(FastifyStatic, {
-    root: path.join(__dirname, "../", "FileStore"),
+    root: path.resolve(env.FILE_STORE_PATH),
     prefix: "/FileStore/",
 });
 

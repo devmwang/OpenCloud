@@ -7,6 +7,8 @@ import path from "path";
 import util from "util";
 import { pipeline } from "stream";
 
+import { env } from "@/env/env";
+
 import type { UploadFileQuerystring } from "./upload.schemas";
 
 const pump = util.promisify(pipeline);
@@ -108,7 +110,7 @@ async function createFileDetails(
 }
 
 async function coreUploadHandler(prisma: PrismaClient, ownerId: string, fileId: string, file: BusboyFileStream) {
-    const folderPath = "./FileStore/" + ownerId;
+    const folderPath = env.FILE_STORE_PATH + ownerId;
     const filePath = folderPath + "/" + fileId;
 
     // Verify correct folder structure exists, otherwise create it

@@ -7,6 +7,8 @@ import path from "path";
 import util from "util";
 import { pipeline } from "stream";
 
+import { env } from "@/env/env";
+
 import type { GetFileParams, DeleteFileQuerystring } from "./fs.schemas";
 
 const pump = util.promisify(pipeline);
