@@ -3,12 +3,13 @@
     "private": true,
     "scripts": {
         "build": "turbo run build",
-        "dev": "turbo run dev",
+        "dev": "dotenv -- turbo run dev",
         "lint": "turbo run lint",
         "format": "prettier --write \"**/*.{ts,tsx,md}\""
     },
     "devDependencies": {
         "@turbo/gen": "^1.10.7",
+        "dotenv-cli": "^7.2.1",
         "eslint": "^8.44.0",
         "eslint-config-custom": "workspace:*",
         "prettier": "^3.0.0",
