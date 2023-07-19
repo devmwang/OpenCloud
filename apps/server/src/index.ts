@@ -1,3 +1,7 @@
+// Constants
+export const SERVER_HOST = "0.0.0.0";
+export const SERVER_PORT = 8080;
+
 // Environment variables must be loaded before anything else
 import * as dotenv from "dotenv";
 dotenv.config();
@@ -14,6 +18,8 @@ import accessControlPlugin from "@/utils/access-control";
 
 import authRouter from "@/systems/auth/auth.routes";
 import { authSchemas } from "@/systems/auth/auth.schemas";
+import uploadRouter from "@/systems/upload/upload.routes";
+import { uploadSchemas } from "@/systems/upload/upload.schemas";
 import fileSystemRouter from "@/systems/fs/fs.routes";
 import { fsSchemas } from "@/systems/fs/fs.schemas";
 import folderRouter from "@/systems/folder/folder.routes";
@@ -43,7 +49,7 @@ void server.register(FastifyRateLimit, {
 
 void server.register(FastifyMultipart, {
     limits: {
-        fileSize: 10 * 1024 * 1024 * 1024,
+        fileSize: 10 * 1024 * 1024 * 1024, // 10 GB
     },
 });
 
@@ -53,12 +59,13 @@ void server.register(FastifyStatic, {
 });
 
 // Register Route Schemas
-for (const schema of [...authSchemas, ...fsSchemas, ...folderSchemas]) {
+for (const schema of [...authSchemas, ...uploadSchemas, ...fsSchemas, ...folderSchemas]) {
     server.addSchema(schema);
 }
 
 // Register Routes
 void server.register(authRouter, { prefix: "/v1/auth" });
+void server.register(uploadRouter, { prefix: "/v1/upload" });
 void server.register(fileSystemRouter, { prefix: "/v1/files" });
 void server.register(folderRouter, { prefix: "/v1/folder" });
 
@@ -69,9 +76,7 @@ server.get("/v1/health", async () => {
 
 void (async () => {
     try {
-        await server.listen({ port: 8080, host: "0.0.0.0" });
-
-        console.log("Server listening at http://localhost:8080");
+        await server.listen({ host: SERVER_HOST, port: SERVER_PORT });
     } catch (err) {
         server.log.error(err);
         process.exit(1);
