@@ -3,12 +3,12 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "nodemon",
+        "dev": "tsup src/index.ts --format esm --watch --onSuccess \"node dist/index.mjs\"",
         "db:push": "prisma db push",
         "db:generate": "prisma generate",
         "db:migrate": "prisma migrate dev",
         "db:validate": "prisma validate",
-        "build": "rimraf dist && prisma db push && prisma generate && tsc --outDir dist && tsc-alias",
+        "build": "rimraf dist && prisma db push && prisma generate && tsup src/index.ts --format esm",
         "clean": "rimraf dist"
     },
     "nodemonConfig": {
@@ -43,18 +43,14 @@
         "@types/prettier": "^2.7.3",
         "@typescript-eslint/eslint-plugin": "^5.59.8",
         "@typescript-eslint/parser": "^5.59.8",
-        "chokidar": "^3.5.3",
-        "concurrently": "^8.1.0",
         "eslint": "^8.41.0",
         "eslint-config-custom": "workspace:*",
-        "nodemon": "^2.0.22",
         "prettier": "^2.8.8",
         "prisma": "^5.0.0",
         "rimraf": "^5.0.1",
-        "ts-node": "^10.9.1",
-        "tsc-alias": "^1.8.6",
         "tsconfig": "workspace:*",
         "tsconfig-paths": "^4.2.0",
+        "tsup": "^7.1.0",
         "typescript": "^5.1.3"
     }
 }
