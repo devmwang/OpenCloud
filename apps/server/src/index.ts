@@ -1,9 +1,5 @@
-// Constants
 export const SERVER_HOST = "0.0.0.0";
 export const SERVER_PORT = 8080;
-
-// Environment variables must be loaded before anything else
-import "dotenv/config";
 
 import Fastify from "fastify";
 import FastifyRateLimit from "@fastify/rate-limit";
