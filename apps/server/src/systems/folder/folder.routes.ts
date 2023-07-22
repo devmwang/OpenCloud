@@ -8,7 +8,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/get-details",
-        onRequest: [server.authenticate],
+        // onRequest: [server.authenticate],
         schema: {
             querystring: $ref("getDetailsQuerySchema"),
             response: { 200: $ref("getDetailsResponseSchema") },
@@ -19,7 +19,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/get-contents",
-        onRequest: [server.authenticate],
+        // onRequest: [server.authenticate],
         schema: {
             querystring: $ref("getContentsQuerySchema"),
             response: { 200: $ref("getContentsResponseSchema") },

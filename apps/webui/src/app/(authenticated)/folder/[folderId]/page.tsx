@@ -22,7 +22,7 @@ export default async function FolderView({ params }: { params: { folderId: strin
 }
 
 async function getFolderDetails(folderId: string) {
-    const response = await fetch(`${env.OPENCLOUD_SERVER_URL}/v1/folder/get-details?folderId=${folderId}`, {
+    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-details?folderId=${folderId}`, {
         cache: "no-store",
     });
 
@@ -40,9 +40,12 @@ async function getFolderDetails(folderId: string) {
 }
 
 async function getFolderContents(folderId: string) {
-    const response = await fetch(`${env.OPENCLOUD_SERVER_URL}/v1/folder/get-contents?folderId=${folderId}`, {
-        cache: "no-store",
-    });
+    const response = await fetch(
+        `${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-contents?folderId=${folderId}`,
+        {
+            cache: "no-store",
+        },
+    );
 
     if (!response.ok) {
         throw new Error("Failed to fetch data");
