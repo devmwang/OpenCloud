@@ -6,8 +6,6 @@ export function Breadcrumb({
 }: {
     folderDetails: { id: string; name: string; type: string; hierarchy: { id: string; name: string; type: string }[] };
 }) {
-    console.log(folderDetails.hierarchy);
-
     return (
         <div className="-mx-3 flex items-center text-3xl font-semibold">
             {folderDetails.hierarchy.reverse().map((folder) => {

@@ -9,7 +9,8 @@
         "db:migrate": "prisma migrate dev",
         "db:validate": "prisma validate",
         "build": "rimraf dist && prisma db push && prisma generate && tsup src/index.ts --format esm",
-        "clean": "rimraf dist"
+        "clean": "rimraf dist",
+        "start": "node ./dist/index.mjs"
     },
     "nodemonConfig": {
         "ignore": [
