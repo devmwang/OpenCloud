@@ -7,7 +7,6 @@
         "lib": ["ES2022"],
         "module": "CommonJS",
         "target": "ES2022",
-        "strict": false,
         "pretty": true,
         "allowUnusedLabels": false,
         "allowUnreachableCode": false,
