@@ -80,7 +80,7 @@ export async function getThumbnailHandler(
     void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
 
     const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
-    const thumbnailBuffer = await sharp(fullFilePath).resize(250, 200).toBuffer();
+    const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).toBuffer();
 
     return reply.send(thumbnailBuffer);
 }
