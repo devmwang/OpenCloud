@@ -2,7 +2,7 @@
 import type { FastifyInstance } from "fastify";
 
 import { $ref } from "./fs.schemas";
-import { getFileHandler, deleteFileHandler } from "./fs.handlers";
+import { getFileHandler, getThumbnailHandler, deleteFileHandler } from "./fs.handlers";
 
 async function fileSystemRouter(server: FastifyInstance) {
     server.route({
@@ -13,6 +13,16 @@ async function fileSystemRouter(server: FastifyInstance) {
             params: $ref("getFileParamsSchema"),
         },
         handler: getFileHandler,
+    });
+
+    server.route({
+        method: "GET",
+        url: "/get-thumbnail/:fileId",
+        onRequest: [server.optionalAuthenticate],
+        schema: {
+            params: $ref("getThumbnailParamsSchema"),
+        },
+        handler: getThumbnailHandler,
     });
 
     server.route({

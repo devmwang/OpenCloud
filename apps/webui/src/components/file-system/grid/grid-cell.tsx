@@ -1,7 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Folder, File } from "lucide-react";
+
+import { env } from "@/env/env.mjs";
 
 export function FolderGridCell({ folderId, folderName }: { folderId: string; folderName: string }) {
     const router = useRouter();
@@ -45,6 +48,15 @@ export function FileGridCell({ fileId, fileName }: { fileId: string; fileName: s
                         <File className="h-6" />
                     </div>
                     <div className="truncate">{fileName}</div>
+                </div>
+                <div className="px-2.5 pb-2">
+                    <Image
+                        className="h-auto w-full rounded-md"
+                        src={`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get-thumbnail/${fileId}`}
+                        width={300}
+                        height={200}
+                        alt="File Preview Thumbnail"
+                    />
                 </div>
             </div>
         </div>
