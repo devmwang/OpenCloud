@@ -9,7 +9,7 @@ export default function Navbar() {
         <>
             <div className="h-full w-full bg-green-500/80">
                 {/* Main Subsections */}
-                <div className="px-4 py-4 text-left text-2xl font-normal text-zinc-950 dark:text-zinc-50">
+                <div className="px-4 py-4 text-left text-2xl font-normal">
                     <div className="flex flex-col">
                         <NavbarLinkComponent LinkDestination="/home" SectionTitle="My Files">
                             <FolderClosed className="mr-4 mt-1 h-6" />

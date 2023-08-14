@@ -11,7 +11,7 @@ export default async function FolderView({ params }: { params: { folderId: strin
     const [folderDetails, folderContents] = await Promise.all([folderDetailsPromise, folderContentsPromise]);
 
     return (
-        <div className="h-full w-full px-6 py-4 text-zinc-950 dark:text-zinc-50">
+        <div className="h-full w-full px-6 py-4">
             <div className="mb-6">
                 <Breadcrumb folderDetails={folderDetails.data} />
             </div>

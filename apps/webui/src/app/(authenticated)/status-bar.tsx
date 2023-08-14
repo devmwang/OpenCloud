@@ -47,7 +47,7 @@ export default function StatusBar() {
     return (
         <>
             <div className="h-full w-full bg-blue-500/80">
-                <div className="flex h-full flex-row items-center justify-between text-zinc-950 dark:text-zinc-50">
+                <div className="flex h-full flex-row items-center justify-between">
                     {/* Site Title */}
                     <div className="w-width-sidebar text-center">
                         <Link href="/home" className="block">

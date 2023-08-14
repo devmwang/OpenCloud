@@ -14,9 +14,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en">
-            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-                {children}
-            </ThemeProvider>
+            <body className="min-h-screen bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+                <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+                    {children}
+                </ThemeProvider>
+            </body>
         </html>
     );
 }
