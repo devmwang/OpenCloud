@@ -7,7 +7,7 @@ const userBase = {
             required_error: "Username is required",
             invalid_type_error: "Username must be a string",
         })
-        .min(3, { message: "Must be 1 or more characters long" }),
+        .min(3, { message: "Username must be 3 or more characters long" }),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
 };
@@ -19,7 +19,7 @@ const createUserSchema = z.object({
             required_error: "Password is required",
             invalid_type_error: "Password must be a string",
         })
-        .min(5, { message: "Must be 5 or more characters long" }),
+        .min(8, { message: "Password must be 8 or more characters long" }),
 });
 
 const userInfoResponseSchema = z.object({
@@ -30,14 +30,18 @@ const userInfoResponseSchema = z.object({
 });
 
 const loginSchema = z.object({
-    username: z.string({
-        required_error: "Username is required",
-        invalid_type_error: "Username must be a string",
-    }),
-    password: z.string({
-        required_error: "Password is required",
-        invalid_type_error: "Password must be a string",
-    }),
+    username: z
+        .string({
+            required_error: "Username is required",
+            invalid_type_error: "Username must be a string",
+        })
+        .min(3),
+    password: z
+        .string({
+            required_error: "Password is required",
+            invalid_type_error: "Password must be a string",
+        })
+        .min(8),
 });
 
 const refreshSchema = z.object({
