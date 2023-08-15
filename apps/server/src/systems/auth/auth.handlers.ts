@@ -90,6 +90,7 @@ export async function loginHandler(
         // Set Access and Refresh Token Cookies
         reply.setCookie("AccessToken", this.jwt.sign({ id: user.id, type: "AccessToken" }, { expiresIn: "15m" }), {
             httpOnly: true,
+            secure: true,
             expires: new Date(Date.now() + ms("15m")),
             path: "/",
         });
@@ -98,8 +99,9 @@ export async function loginHandler(
             this.jwt.sign({ id: refreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
             {
                 httpOnly: true,
+                secure: true,
                 expires: new Date(Date.now() + ms("7d")),
-                path: "/v1/auth/refresh",
+                path: "/",
             },
         );
 
