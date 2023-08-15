@@ -91,6 +91,7 @@ export async function loginHandler(
         reply.setCookie("AccessToken", this.jwt.sign({ id: user.id, type: "AccessToken" }, { expiresIn: "15m" }), {
             httpOnly: true,
             secure: true,
+            sameSite: "lax",
             expires: new Date(Date.now() + ms("15m")),
             path: "/",
         });
@@ -100,6 +101,7 @@ export async function loginHandler(
             {
                 httpOnly: true,
                 secure: true,
+                sameSite: "lax",
                 expires: new Date(Date.now() + ms("7d")),
                 path: "/",
             },

@@ -43,6 +43,7 @@ void server.register(accessControlPlugin);
 
 void server.register(FastifyCORS, {
     origin: [/localhost(?::\d{1,5})?/, /127\.0\.0\.1(?::\d{1,5})?/, env.OPENCLOUD_WEBUI_URL],
+    credentials: true,
 });
 
 void server.register(FastifyCookie, {
