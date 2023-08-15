@@ -3,6 +3,7 @@ export const SERVER_PORT = 8080;
 
 import Fastify from "fastify";
 import FastifyCORS from "@fastify/cors";
+import FastifyCookie from "@fastify/cookie";
 import FastifyRateLimit from "@fastify/rate-limit";
 import FastifyMultipart from "@fastify/multipart";
 import FastifyStatic from "@fastify/static";
@@ -42,6 +43,11 @@ void server.register(accessControlPlugin);
 
 void server.register(FastifyCORS, {
     origin: [/localhost(?::\d{1,5})?/, env.OPENCLOUD_WEBUI_URL],
+});
+
+void server.register(FastifyCookie, {
+    secret: env.AUTH_SECRET,
+    parseOptions: {},
 });
 
 void server.register(FastifyRateLimit, {

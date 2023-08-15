@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { FastifyJWT } from "@fastify/jwt";
 import * as argon2 from "argon2";
+import ms from "ms";
 
 import type {
     CreateUserInput,
@@ -86,10 +87,26 @@ export async function loginHandler(
             },
         });
 
-        // Return access credentials
+        // Set Access and Refresh Token Cookies
+        reply.setCookie("AccessToken", this.jwt.sign({ id: user.id, type: "AccessToken" }, { expiresIn: "15m" }), {
+            httpOnly: true,
+            expires: new Date(Date.now() + ms("15m")),
+        });
+        reply.setCookie(
+            "RefreshToken",
+            this.jwt.sign({ id: refreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+            {
+                httpOnly: true,
+                expires: new Date(Date.now() + ms("7d")),
+            },
+        );
+
+        // Return user details
         return {
-            accessToken: this.jwt.sign({ id: user.id, type: "AccessToken" }, { expiresIn: "15m" }),
-            refreshToken: this.jwt.sign({ id: refreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+            id: user.id,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
             rootFolderId: user.rootFolderId,
         };
     }
