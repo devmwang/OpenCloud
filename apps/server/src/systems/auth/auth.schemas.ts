@@ -51,16 +51,9 @@ const refreshSchema = z.object({
     }),
 });
 
-const credentialsResponseSchema = z.object({
-    accessToken: z.string(),
-    refreshToken: z.string(),
+const loginResponseSchema = z.object({
+    rootFolderId: z.string(),
 });
-
-const loginResponseSchema = credentialsResponseSchema.merge(
-    z.object({
-        rootFolderId: z.string(),
-    }),
-);
 
 const createAccessRuleSchema = z.object({
     name: z.string({
@@ -100,7 +93,6 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         userInfoResponseSchema,
         loginSchema,
         refreshSchema,
-        credentialsResponseSchema,
         loginResponseSchema,
         createAccessRuleSchema,
         createUploadTokenSchema,

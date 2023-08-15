@@ -37,7 +37,6 @@ async function authRouter(server: FastifyInstance) {
         url: "/refresh",
         schema: {
             body: $ref("refreshSchema"),
-            response: { 200: $ref("credentialsResponseSchema") },
         },
         handler: refreshHandler,
     });
