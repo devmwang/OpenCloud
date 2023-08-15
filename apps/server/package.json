@@ -25,6 +25,7 @@
     },
     "dependencies": {
         "@fastify/busboy": "^1.2.1",
+        "@fastify/cors": "^8.3.0",
         "@fastify/jwt": "^7.0.0",
         "@fastify/multipart": "^7.6.0",
         "@fastify/rate-limit": "^8.0.0",
