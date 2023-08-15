@@ -1,12 +1,22 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
 
+import { env } from "@/env/env.mjs";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 export default function LoginPage() {
+    const [attemptingLogin, setAttemptingLogin] = useState(false);
+    const [loginError, setLoginError] = useState("");
+
+    const router = useRouter();
+
     const loginForm = useForm<z.infer<typeof loginSchema>>({
         resolver: zodResolver(loginSchema),
         defaultValues: {
@@ -16,12 +26,33 @@ export default function LoginPage() {
     });
 
     function submitLoginForm(values: z.infer<typeof loginSchema>) {
-        console.log(values);
+        setAttemptingLogin(true);
+
+        axios
+            .post(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/login`, values, {
+                withCredentials: true,
+            })
+            .then((response) => {
+                if (response.status === 200) {
+                    router.push(`/home`);
+                } else {
+                    setAttemptingLogin(false);
+                }
+            })
+            .catch((error) => {
+                setAttemptingLogin(false);
+                setLoginError(error.response.data.message);
+            });
     }
 
     return (
         <div className="relative flex h-full min-h-screen w-full flex-col items-center justify-center ">
-            <div className="mb-6 text-3xl font-bold">Log in to OpenCloud</div>
+            <div className="mb-4 text-3xl font-bold">Log in to OpenCloud</div>
+            {loginError && (
+                <div className="mb-2">
+                    <span className="text-lg font-medium text-red-500 dark:text-red-800">{loginError}</span>
+                </div>
+            )}
             <div className="w-full max-w-xs">
                 <Form {...loginForm}>
                     <form onSubmit={loginForm.handleSubmit(submitLoginForm)} className="space-y-3.5">
@@ -62,9 +93,11 @@ export default function LoginPage() {
                             )}
                         />
                         <button
+                            disabled={attemptingLogin}
                             type="submit"
-                            className="flex w-full items-center justify-center rounded-md bg-zinc-900 px-2 py-2 hover:bg-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                            className="flex w-full items-center justify-center rounded-md bg-zinc-900 px-2 py-2 hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-75 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                         >
+                            {attemptingLogin && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             <span className="whitespace-nowrap text-xl font-semibold text-zinc-50">Login</span>
                         </button>
                     </form>
