@@ -27,6 +27,10 @@ declare module "@fastify/jwt" {
 const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
     void server.register(FastifyJWT, {
         secret: env.AUTH_SECRET,
+        cookie: {
+            cookieName: "AccessToken",
+            signed: false,
+        },
     });
 
     // Make JWT verification/decode available through the fastify server instance: server.authentication
