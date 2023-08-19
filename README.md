@@ -18,7 +18,7 @@ OpenCloud user-facing clients communicate with the backend server over the OpenC
 
 ### Authentication Mechanism
 
-OpenCloud uses a token-based authentication system. On login, this server return an access-token and refresh-token. The access-token only provides access to protected resources for 15 minutes. After the access-token expires, the client will attempt to fetch a new token by using the refresh-token, which has a much longer lifespan. To prevent the possibility of account compromise due to a stolen refresh-token, this system implements refresh-token rotation and automatic refresh-token reuse detection. This mechanism is outlined in [this blog post](https://auth0.com/blog/refresh-tokens-what-are-they-and-when-to-use-them/) by the team at Auth0.
+OpenCloud uses a token-based authentication system. On login, this server return an access-token and refresh-token. The access-token only provides access to protected resources for 15 minutes. Just prior to access-token expiration, the client will preemptively fetch a new token using the refresh-token, which has a 1 week lifespan. To protect the account in the event of a compromised refresh-token, this system implements refresh-token rotation and automatic refresh-token reuse detection. This mechanism is outlined in [this blog post](https://auth0.com/blog/refresh-tokens-what-are-they-and-when-to-use-them/) by the team at Auth0.
 
 ## Legal
 
