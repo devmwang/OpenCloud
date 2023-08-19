@@ -120,6 +120,39 @@ export async function loginHandler(
     return reply.code(401).send({ message: "Invalid username or password" });
 }
 
+export async function sessionHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    if (!request.cookies["AccessToken"]) {
+        return reply.code(401).send({ message: "Invalid session" });
+    }
+
+    const accessToken = request.cookies["AccessToken"];
+
+    const decodedToken: FastifyJWT["decoded"] | null = this.jwt.decode(accessToken);
+
+    if (!decodedToken) {
+        return reply.code(500).send({ message: "Invalid session" });
+    }
+
+    const expires = new Date(decodedToken.exp * 1000);
+
+    const user = await this.prisma.user.findUnique({ where: { id: request.user.id } });
+
+    if (!user) {
+        return reply.code(500).send({ message: "Invalid session" });
+    }
+
+    return reply.code(200).send({
+        user: {
+            id: user.id,
+            username: user.username,
+            rootFolderId: user.rootFolderId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+        },
+        expires: expires,
+    });
+}
+
 export async function refreshHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Body: RefreshInput }>,

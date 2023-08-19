@@ -44,15 +44,26 @@ const loginSchema = z.object({
         .min(8),
 });
 
+const loginResponseSchema = z.object({
+    rootFolderId: z.string(),
+});
+
+const sessionResponseSchema = z.object({
+    user: z.object({
+        id: z.string(),
+        username: z.string(),
+        rootFolderId: z.string(),
+        firstName: z.string().nullable(),
+        lastName: z.string().nullable(),
+    }),
+    expires: z.string().datetime(),
+});
+
 const refreshSchema = z.object({
     refreshToken: z.string({
         required_error: "Refresh token is required",
         invalid_type_error: "Refresh token must be a string",
     }),
-});
-
-const loginResponseSchema = z.object({
-    rootFolderId: z.string(),
 });
 
 const createAccessRuleSchema = z.object({
@@ -92,8 +103,9 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         createUserSchema,
         userInfoResponseSchema,
         loginSchema,
-        refreshSchema,
         loginResponseSchema,
+        sessionResponseSchema,
+        refreshSchema,
         createAccessRuleSchema,
         createUploadTokenSchema,
         createUploadTokenResponseSchema,

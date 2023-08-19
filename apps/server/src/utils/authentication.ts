@@ -18,6 +18,12 @@ declare module "@fastify/jwt" {
             id: string;
             type: "AccessToken" | "RefreshToken" | "UploadToken";
         };
+        decoded: {
+            id: string;
+            type: "AccessToken" | "RefreshToken" | "UploadToken";
+            iat: number;
+            exp: number;
+        }
         user: {
             id: string;
         };
@@ -36,7 +42,7 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
     // Make JWT verification/decode available through the fastify server instance: server.authentication
     server.decorate("authenticate", async function (request: FastifyRequest, reply: FastifyReply) {
         try {
-            await request.jwtVerify();
+            await request.jwtVerify({onlyCookie: true});
             request.authenticated = true;
         } catch (err) {
             void reply.send(err);
@@ -47,7 +53,7 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
     // Attempts to verify user but does not stop if verification fails (allows routes with optional authentication)
     server.decorate("optionalAuthenticate", async function (request: FastifyRequest) {
         try {
-            await request.jwtVerify();
+            await request.jwtVerify({onlyCookie: true});
             request.authenticated = true;
         } catch (err) {
             request.authenticated = false;
