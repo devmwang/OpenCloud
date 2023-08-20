@@ -59,13 +59,6 @@ const sessionResponseSchema = z.object({
     expires: z.string().datetime(),
 });
 
-const refreshSchema = z.object({
-    refreshToken: z.string({
-        required_error: "Refresh token is required",
-        invalid_type_error: "Refresh token must be a string",
-    }),
-});
-
 const createAccessRuleSchema = z.object({
     name: z.string({
         required_error: "Name is required",
@@ -94,7 +87,6 @@ const createUploadTokenResponseSchema = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
-export type RefreshInput = z.infer<typeof refreshSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenSchema>;
 
@@ -105,7 +97,6 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         loginSchema,
         loginResponseSchema,
         sessionResponseSchema,
-        refreshSchema,
         createAccessRuleSchema,
         createUploadTokenSchema,
         createUploadTokenResponseSchema,

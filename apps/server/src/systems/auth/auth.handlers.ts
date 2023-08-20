@@ -3,13 +3,7 @@ import type { FastifyJWT } from "@fastify/jwt";
 import * as argon2 from "argon2";
 import ms from "ms";
 
-import type {
-    CreateUserInput,
-    LoginInput,
-    RefreshInput,
-    CreateAccessRuleInput,
-    CreateUploadTokenInput,
-} from "./auth.schemas";
+import type { CreateUserInput, LoginInput, CreateAccessRuleInput, CreateUploadTokenInput } from "./auth.schemas";
 
 export async function createUserHandler(
     this: FastifyInstance,
@@ -153,12 +147,14 @@ export async function sessionHandler(this: FastifyInstance, request: FastifyRequ
     });
 }
 
-export async function refreshHandler(
-    this: FastifyInstance,
-    request: FastifyRequest<{ Body: RefreshInput }>,
-    reply: FastifyReply,
-) {
-    const tokenPayload: FastifyJWT["payload"] = this.jwt.verify(request.body.refreshToken);
+export async function refreshHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    if (!request.cookies["RefreshToken"]) {
+        return reply.code(401).send({ message: "Invalid refresh token" });
+    }
+
+    const refreshToken = request.cookies["RefreshToken"];
+
+    const tokenPayload: FastifyJWT["decoded"] = this.jwt.verify(refreshToken);
 
     // Get current token from db and verify that it is valid
     const currentRefreshToken = await this.prisma.refreshToken.findUnique({
@@ -201,10 +197,27 @@ export async function refreshHandler(
         },
     });
 
-    return reply.code(200).send({
-        accessToken: this.jwt.sign({ id: userId, type: "AccessToken" }, { expiresIn: "15m" }),
-        refreshToken: this.jwt.sign({ id: newRefreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+    // Set Access and Refresh Token Cookies
+    reply.setCookie("AccessToken", this.jwt.sign({ id: userId, type: "AccessToken" }, { expiresIn: "15m" }), {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        expires: new Date(Date.now() + ms("15m")),
+        path: "/",
     });
+    reply.setCookie(
+        "RefreshToken",
+        this.jwt.sign({ id: newRefreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+        {
+            httpOnly: true,
+            secure: true,
+            sameSite: "lax",
+            expires: new Date(Date.now() + ms("7d")),
+            path: "/",
+        },
+    );
+
+    return reply.code(200).send({ message: "Success" });
 }
 
 export async function infoHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {

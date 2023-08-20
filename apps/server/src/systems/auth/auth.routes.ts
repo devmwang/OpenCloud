@@ -44,11 +44,8 @@ async function authRouter(server: FastifyInstance) {
     });
 
     server.route({
-        method: "POST",
+        method: "GET",
         url: "/refresh",
-        schema: {
-            body: $ref("refreshSchema"),
-        },
         handler: refreshHandler,
     });
 
