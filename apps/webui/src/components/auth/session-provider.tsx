@@ -30,7 +30,6 @@ export const SessionContext = createContext<SessionContextType>({
 });
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-    const [initialized, setInitialized] = useState(false);
     const [session, setSession] = useState<SessionInterface | undefined>(undefined);
 
     const contextValue = useMemo(
@@ -69,23 +68,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     // Check for existing session in localStorage
     useEffect(() => {
-        if (!initialized) {
-            const accessTokenExpiresString = localStorage.getItem("accessTokenExpires");
-            const refreshTokenExpiresString = localStorage.getItem("refreshTokenExpires");
+        const accessTokenExpiresString = localStorage.getItem("accessTokenExpires");
+        const refreshTokenExpiresString = localStorage.getItem("refreshTokenExpires");
 
-            // Verify both token expiration times exist in localStorage
-            if (!!accessTokenExpiresString && !!refreshTokenExpiresString) {
-                const accessTokenExpires = new Date(accessTokenExpiresString);
-                const refreshTokenExpires = new Date(refreshTokenExpiresString);
+        // Verify both token expiration times exist in localStorage
+        if (!!accessTokenExpiresString && !!refreshTokenExpiresString) {
+            const accessTokenExpires = new Date(accessTokenExpiresString);
+            const refreshTokenExpires = new Date(refreshTokenExpiresString);
 
-                // Verify both token expiration times are in the future
-                if (accessTokenExpires > new Date() && refreshTokenExpires > new Date()) {
-                    // Get session details from server and set session
-                    contextValue.update();
-                }
+            // Verify both token expiration times are in the future
+            if (accessTokenExpires > new Date() && refreshTokenExpires > new Date()) {
+                // Get session details from server and set session
+                contextValue.update();
+                console.log("Session restored from localStorage");
             }
         }
-    }, [setInitialized]);
+    }, []);
 
     // Token refresh system
     useEffect(() => {
