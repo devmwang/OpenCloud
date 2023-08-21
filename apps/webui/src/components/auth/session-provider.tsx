@@ -87,7 +87,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
                     // Get session details from server and set session
                     contextValue.update();
-                    console.log("Session restored from localStorage");
                 }
             }
         }
