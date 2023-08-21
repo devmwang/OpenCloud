@@ -22,13 +22,6 @@ const createUserSchema = z.object({
         .min(8, { message: "Password must be 8 or more characters long" }),
 });
 
-const userInfoResponseSchema = z.object({
-    id: z.string(),
-    ...userBase,
-    role: z.enum(["ADMIN", "USER"]),
-    rootFolderId: z.string(),
-});
-
 const loginSchema = z.object({
     username: z
         .string({
@@ -58,6 +51,18 @@ const sessionResponseSchema = z.object({
     }),
     accessTokenExpires: z.string().datetime(),
     refreshTokenExpires: z.string().datetime(),
+});
+
+const refreshResponseSchema = z.object({
+    accessTokenExpiration: z.string().datetime(),
+    refreshTokenExpiration: z.string().datetime(),
+});
+
+const userInfoResponseSchema = z.object({
+    id: z.string(),
+    ...userBase,
+    role: z.enum(["ADMIN", "USER"]),
+    rootFolderId: z.string(),
 });
 
 const createAccessRuleSchema = z.object({
@@ -94,10 +99,11 @@ export type CreateUploadTokenInput = z.infer<typeof createUploadTokenSchema>;
 export const { schemas: authSchemas, $ref } = buildJsonSchemas(
     {
         createUserSchema,
-        userInfoResponseSchema,
         loginSchema,
         loginResponseSchema,
         sessionResponseSchema,
+        refreshResponseSchema,
+        userInfoResponseSchema,
         createAccessRuleSchema,
         createUploadTokenSchema,
         createUploadTokenResponseSchema,

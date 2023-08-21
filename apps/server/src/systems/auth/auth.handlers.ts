@@ -102,13 +102,13 @@ export async function loginHandler(
         );
 
         // Return user details
-        return {
+        return reply.code(200).send({
             id: user.id,
             username: user.username,
             firstName: user.firstName,
             lastName: user.lastName,
             rootFolderId: user.rootFolderId,
-        };
+        });
     }
 
     return reply.code(401).send({ message: "Invalid username or password" });
@@ -201,12 +201,15 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
         },
     });
 
+    const accessTokenExpires = new Date(Date.now() + ms("15m"));
+    const refreshTokenExpires = new Date(Date.now() + ms("7d"));
+
     // Set Access and Refresh Token Cookies
     reply.setCookie("AccessToken", this.jwt.sign({ id: userId, type: "AccessToken" }, { expiresIn: "15m" }), {
         httpOnly: true,
         secure: true,
         sameSite: "lax",
-        expires: new Date(Date.now() + ms("15m")),
+        expires: accessTokenExpires,
         path: "/",
     });
     reply.setCookie(
@@ -216,12 +219,15 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
             httpOnly: true,
             secure: true,
             sameSite: "lax",
-            expires: new Date(Date.now() + ms("7d")),
+            expires: refreshTokenExpires,
             path: "/",
         },
     );
 
-    return reply.code(200).send({ message: "Success" });
+    return reply.code(200).send({
+        accessTokenExpires: accessTokenExpires,
+        refreshTokenExpires: refreshTokenExpires,
+    });
 }
 
 export async function infoHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
