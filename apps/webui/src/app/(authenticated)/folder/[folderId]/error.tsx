@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export default function Error() {
     return (
-        <div className="px-6 py-4 text-lg text-white">
+        <div className="px-6 py-4 text-lg">
             Failed to load data for this folder.{" "}
             <button
                 onClick={() => {

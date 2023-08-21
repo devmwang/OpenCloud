@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { cookies } from "next/headers";
+
 import { env } from "@/env/env.mjs";
 import { Breadcrumb } from "@/components/file-system/breadcrumb";
 import { GridLayout } from "@/components/file-system/grid/core-layout";
@@ -11,7 +13,7 @@ export default async function FolderView({ params }: { params: { folderId: strin
     const [folderDetails, folderContents] = await Promise.all([folderDetailsPromise, folderContentsPromise]);
 
     return (
-        <div className="h-full w-full px-6 py-4 text-zinc-950 dark:text-zinc-50">
+        <div className="h-full w-full px-6 py-4">
             <div className="mb-6">
                 <Breadcrumb folderDetails={folderDetails.data} />
             </div>
@@ -24,6 +26,7 @@ export default async function FolderView({ params }: { params: { folderId: strin
 async function getFolderDetails(folderId: string) {
     const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-details?folderId=${folderId}`, {
         cache: "no-store",
+        headers: { Cookie: cookies().toString() },
     });
 
     if (!response.ok) {
@@ -44,6 +47,7 @@ async function getFolderContents(folderId: string) {
         `${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-contents?folderId=${folderId}`,
         {
             cache: "no-store",
+            headers: { Cookie: cookies().toString() },
         },
     );
 

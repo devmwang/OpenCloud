@@ -2,6 +2,8 @@ export const SERVER_HOST = "0.0.0.0";
 export const SERVER_PORT = 8080;
 
 import Fastify from "fastify";
+import FastifyCORS from "@fastify/cors";
+import FastifyCookie from "@fastify/cookie";
 import FastifyRateLimit from "@fastify/rate-limit";
 import FastifyMultipart from "@fastify/multipart";
 import FastifyStatic from "@fastify/static";
@@ -39,8 +41,18 @@ void server.register(prismaPlugin);
 void server.register(authenticationPlugin);
 void server.register(accessControlPlugin);
 
+void server.register(FastifyCORS, {
+    origin: [/localhost(?::\d{1,5})?/, /127\.0\.0\.1(?::\d{1,5})?/, env.OPENCLOUD_WEBUI_URL],
+    credentials: true,
+});
+
+void server.register(FastifyCookie, {
+    secret: env.AUTH_SECRET,
+    parseOptions: {},
+});
+
 void server.register(FastifyRateLimit, {
-    max: 100,
+    max: 1000,
     timeWindow: "1 minute",
 });
 

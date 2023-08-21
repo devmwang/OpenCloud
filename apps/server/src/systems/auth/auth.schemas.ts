@@ -7,7 +7,7 @@ const userBase = {
             required_error: "Username is required",
             invalid_type_error: "Username must be a string",
         })
-        .min(3, { message: "Must be 1 or more characters long" }),
+        .min(3, { message: "Username must be 3 or more characters long" }),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
 };
@@ -19,7 +19,43 @@ const createUserSchema = z.object({
             required_error: "Password is required",
             invalid_type_error: "Password must be a string",
         })
-        .min(5, { message: "Must be 5 or more characters long" }),
+        .min(8, { message: "Password must be 8 or more characters long" }),
+});
+
+const loginSchema = z.object({
+    username: z
+        .string({
+            required_error: "Username is required",
+            invalid_type_error: "Username must be a string",
+        })
+        .min(3),
+    password: z
+        .string({
+            required_error: "Password is required",
+            invalid_type_error: "Password must be a string",
+        })
+        .min(8),
+});
+
+const loginResponseSchema = z.object({
+    rootFolderId: z.string(),
+});
+
+const sessionResponseSchema = z.object({
+    user: z.object({
+        id: z.string(),
+        username: z.string(),
+        rootFolderId: z.string(),
+        firstName: z.string().nullable(),
+        lastName: z.string().nullable(),
+    }),
+    accessTokenExpires: z.string().datetime(),
+    refreshTokenExpires: z.string().datetime(),
+});
+
+const refreshResponseSchema = z.object({
+    accessTokenExpiration: z.string().datetime(),
+    refreshTokenExpiration: z.string().datetime(),
 });
 
 const userInfoResponseSchema = z.object({
@@ -28,35 +64,6 @@ const userInfoResponseSchema = z.object({
     role: z.enum(["ADMIN", "USER"]),
     rootFolderId: z.string(),
 });
-
-const loginSchema = z.object({
-    username: z.string({
-        required_error: "Username is required",
-        invalid_type_error: "Username must be a string",
-    }),
-    password: z.string({
-        required_error: "Password is required",
-        invalid_type_error: "Password must be a string",
-    }),
-});
-
-const refreshSchema = z.object({
-    refreshToken: z.string({
-        required_error: "Refresh token is required",
-        invalid_type_error: "Refresh token must be a string",
-    }),
-});
-
-const credentialsResponseSchema = z.object({
-    accessToken: z.string(),
-    refreshToken: z.string(),
-});
-
-const loginResponseSchema = credentialsResponseSchema.merge(
-    z.object({
-        rootFolderId: z.string(),
-    }),
-);
 
 const createAccessRuleSchema = z.object({
     name: z.string({
@@ -86,18 +93,17 @@ const createUploadTokenResponseSchema = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
-export type RefreshInput = z.infer<typeof refreshSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenSchema>;
 
 export const { schemas: authSchemas, $ref } = buildJsonSchemas(
     {
         createUserSchema,
-        userInfoResponseSchema,
         loginSchema,
-        refreshSchema,
-        credentialsResponseSchema,
         loginResponseSchema,
+        sessionResponseSchema,
+        refreshResponseSchema,
+        userInfoResponseSchema,
         createAccessRuleSchema,
         createUploadTokenSchema,
         createUploadTokenResponseSchema,

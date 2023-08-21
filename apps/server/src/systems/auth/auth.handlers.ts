@@ -1,14 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { FastifyJWT } from "@fastify/jwt";
 import * as argon2 from "argon2";
+import ms from "ms";
 
-import type {
-    CreateUserInput,
-    LoginInput,
-    RefreshInput,
-    CreateAccessRuleInput,
-    CreateUploadTokenInput,
-} from "./auth.schemas";
+import type { CreateUserInput, LoginInput, CreateAccessRuleInput, CreateUploadTokenInput } from "./auth.schemas";
 
 export async function createUserHandler(
     this: FastifyInstance,
@@ -86,23 +81,84 @@ export async function loginHandler(
             },
         });
 
-        // Return access credentials
-        return {
-            accessToken: this.jwt.sign({ id: user.id, type: "AccessToken" }, { expiresIn: "15m" }),
-            refreshToken: this.jwt.sign({ id: refreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+        // Set Access and Refresh Token Cookies
+        reply.setCookie("AccessToken", this.jwt.sign({ id: user.id, type: "AccessToken" }, { expiresIn: "15m" }), {
+            httpOnly: true,
+            secure: true,
+            sameSite: "lax",
+            expires: new Date(Date.now() + ms("15m")),
+            path: "/",
+        });
+        reply.setCookie(
+            "RefreshToken",
+            this.jwt.sign({ id: refreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+            {
+                httpOnly: true,
+                secure: true,
+                sameSite: "lax",
+                expires: new Date(Date.now() + ms("7d")),
+                path: "/",
+            },
+        );
+
+        // Return user details
+        return reply.code(200).send({
+            id: user.id,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
             rootFolderId: user.rootFolderId,
-        };
+        });
     }
 
     return reply.code(401).send({ message: "Invalid username or password" });
 }
 
-export async function refreshHandler(
-    this: FastifyInstance,
-    request: FastifyRequest<{ Body: RefreshInput }>,
-    reply: FastifyReply,
-) {
-    const tokenPayload: FastifyJWT["payload"] = this.jwt.verify(request.body.refreshToken);
+export async function sessionHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    if (!request.cookies["AccessToken"] || !request.cookies["RefreshToken"]) {
+        return reply.code(401).send({ message: "Invalid session" });
+    }
+
+    const accessToken = request.cookies["AccessToken"];
+    const refreshToken = request.cookies["RefreshToken"];
+
+    const decodedAccessToken: FastifyJWT["decoded"] | null = this.jwt.decode(accessToken);
+    const decodedRefreshToken: FastifyJWT["decoded"] | null = this.jwt.decode(refreshToken);
+
+    if (!decodedAccessToken || !decodedRefreshToken) {
+        return reply.code(500).send({ message: "Invalid session" });
+    }
+
+    const accessTokenExpires = new Date(decodedAccessToken.exp * 1000);
+    const refreshTokenExpires = new Date(decodedRefreshToken.exp * 1000);
+
+    const user = await this.prisma.user.findUnique({ where: { id: request.user.id } });
+
+    if (!user) {
+        return reply.code(500).send({ message: "Invalid session" });
+    }
+
+    return reply.code(200).send({
+        user: {
+            id: user.id,
+            username: user.username,
+            rootFolderId: user.rootFolderId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+        },
+        accessTokenExpires: accessTokenExpires,
+        refreshTokenExpires: refreshTokenExpires,
+    });
+}
+
+export async function refreshHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    if (!request.cookies["RefreshToken"]) {
+        return reply.code(401).send({ message: "Invalid refresh token" });
+    }
+
+    const refreshToken = request.cookies["RefreshToken"];
+
+    const tokenPayload: FastifyJWT["decoded"] = this.jwt.verify(refreshToken);
 
     // Get current token from db and verify that it is valid
     const currentRefreshToken = await this.prisma.refreshToken.findUnique({
@@ -145,9 +201,32 @@ export async function refreshHandler(
         },
     });
 
+    const accessTokenExpires = new Date(Date.now() + ms("15m"));
+    const refreshTokenExpires = new Date(Date.now() + ms("7d"));
+
+    // Set Access and Refresh Token Cookies
+    reply.setCookie("AccessToken", this.jwt.sign({ id: userId, type: "AccessToken" }, { expiresIn: "15m" }), {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        expires: accessTokenExpires,
+        path: "/",
+    });
+    reply.setCookie(
+        "RefreshToken",
+        this.jwt.sign({ id: newRefreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+        {
+            httpOnly: true,
+            secure: true,
+            sameSite: "lax",
+            expires: refreshTokenExpires,
+            path: "/",
+        },
+    );
+
     return reply.code(200).send({
-        accessToken: this.jwt.sign({ id: userId, type: "AccessToken" }, { expiresIn: "15m" }),
-        refreshToken: this.jwt.sign({ id: newRefreshToken.id, type: "RefreshToken" }, { expiresIn: "7d" }),
+        accessTokenExpires: accessTokenExpires,
+        refreshTokenExpires: refreshTokenExpires,
     });
 }
 

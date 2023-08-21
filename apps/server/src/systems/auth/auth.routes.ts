@@ -5,6 +5,7 @@ import { $ref } from "./auth.schemas";
 import {
     createUserHandler,
     loginHandler,
+    sessionHandler,
     refreshHandler,
     infoHandler,
     createUploadTokenHandler,
@@ -33,12 +34,18 @@ async function authRouter(server: FastifyInstance) {
     });
 
     server.route({
-        method: "POST",
-        url: "/refresh",
+        method: "GET",
+        url: "/session",
+        onRequest: [server.authenticate],
         schema: {
-            body: $ref("refreshSchema"),
-            response: { 200: $ref("credentialsResponseSchema") },
+            response: { 200: $ref("sessionResponseSchema") },
         },
+        handler: sessionHandler,
+    });
+
+    server.route({
+        method: "GET",
+        url: "/refresh",
         handler: refreshHandler,
     });
 
