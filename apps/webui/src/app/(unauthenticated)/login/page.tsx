@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import * as z from "zod";
@@ -9,9 +9,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 
 import { env } from "@/env/env.mjs";
+import { SessionContext } from "@/components/auth/session-provider";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 export default function LoginPage() {
+    const sessionContext = useContext(SessionContext);
+
     const [attemptingLogin, setAttemptingLogin] = useState(false);
     const [loginError, setLoginError] = useState("");
 
@@ -34,6 +37,7 @@ export default function LoginPage() {
             })
             .then((response) => {
                 if (response.status === 200) {
+                    sessionContext.update();
                     router.push(`/home`);
                 } else {
                     setAttemptingLogin(false);
@@ -67,7 +71,6 @@ export default function LoginPage() {
                                             type="text"
                                             id="username"
                                             placeholder="Username"
-                                            autoComplete="username"
                                             className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-2 py-1 text-xl ring-offset-zinc-50 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-700 focus-visible:ring-offset-2 dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-200"
                                         />
                                     </FormControl>
@@ -86,7 +89,6 @@ export default function LoginPage() {
                                             type="password"
                                             id="password"
                                             placeholder="Password"
-                                            autoComplete="current-password"
                                             className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-2 py-1 text-xl ring-offset-zinc-50 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-700 focus-visible:ring-offset-2 dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-200"
                                         />
                                     </FormControl>
