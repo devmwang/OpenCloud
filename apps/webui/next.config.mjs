@@ -9,9 +9,6 @@ import { env } from "./src/env/env.mjs";
 
 const config = {
     reactStrictMode: true,
-    experimental: {
-        typedRoutes: true,
-    },
     swcMinify: true,
     // i18n: {
     //     locales: ["en"],
