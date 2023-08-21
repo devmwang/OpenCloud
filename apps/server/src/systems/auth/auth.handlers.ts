@@ -3,6 +3,7 @@ import type { FastifyJWT } from "@fastify/jwt";
 import * as argon2 from "argon2";
 import ms from "ms";
 
+import { env } from "@/env/env";
 import type { CreateUserInput, LoginInput, CreateAccessRuleInput, CreateUploadTokenInput } from "./auth.schemas";
 
 export async function createUserHandler(
@@ -87,6 +88,7 @@ export async function loginHandler(
             secure: true,
             sameSite: "lax",
             expires: new Date(Date.now() + ms("15m")),
+            domain: env.COOKIE_URL,
             path: "/",
         });
         reply.setCookie(
@@ -97,6 +99,7 @@ export async function loginHandler(
                 secure: true,
                 sameSite: "lax",
                 expires: new Date(Date.now() + ms("7d")),
+                domain: env.COOKIE_URL,
                 path: "/",
             },
         );
@@ -210,6 +213,7 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
         secure: true,
         sameSite: "lax",
         expires: accessTokenExpires,
+        domain: env.COOKIE_URL,
         path: "/",
     });
     reply.setCookie(
@@ -220,6 +224,7 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
             secure: true,
             sameSite: "lax",
             expires: refreshTokenExpires,
+            domain: env.COOKIE_URL,
             path: "/",
         },
     );
