@@ -184,6 +184,10 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
             },
         });
 
+        // Clear cookies on client
+        reply.clearCookie("AccessToken", { domain: env.COOKIE_URL, path: "/" });
+        reply.clearCookie("RefreshToken", { domain: env.COOKIE_URL, path: "/" });
+
         return reply.code(401).send({ message: "Invalid refresh token" });
     }
 
