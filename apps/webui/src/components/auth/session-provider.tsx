@@ -43,11 +43,23 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                         })
                         .then((response) => {
                             if (response.status === 200) {
-                                setSession(response.data);
+                                const parsedResponse = refreshSessionSchema.safeParse(response.data);
+
+                                if (parsedResponse.success === false) return;
+
+                                const newSession = {
+                                    user: session.user,
+                                    accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
+                                    refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
+                                };
+
+                                if (newSession) {
+                                    setSession(newSession);
+                                }
                             }
                         })
                         .catch((error) => {
-                            setSession(undefined);
+                            console.log(error);
                         });
                 },
                 ms("15m") - ms("10s"),
@@ -115,6 +127,11 @@ const getSessionDetailsSchema = z.object({
         firstName: z.string().nullable(),
         lastName: z.string().nullable(),
     }),
+    accessTokenExpires: z.string().datetime(),
+    refreshTokenExpires: z.string().datetime(),
+});
+
+const refreshSessionSchema = z.object({
     accessTokenExpires: z.string().datetime(),
     refreshTokenExpires: z.string().datetime(),
 });
