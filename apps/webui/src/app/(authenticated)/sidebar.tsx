@@ -7,7 +7,7 @@ import { FolderClosed } from "lucide-react";
 export default function Navbar() {
     return (
         <>
-            <div className="h-full w-full bg-green-500/80">
+            <div className="h-full w-full border-r border-zinc-300 dark:border-zinc-700">
                 {/* Main Subsections */}
                 <div className="px-4 py-4 text-left text-2xl font-normal">
                     <div className="flex flex-col">

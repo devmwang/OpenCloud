@@ -46,7 +46,7 @@ export default function StatusBar() {
 
     return (
         <>
-            <div className="h-full w-full bg-blue-500/80">
+            <div className="h-full w-full border-b border-zinc-300 dark:border-zinc-700">
                 <div className="flex h-full flex-row items-center justify-between">
                     {/* Site Title */}
                     <div className="w-width-sidebar text-center">
