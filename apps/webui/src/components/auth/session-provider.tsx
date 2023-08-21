@@ -30,8 +30,64 @@ export const SessionContext = createContext<SessionContextType>({
 });
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
+    const [initialized, setInitialized] = useState(false);
     const [session, setSession] = useState<SessionInterface | undefined>(undefined);
 
+    const contextValue = useMemo(
+        () => ({
+            session: session,
+            update: async () => {
+                try {
+                    const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
+                        withCredentials: true,
+                    });
+
+                    const parsedResponse = getSessionDetailsSchema.safeParse(response.data);
+
+                    if (parsedResponse.success === false) return;
+
+                    const newSession = {
+                        user: parsedResponse.data.user,
+                        accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
+                        refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
+                    };
+
+                    // Update localStorage
+                    localStorage.setItem("accessTokenExpires", parsedResponse.data.accessTokenExpires);
+                    localStorage.setItem("refreshTokenExpires", parsedResponse.data.refreshTokenExpires);
+
+                    if (newSession) {
+                        setSession(newSession);
+                    }
+
+                    return newSession;
+                } catch (error) {}
+            },
+        }),
+        [session],
+    );
+
+    // Check for existing session in localStorage
+    useEffect(() => {
+        if (!initialized) {
+            const accessTokenExpiresString = localStorage.getItem("accessTokenExpires");
+            const refreshTokenExpiresString = localStorage.getItem("refreshTokenExpires");
+
+            // Verify both token expiration times exist in localStorage
+            if (!!accessTokenExpiresString && !!refreshTokenExpiresString) {
+                const accessTokenExpires = new Date(accessTokenExpiresString);
+                const refreshTokenExpires = new Date(refreshTokenExpiresString);
+
+                // Verify both token expiration times are in the future
+                if (accessTokenExpires > new Date() && refreshTokenExpires > new Date()) {
+                    // Get session details from server and set session
+                    contextValue.update();
+                }
+            }
+        }
+    }, [setInitialized]);
+
+    // Token refresh system
     useEffect(() => {
         if (session) {
             // Refetch 10 seconds prior to expiry
@@ -53,6 +109,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                                     refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
                                 };
 
+                                // Update localStorage
+                                localStorage.setItem("accessTokenExpires", parsedResponse.data.accessTokenExpires);
+                                localStorage.setItem("refreshTokenExpires", parsedResponse.data.refreshTokenExpires);
+
                                 if (newSession) {
                                     setSession(newSession);
                                 }
@@ -60,6 +120,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                         })
                         .catch((error) => {
                             console.log(error);
+
+                            // Failed to refresh, so clear session
+                            setSession(undefined);
                         });
                 },
                 ms("15m") - ms("10s"),
@@ -69,54 +132,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
     }, [session]);
 
-    const value = useMemo(
-        () => ({
-            session: session,
-            update: async () => {
-                try {
-                    const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
-                        withCredentials: true,
-                    });
-
-                    const parsedResponse = getSessionDetailsSchema.safeParse(response.data);
-
-                    if (parsedResponse.success === false) return;
-
-                    const newSession = {
-                        user: parsedResponse.data.user,
-                        accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
-                        refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
-                    };
-
-                    if (newSession) {
-                        setSession(newSession);
-                    }
-
-                    return newSession;
-                } catch (error) {}
-            },
-        }),
-        [session],
-    );
-
-    return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
-}
-
-function refreshTokenValid() {
-    axios
-        .get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/verify-refresh-token`, {
-            withCredentials: true,
-        })
-        .then((response) => {
-            if (response.status === 200) {
-                return true;
-            } else {
-                return false;
-            }
-        })
-        .catch((error) => {
-            return false;
-        });
+    return <SessionContext.Provider value={contextValue}>{children}</SessionContext.Provider>;
 }
 
 const getSessionDetailsSchema = z.object({
