@@ -21,21 +21,24 @@ interface SessionInterface {
 
 type SessionContextType = {
     session: SessionInterface | undefined;
+    authenticated: boolean;
     update: (data?: any) => Promise<SessionInterface | undefined>;
 };
 
 export const SessionContext = createContext<SessionContextType>({
     session: undefined,
+    authenticated: false,
     update: async () => undefined,
 });
-
 export function SessionProvider({ children }: { children: React.ReactNode }) {
     const firstLoad = useRef(true);
     const [session, setSession] = useState<SessionInterface | undefined>(undefined);
+    const [authenticated, setAuthenticated] = useState<boolean>(false);
 
     const contextValue = useMemo(
         () => ({
             session: session,
+            authenticated: authenticated,
             update: async () => {
                 try {
                     const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
@@ -52,12 +55,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                         refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
                     };
 
-                    // Update localStorage
-                    localStorage.setItem("accessTokenExpires", parsedResponse.data.accessTokenExpires);
-                    localStorage.setItem("refreshTokenExpires", parsedResponse.data.refreshTokenExpires);
-
                     if (newSession) {
                         setSession(newSession);
+                        setAuthenticated(true);
+
+                        // Update localStorage
+                        localStorage.setItem("accessTokenExpires", parsedResponse.data.accessTokenExpires);
+                        localStorage.setItem("refreshTokenExpires", parsedResponse.data.refreshTokenExpires);
                     }
 
                     return newSession;
@@ -94,7 +98,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     // Token refresh system
     useEffect(() => {
-        if (session) {
+        if (authenticated && session) {
             // Refetch 10 seconds prior to expiry
             const refetchIntervalTimer = setInterval(
                 async () => {
@@ -129,12 +133,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                         setSession(undefined);
                     }
                 },
-                ms("15m") - ms("10s"),
+                ms("30s") - ms("10s"),
             );
 
-            return () => clearInterval(refetchIntervalTimer);
+            return () => {
+                clearInterval(refetchIntervalTimer);
+            };
         }
-    }, [session]);
+    }, [authenticated]);
 
     return <SessionContext.Provider value={contextValue}>{children}</SessionContext.Provider>;
 }
