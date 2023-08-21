@@ -15,7 +15,8 @@ interface SessionInterface {
         firstName: string | null;
         lastName: string | null;
     };
-    expires: Date;
+    accessTokenExpires: Date;
+    refreshTokenExpires: Date;
 }
 
 type SessionContextType = {
@@ -71,7 +72,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
                     const newSession = {
                         user: parsedResponse.data.user,
-                        expires: new Date(parsedResponse.data.expires),
+                        accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
+                        refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
                     };
 
                     if (newSession) {
@@ -113,5 +115,6 @@ const getSessionDetailsSchema = z.object({
         firstName: z.string().nullable(),
         lastName: z.string().nullable(),
     }),
-    expires: z.string().datetime(),
+    accessTokenExpires: z.string().datetime(),
+    refreshTokenExpires: z.string().datetime(),
 });

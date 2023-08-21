@@ -56,7 +56,8 @@ const sessionResponseSchema = z.object({
         firstName: z.string().nullable(),
         lastName: z.string().nullable(),
     }),
-    expires: z.string().datetime(),
+    accessTokenExpires: z.string().datetime(),
+    refreshTokenExpires: z.string().datetime(),
 });
 
 const createAccessRuleSchema = z.object({

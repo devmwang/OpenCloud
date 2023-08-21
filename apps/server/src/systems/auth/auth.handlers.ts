@@ -115,19 +115,22 @@ export async function loginHandler(
 }
 
 export async function sessionHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
-    if (!request.cookies["AccessToken"]) {
+    if (!request.cookies["AccessToken"] || !request.cookies["RefreshToken"]) {
         return reply.code(401).send({ message: "Invalid session" });
     }
 
     const accessToken = request.cookies["AccessToken"];
+    const refreshToken = request.cookies["RefreshToken"];
 
-    const decodedToken: FastifyJWT["decoded"] | null = this.jwt.decode(accessToken);
+    const decodedAccessToken: FastifyJWT["decoded"] | null = this.jwt.decode(accessToken);
+    const decodedRefreshToken: FastifyJWT["decoded"] | null = this.jwt.decode(refreshToken);
 
-    if (!decodedToken) {
+    if (!decodedAccessToken || !decodedRefreshToken) {
         return reply.code(500).send({ message: "Invalid session" });
     }
 
-    const expires = new Date(decodedToken.exp * 1000);
+    const accessTokenExpires = new Date(decodedAccessToken.exp * 1000);
+    const refreshTokenExpires = new Date(decodedRefreshToken.exp * 1000);
 
     const user = await this.prisma.user.findUnique({ where: { id: request.user.id } });
 
@@ -143,7 +146,8 @@ export async function sessionHandler(this: FastifyInstance, request: FastifyRequ
             firstName: user.firstName,
             lastName: user.lastName,
         },
-        expires: expires,
+        accessTokenExpires: accessTokenExpires,
+        refreshTokenExpires: refreshTokenExpires,
     });
 }
 
