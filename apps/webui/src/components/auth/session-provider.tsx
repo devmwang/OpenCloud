@@ -133,7 +133,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                         setSession(undefined);
                     }
                 },
-                ms("30s") - ms("10s"),
+                ms("15m") - ms("10s"),
             );
 
             return () => {
