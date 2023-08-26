@@ -7,10 +7,6 @@ import { Breadcrumb } from "@/components/file-system/breadcrumb";
 import { GridLayout } from "@/components/file-system/grid/core-layout";
 
 export default async function FolderView({ params }: { params: { folderId: string } }) {
-    return <FolderViewComponent params={params} />;
-}
-
-export async function FolderViewComponent({ params }: { params: { folderId: string } }) {
     const folderDetailsPromise = getFolderDetails(params.folderId);
     const folderContentsPromise = getFolderContents(params.folderId);
 

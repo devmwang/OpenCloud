@@ -1,17 +1,23 @@
 import React from "react";
 import type { Route } from "next";
 import Link from "next/link";
-
 import { FolderClosed } from "lucide-react";
 
-export default function Navbar() {
+import { getServerSession } from "@/components/auth/server-session";
+
+export default async function Navbar() {
+    const session = await getServerSession();
+
     return (
         <>
             <div className="h-full w-full border-r border-zinc-300 dark:border-zinc-700">
                 {/* Main Subsections */}
                 <div className="px-4 py-4 text-left text-2xl font-normal">
                     <div className="flex flex-col">
-                        <NavbarLinkComponent LinkDestination="/home" SectionTitle="My Files">
+                        <NavbarLinkComponent
+                            LinkDestination={`/folder/${session.data.user.rootFolderId}`}
+                            SectionTitle="My Files"
+                        >
                             <FolderClosed className="mr-4 mt-1 h-6" />
                         </NavbarLinkComponent>
                     </div>

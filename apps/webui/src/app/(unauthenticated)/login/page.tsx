@@ -38,7 +38,7 @@ export default function LoginPage() {
             .then((response) => {
                 if (response.status === 200) {
                     sessionContext.update();
-                    router.push(`/home`);
+                    router.push(`/folder/${response.data.rootFolderId}`);
                 } else {
                     setAttemptingLogin(false);
                 }
