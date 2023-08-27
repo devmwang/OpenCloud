@@ -23,16 +23,19 @@ model User {
     uploadTokens         UploadToken[]
     accessControlRuleIds String[]
     createdAt            DateTime       @default(now())
+    updatedAt            DateTime       @default(now()) @updatedAt
 
     @@map("Users")
 }
 
 model AccessRule {
-    id     String           @id @default(cuid())
-    name   String
-    type   AllowDisallow
-    method AccessRuleMethod
-    match  String
+    id        String           @id @default(cuid())
+    name      String
+    type      AllowDisallow
+    method    AccessRuleMethod
+    match     String
+    createdAt DateTime         @default(now())
+    updatedAt DateTime         @default(now()) @updatedAt
 
     @@map("AccessRules")
 }
@@ -43,6 +46,7 @@ model RefreshToken {
     userId    String
     valid     Boolean  @default(true)
     createdAt DateTime @default(now())
+    updatedAt DateTime @default(now()) @updatedAt
 
     @@map("RefreshTokens")
 }
@@ -54,8 +58,9 @@ model UploadToken {
     description          String?
     folderId             String
     fileAccess           FileAccess
-    createdAt            DateTime   @default(now())
     accessControlRuleIds String[]
+    createdAt            DateTime   @default(now())
+    updatedAt            DateTime   @default(now()) @updatedAt
 
     @@map("UploadTokens")
 }
@@ -70,6 +75,7 @@ model Folder {
     childFolders   Folder[]   @relation("NestedFolder")
     childFiles     File[]
     createdAt      DateTime   @default(now())
+    updatedAt      DateTime   @default(now()) @updatedAt
 
     @@map("Folders")
 }
@@ -84,6 +90,7 @@ model File {
     parentFolder Folder     @relation(fields: [parentId], references: [id])
     parentId     String
     createdAt    DateTime   @default(now())
+    updatedAt    DateTime   @default(now()) @updatedAt
 
     @@map("Files")
 }
