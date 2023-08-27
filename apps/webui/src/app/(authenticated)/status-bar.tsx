@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import Link from "next/link";
 
 import { Bell, UserCircle2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
+import { SessionContext } from "@/components/auth/session-provider";
+
 export default function StatusBar() {
+    const sessionContext = useContext(SessionContext);
+
     const [activeMenu, setActiveMenu] = useState("");
 
     const alertMenuRef = useRef<HTMLDivElement>(null);
@@ -50,7 +54,7 @@ export default function StatusBar() {
                 <div className="flex h-full flex-row items-center justify-between">
                     {/* Site Title */}
                     <div className="w-width-sidebar text-center">
-                        <Link href="/home" className="block">
+                        <Link href={`/folder/${sessionContext.session?.user.rootFolderId}`} className="block">
                             <span className="self-center whitespace-nowrap text-4xl font-semibold">{"OpenCloud"}</span>
                         </Link>
                     </div>
@@ -100,7 +104,7 @@ export default function StatusBar() {
                                         transition={menuTransition}
                                     >
                                         <Link
-                                            href="/home"
+                                            href={`/folder/${sessionContext.session?.user.rootFolderId}`}
                                             className="block rounded-lg px-5 py-1 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                                         >
                                             <span className="self-center whitespace-nowrap">{"Home"}</span>

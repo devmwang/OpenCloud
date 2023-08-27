@@ -8,6 +8,9 @@ import { env } from "./src/env/env.mjs";
 /** @type {import("next").NextConfig} */
 
 const config = {
+    experimental: {
+        typedRoutes: true,
+    },
     reactStrictMode: true,
     swcMinify: true,
     // i18n: {
