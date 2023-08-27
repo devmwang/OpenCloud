@@ -19,7 +19,7 @@ export function Breadcrumb({
                 );
             })}
 
-            <BreadcrumbFolder folderName={folderDetails.name} folderId={folderDetails.id} />
+            <div className="cursor-default rounded-xl px-3 pb-1 pt-0.5">{folderDetails.name}</div>
         </div>
     );
 }
