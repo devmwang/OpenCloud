@@ -2,9 +2,20 @@
 import type { FastifyInstance } from "fastify";
 
 import { $ref } from "./fs.schemas";
-import { getFileHandler, getThumbnailHandler, deleteFileHandler } from "./fs.handlers";
+import { getDetailsHandler, getFileHandler, getThumbnailHandler, deleteFileHandler } from "./fs.handlers";
 
 async function fileSystemRouter(server: FastifyInstance) {
+    server.route({
+        method: "GET",
+        url: "/get-details",
+        onRequest: [server.optionalAuthenticate],
+        schema: {
+            querystring: $ref("getDetailsQuerySchema"),
+            response: { 200: $ref("getDetailsResponseSchema") },
+        },
+        handler: getDetailsHandler,
+    });
+
     server.route({
         method: "GET",
         url: "/get/:fileId",

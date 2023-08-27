@@ -6,9 +6,45 @@ import sharp from "sharp";
 
 import { env } from "@/env/env";
 
-import type { GetFileParams, GetThumbnailParams, DeleteFileQuerystring } from "./fs.schemas";
+import type { GetDetailsQuerystring, GetFileParams, GetThumbnailParams, DeleteFileQuerystring } from "./fs.schemas";
 
 const unlinkAsync = util.promisify(fs.unlink);
+
+export async function getDetailsHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Querystring: GetDetailsQuerystring }>,
+    reply: FastifyReply,
+) {
+    const fileId = request.query.fileId;
+
+    const file = await this.prisma.file.findUnique({ where: { id: fileId } });
+
+    if (!file) {
+        return reply.code(404).send({ message: "Something went wrong. Please try again." });
+    }
+
+    if (file.fileAccess != "PUBLIC") {
+        if (request.authenticated == false) {
+            return reply.code(401).send({ error: "Unauthorized", message: "You do not have access to this file" });
+        }
+
+        if (request.user.id != file.ownerId) {
+            return reply.code(403).send({ error: "Forbidden", message: "You do not have access to this file" });
+        }
+    }
+
+    return reply
+        .code(200)
+        .send({
+            id: fileId,
+            name: file.fileName,
+            ownerId: file.ownerId,
+            parentId: file.parentId,
+            fileType: file.fileType,
+            createdAt: file.createdAt,
+            updatedAt: file.updatedAt,
+        });
+}
 
 export async function getFileHandler(
     this: FastifyInstance,
