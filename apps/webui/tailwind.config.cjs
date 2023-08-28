@@ -25,6 +25,7 @@ module.exports = {
             },
             gridTemplateRows: {
                 "core-layout": "4rem 1fr",
+                "file-view-modal": "auto 1fr",
             },
             keyframes: {
                 "accordion-down": {
