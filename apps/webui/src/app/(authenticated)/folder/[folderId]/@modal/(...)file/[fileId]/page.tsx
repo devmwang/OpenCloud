@@ -12,7 +12,7 @@ export default async function FileView({ params }: { params: { fileId: string } 
 
     return (
         <>
-            <div className="border-b border-zinc-300 px-6 py-4 text-xl font-semibold dark:border-zinc-700">
+            <div className="border-b border-zinc-400 px-6 py-4 text-xl font-semibold dark:border-zinc-700">
                 {fileDetails.data.name}
             </div>
             <div className="relative h-full overflow-hidden">
