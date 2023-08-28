@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { env } from "@/env/env.mjs";
-import { ImageView } from "@/components/file-system/file-view/image-view";
+import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
 
 export default async function FileView({ params }: { params: { fileId: string } }) {
     const fileDetailsPromise = getFileDetails(params.fileId);
@@ -16,7 +16,7 @@ export default async function FileView({ params }: { params: { fileId: string } 
                 {fileDetails.data.name}
             </div>
             <div className="relative h-full overflow-hidden">
-                <ImageView fileId={params.fileId} />
+                <PreviewPane fileId={params.fileId} />
             </div>
         </>
     );

@@ -5,7 +5,7 @@ import Image from "next/image";
 
 import { env } from "@/env/env.mjs";
 
-export function ImageView({ fileId }: { fileId: string }) {
+export function PreviewPane({ fileId }: { fileId: string }) {
     const zoomSpeed = 0.1;
 
     const [scale, setScale] = useState(1);
