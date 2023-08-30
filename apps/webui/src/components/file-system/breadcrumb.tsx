@@ -19,7 +19,7 @@ export function Breadcrumb({
                 );
             })}
 
-            <div className="cursor-default rounded-xl px-3 pb-1 pt-0.5">{folderDetails.name}</div>
+            <div className="cursor-default rounded-xl pb-1 pl-2.5 pr-3 pt-0.5">{folderDetails.name}</div>
         </div>
     );
 }
@@ -28,7 +28,7 @@ function BreadcrumbFolder({ folderName, folderId }: { folderName: string; folder
     return (
         <Link
             href={`/folder/${folderId}`}
-            className="cursor-pointer rounded-xl px-3 pb-1 pt-0.5 hover:bg-black/10 dark:hover:bg-white/20"
+            className="cursor-pointer rounded-xl pb-1 pl-2.5 pr-3 pt-0.5 hover:bg-black/10 dark:hover:bg-white/20"
         >
             {folderName}
         </Link>
