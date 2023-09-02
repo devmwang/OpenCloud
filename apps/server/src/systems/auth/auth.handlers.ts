@@ -73,12 +73,15 @@ export async function loginHandler(
     const passwordValid = await argon2.verify(user.password, body.password);
 
     if (passwordValid) {
+        const refreshExpiration = new Date(Date.now() + ms("7d"));
+
         // Create refresh token in db
         const refreshToken = await this.prisma.refreshToken.create({
             data: {
                 user: {
                     connect: { id: user.id },
                 },
+                expiresAt: refreshExpiration,
             },
         });
 
@@ -98,7 +101,7 @@ export async function loginHandler(
                 httpOnly: true,
                 secure: true,
                 sameSite: "lax",
-                expires: new Date(Date.now() + ms("7d")),
+                expires: refreshExpiration,
                 domain: env.COOKIE_URL,
                 path: "/",
             },
@@ -173,8 +176,8 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
         return reply.code(401).send({ message: "Invalid refresh token" });
     }
 
+    // User refresh token already used (potentially stolen), invalidate all of user's refresh tokens
     if (!currentRefreshToken.valid) {
-        // User refresh token potentially stolen, invalidate all of user's refresh tokens
         await this.prisma.refreshToken.updateMany({
             where: {
                 userId: currentRefreshToken.userId,
@@ -191,6 +194,19 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
         return reply.code(401).send({ message: "Invalid refresh token" });
     }
 
+    // Session invalid/expired, clear cookies from client and mark token as invalid
+    if (currentRefreshToken.expiresAt < new Date()) {
+        reply.clearCookie("AccessToken", { domain: env.COOKIE_URL, path: "/" });
+        reply.clearCookie("RefreshToken", { domain: env.COOKIE_URL, path: "/" });
+
+        await this.prisma.refreshToken.update({
+            where: { id: currentRefreshToken.id },
+            data: { valid: false },
+        });
+
+        return reply.code(401).send({ message: "Expired refresh token" });
+    }
+
     // Invalidate current refresh token
     await this.prisma.refreshToken.update({
         where: { id: tokenPayload.id },
@@ -200,16 +216,17 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
     const userId = currentRefreshToken.userId;
 
     // Create new refresh token in db
+    const accessTokenExpires = new Date(Date.now() + ms("15m"));
+    const refreshTokenExpires = new Date(Date.now() + ms("7d"));
+
     const newRefreshToken = await this.prisma.refreshToken.create({
         data: {
             user: {
                 connect: { id: userId },
             },
+            expiresAt: refreshTokenExpires,
         },
     });
-
-    const accessTokenExpires = new Date(Date.now() + ms("15m"));
-    const refreshTokenExpires = new Date(Date.now() + ms("7d"));
 
     // Set Access and Refresh Token Cookies
     reply.setCookie("AccessToken", this.jwt.sign({ id: userId, type: "AccessToken" }, { expiresIn: "15m" }), {
