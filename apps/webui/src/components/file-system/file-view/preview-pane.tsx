@@ -36,7 +36,7 @@ export function PreviewPane({ fileId }: { fileId: string }) {
     return (
         <>
             <Image
-                className="select-none object-scale-down"
+                className="select-none object-scale-down transition-transform duration-200 ease-in-out"
                 style={{ transform: `scale(${scale})` }}
                 src={`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`}
                 fill={true}
