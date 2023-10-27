@@ -13,7 +13,7 @@ export default function RootAuthenticatedLayout({ children }: { children: React.
             </div>
 
             <div className="col-start-2 row-start-2 row-end-2 overflow-y-auto">
-                <div className="flex grow">{children}</div>
+                <div className="flex h-full w-full grow">{children}</div>
             </div>
         </div>
     );
