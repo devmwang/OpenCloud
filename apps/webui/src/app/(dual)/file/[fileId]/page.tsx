@@ -1,8 +1,35 @@
+import { Metadata } from "next";
 import { cookies } from "next/headers";
 import { z } from "zod";
+import path from "path";
 
 import { env } from "@/env/env.mjs";
 import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
+
+export async function generateMetadata({ params }: { params: { fileId: string } }): Promise<Metadata> {
+    const fileId = params.fileId;
+
+    const fileDetails = await getFileDetails(fileId);
+
+    if (!fileDetails.success) {
+        if (fileDetails.error == "Unauthorized") {
+            return {
+                title: "OpenCloud - Unauthorized",
+            };
+        } else {
+            return {};
+        }
+    }
+    if (!fileDetails.data) {
+        return {};
+    }
+
+    return {
+        openGraph: {
+            images: [`https://opencloud-api.devmwang.com/v1/files/get/${fileId}${path.extname(fileDetails.data.name)}`],
+        },
+    };
+}
 
 export default async function FileView({ params }: { params: { fileId: string } }) {
     const fileDetailsPromise = getFileDetails(params.fileId);
@@ -10,7 +37,11 @@ export default async function FileView({ params }: { params: { fileId: string } 
     const [fileDetails] = await Promise.all([fileDetailsPromise]);
 
     if (!fileDetails.success) {
-        return <div className="px-6 py-10 text-center text-xl">You are not authorized to view this file.</div>;
+        if (fileDetails.error == "Unauthorized") {
+            return <div className="px-6 py-10 text-center text-xl">You are not authorized to view this file.</div>;
+        } else {
+            throw new Error("Failed to fetch data");
+        }
     }
     if (!fileDetails.data) {
         throw new Error("Failed to fetch data");
