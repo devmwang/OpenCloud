@@ -5,8 +5,8 @@ export async function middleware(request: NextRequest) {
     const accessToken = request.cookies.get("AccessToken");
 
     // If there is no access token, do not allow access to protected pages
+    // Run authentication for file view in file component
     if (
-        request.nextUrl.pathname.startsWith("/file") ||
         request.nextUrl.pathname.startsWith("/folder") ||
         request.nextUrl.pathname.startsWith("/home") ||
         request.nextUrl.pathname.startsWith("/profile")
