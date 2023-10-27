@@ -9,6 +9,13 @@ export default async function FileView({ params }: { params: { fileId: string } 
 
     const [fileDetails] = await Promise.all([fileDetailsPromise]);
 
+    if (!fileDetails.success) {
+        return <div className="px-6 py-10 text-center text-xl">You are not authorized to view this file.</div>;
+    }
+    if (!fileDetails.data) {
+        throw new Error("Failed to fetch data");
+    }
+
     return (
         <div className="fixed bottom-0 left-0 right-0 top-0 z-20 mx-auto bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
             <div className="grid h-full w-full grid-rows-core-layout">
@@ -42,11 +49,11 @@ async function getFileDetails(fileId: string) {
         headers: { Cookie: cookies().toString() },
     });
 
-    if (!response.ok) {
-        if (response.status == 401 || response.status == 403) {
-            throw new Error("Unauthorized");
-        }
+    if (response.status == 401 || response.status == 403) {
+        return { success: false, error: "Unauthorized" };
+    }
 
+    if (!response.ok) {
         throw new Error("Failed to fetch data");
     }
 
@@ -56,7 +63,8 @@ async function getFileDetails(fileId: string) {
         throw new Error("Failed to fetch data");
     }
 
-    return parsedFileDetails;
+    // return parsedFileDetails.data;
+    return { success: true, data: parsedFileDetails.data };
 }
 
 const getFileDetailsSchema = z.object({
