@@ -7,7 +7,7 @@ import { env } from "@/env/env.mjs";
 import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
 
 export async function generateMetadata({ params }: { params: { fileId: string } }): Promise<Metadata> {
-    const fileId = params.fileId;
+    const fileId = path.parse(params.fileId).name;
 
     const fileDetails = await getFileDetails(fileId);
 
@@ -33,7 +33,8 @@ export async function generateMetadata({ params }: { params: { fileId: string } 
 }
 
 export default async function FileView({ params }: { params: { fileId: string } }) {
-    const fileDetailsPromise = getFileDetails(params.fileId);
+    const fileId = path.parse(params.fileId).name;
+    const fileDetailsPromise = getFileDetails(fileId);
 
     const [fileDetails] = await Promise.all([fileDetailsPromise]);
 

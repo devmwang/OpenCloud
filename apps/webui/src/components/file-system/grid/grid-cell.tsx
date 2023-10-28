@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Folder, File } from "lucide-react";
+import path from "path";
 
 import { env } from "@/env/env.mjs";
 
@@ -38,7 +39,7 @@ export function FileGridCell({ fileId, fileName }: { fileId: string; fileName: s
             className="cursor-pointer"
             onClick={(event) => {
                 if (event.detail >= 2) {
-                    router.push(`/file/${fileId}`);
+                    router.push(`/file/${fileId}${path.parse(fileName).ext}`);
                 }
             }}
         >

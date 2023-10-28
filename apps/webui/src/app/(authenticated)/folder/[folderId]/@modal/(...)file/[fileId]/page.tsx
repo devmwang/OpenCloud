@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
+import path from "path";
 
 import { env } from "@/env/env.mjs";
 import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
@@ -17,9 +18,9 @@ export default async function FileView({ params }: { params: { fileId: string } 
         );
     }
 
-    const fileDetailsPromise = getFileDetails(params.fileId);
+    const fileId = path.parse(params.fileId).name;
 
-    const [fileDetails] = await Promise.all([fileDetailsPromise]);
+    const fileDetails = await getFileDetails(fileId);
 
     return (
         <>
