@@ -23,6 +23,6 @@ export async function middleware(request: NextRequest) {
         const pathName = request.nextUrl.pathname;
         const fileId = pathName.substring(pathName.lastIndexOf('/') + 1);
 
-        return NextResponse.redirect(new URL(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`));
+        return NextResponse.rewrite(new URL(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`));
     }
 }
