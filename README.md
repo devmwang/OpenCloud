@@ -6,15 +6,16 @@ OpenCloud is a free, open-source, and self-hosted cloud file server and manageme
 
 ### Server and WebUI on the same Server
 
-Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Then, run the server and webui using `pnpm run start`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run the server and webui in the background (with `pm2 start "pnpm run start"`). The server will be available at `localhost:8080`. WebUI will be available at `localhost:3000`.
+Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Generate the Prisma client with `pnpm exec dotenv -- "pnpm --filter server run db:generate"`. Then, run the server and webui using `pnpm run start`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run the server and webui in the background (with `pm2 start "pnpm run start"`). The server will be available at `localhost:8080`. WebUI will be available at `localhost:3000`.
 
 ### Server Only
 
-Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Then, run the server using `pnpm run start --filter server`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run the server in the background (with `pm2 start "pnpm run start --filter server"`). The server will be available at `localhost:8080`.
+Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Generate the Prisma client with `pnpm exec dotenv -- "pnpm --filter server run db:generate"`. Then, run the server using `pnpm run start --filter server`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run the server in the background (with `pm2 start "pnpm run start --filter server"`). The server will be available at `localhost:8080`.
 
 ### WebUI Client Only
 
 There are two options: Automatic hosting using Vercel or local self-hosting.
+
 #### Option 1: Automatic Hosting with Vercel
 
 Fork the repository and create a new project on [Vercel](https://vercel.com). Connect the project to your forked repository. Copy the `.env.example` file into the deployment configuration panel and fill in the required values. Then, deploy the project. The web client will be available at the domain you select in the Vercel control panel. Ensure that the domain you use is listed in the `OPENCLOUD_WEBUI_URL` environment variable in the server configuration for CORS to work correctly on the server.
