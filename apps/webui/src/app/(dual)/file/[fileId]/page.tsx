@@ -1,5 +1,6 @@
 import { Metadata } from "next";
-import { cookies } from "next/headers";
+import { headers, cookies } from "next/headers";
+import { permanentRedirect } from "next/navigation";
 import { z } from "zod";
 import path from "path";
 
@@ -46,6 +47,12 @@ export default async function FileView({ params }: { params: { fileId: string } 
     }
     if (!fileDetails.data) {
         throw new Error("Failed to fetch data");
+    }
+
+    // If user agent is discord, redirect file view to API route
+    const headersList = headers();
+    if (headersList.get("User-Agent")?.toLowerCase().includes("discord")) {
+        permanentRedirect (`/api/non-user/file/${fileDetails.data.id}${path.extname(fileDetails.data.name)}`);
     }
 
     return (
