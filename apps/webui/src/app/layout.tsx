@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     icons: {
         icon: "/OpenCloud-Circle.svg",
     },
+    metadataBase: new URL('https://devmwang.com'),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

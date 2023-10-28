@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { env } from "@/env/env.mjs";
+
 export async function middleware(request: NextRequest) {
     const accessToken = request.cookies.get("AccessToken");
 
@@ -14,5 +16,13 @@ export async function middleware(request: NextRequest) {
         if (!accessToken) {
             return NextResponse.redirect(new URL("/login", request.nextUrl));
         }
+    }
+
+    // Handle discordbot user agent
+    if (request.headers.get("User-Agent")?.toLowerCase().includes("discord")) {
+        const pathName = request.nextUrl.pathname;
+        const fileId = pathName.substring(pathName.lastIndexOf('/') + 1);
+
+        return NextResponse.redirect(new URL(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`));
     }
 }
