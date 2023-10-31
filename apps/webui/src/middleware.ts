@@ -14,7 +14,15 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith("/profile")
     ) {
         if (!accessToken) {
-            return NextResponse.redirect(new URL("/login", request.nextUrl));
+            // Store attempted url in search params
+            const searchParams = new URLSearchParams(request.nextUrl.searchParams);
+            searchParams.set("next", request.nextUrl.pathname);
+
+            const response = NextResponse.redirect(
+                new URL(`/login?${searchParams}`, request.url)
+            );
+
+            return response;
         }
     }
 
