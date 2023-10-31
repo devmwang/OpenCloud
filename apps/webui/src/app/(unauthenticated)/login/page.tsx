@@ -1,7 +1,8 @@
 "use client";
 
 import { useContext, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Route } from "next";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
@@ -13,12 +14,13 @@ import { SessionContext } from "@/components/auth/session-provider";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 export default function LoginPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
     const sessionContext = useContext(SessionContext);
 
     const [attemptingLogin, setAttemptingLogin] = useState(false);
     const [loginError, setLoginError] = useState("");
-
-    const router = useRouter();
 
     const loginForm = useForm<z.infer<typeof loginSchema>>({
         resolver: zodResolver(loginSchema),
@@ -38,7 +40,10 @@ export default function LoginPage() {
             .then((response) => {
                 if (response.status === 200) {
                     sessionContext.update();
-                    router.push(`/folder/${response.data.rootFolderId}`);
+
+                    const nextUrl = searchParams.get("next") ?? `/folder/${response.data.rootFolderId}`;
+                    router.push(nextUrl as Route);
+                    router.refresh();
                 } else {
                     setAttemptingLogin(false);
                 }
@@ -101,7 +106,6 @@ export default function LoginPage() {
                             type="submit"
                             className="flex w-full items-center justify-center rounded-md bg-zinc-900 px-2 py-2 hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-75 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                         >
-                            {attemptingLogin && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             <span className="whitespace-nowrap text-xl font-semibold text-zinc-50">Login</span>
                         </button>
                     </form>
