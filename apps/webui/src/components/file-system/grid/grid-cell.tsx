@@ -24,7 +24,7 @@ export function FolderGridCell({ folderId, folderName }: { folderId: string; fol
                     <div className="block px-4 py-3">
                         <Folder className="h-6" />
                     </div>
-                    <div className="truncate">{folderName}</div>
+                    <div className="truncate select-none">{folderName}</div>
                 </div>
             </div>
         </div>
@@ -48,7 +48,7 @@ export function FileGridCell({ fileId, fileName }: { fileId: string; fileName: s
                     <div className="block px-4 py-3">
                         <File className="h-6" />
                     </div>
-                    <div className="truncate">{fileName}</div>
+                    <div className="truncate select-none">{fileName}</div>
                 </div>
                 <div className="px-2.5 pb-2">
                     <Image
