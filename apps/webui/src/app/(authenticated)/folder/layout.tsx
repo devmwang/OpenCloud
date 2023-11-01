@@ -1,10 +1,9 @@
-import React, { Suspense } from "react";
+import React from "react";
 
-export default function FolderLayout(props: { children: React.ReactNode; modal: React.ReactNode }) {
+export default function FolderLayout({ children }: { children: React.ReactNode }) {
     return (
         <>
-            {props.children}
-            {props.modal}
+            {children}
         </>
     );
 }
