@@ -13,12 +13,15 @@ const config = {
     },
     reactStrictMode: true,
     swcMinify: true,
-    // i18n: {
-    //     locales: ["en"],
-    //     defaultLocale: "en",
-    // },
     images: {
-        domains: [new URL(env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL).hostname],
+        remotePatterns: [
+            {
+                protocol: "https",
+                hostname: env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL,
+                port: "",
+                pathname: "/*/files/get/**",
+            },
+        ],
     },
 };
 export default config;
