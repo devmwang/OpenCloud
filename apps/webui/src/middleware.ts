@@ -4,35 +4,45 @@ import type { NextRequest } from "next/server";
 import { env } from "@/env/env.mjs";
 
 export async function middleware(request: NextRequest) {
-    const accessToken = request.cookies.get("AccessToken");
+    // Handle discordbot user agent
+    if (request.nextUrl.pathname.startsWith("/file")) {
+        if (
+            request.headers.get("User-Agent")?.toLowerCase().includes("discord") ||
+            request.headers.get("User-Agent") ==
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 11.6; rv:92.0) Gecko/20100101 Firefox/92.0"
+        ) {
+            const pathName = request.nextUrl.pathname;
+            const fileId = pathName.substring(pathName.lastIndexOf("/") + 1);
 
-    // If there is no access token, do not allow access to protected pages
-    // Run authentication for file view in file component
-    if (
-        request.nextUrl.pathname.startsWith("/folder") ||
-        request.nextUrl.pathname.startsWith("/home") ||
-        request.nextUrl.pathname.startsWith("/profile")
-    ) {
-        if (!accessToken) {
-            // Store attempted url in search params
-            const searchParams = new URLSearchParams(request.nextUrl.searchParams);
-            searchParams.set("next", request.nextUrl.pathname);
-
-            const response = NextResponse.redirect(
-                new URL(`/login?${searchParams}`, request.url)
-            );
-
-            return response;
+            return NextResponse.rewrite(new URL(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`));
         }
     }
 
-    // Handle discordbot user agent
-    if (request.nextUrl.pathname.startsWith("/file")) {
-        if (request.headers.get("User-Agent")?.toLowerCase().includes("discord") || request.headers.get("User-Agent") == "Mozilla/5.0 (Macintosh; Intel Mac OS X 11.6; rv:92.0) Gecko/20100101 Firefox/92.0") {
-            const pathName = request.nextUrl.pathname;
-            const fileId = pathName.substring(pathName.lastIndexOf('/') + 1);
-    
-            return NextResponse.rewrite(new URL(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`));
+    const accessToken = request.cookies.get("AccessToken");
+    console.log(accessToken);
+    if (!!accessToken) {
+        const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
+            credentials: "include",
+            next: {
+                tags: ["session"],
+            },
+        });
+
+        if (response.ok) {
+            return NextResponse.next();
         }
+    }
+
+    // Unauthenticated
+    // If not authed, do not allow access to protected pages
+    // Run authentication for file view in file component
+    if (request.nextUrl.pathname.startsWith("/folder") || request.nextUrl.pathname.startsWith("/profile")) {
+        // Store attempted url in search params
+        const searchParams = new URLSearchParams(request.nextUrl.searchParams);
+        searchParams.set("next", request.nextUrl.pathname);
+
+        const response = NextResponse.redirect(new URL(`/login?${searchParams}`, request.url));
+
+        return response;
     }
 }
