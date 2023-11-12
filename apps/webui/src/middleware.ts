@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { ResponseCookies, RequestCookies } from "next/dist/server/web/spec-extension/cookies";
 
 import { env } from "@/env/env.mjs";
 
@@ -18,23 +18,35 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    const accessToken = request.cookies.get("AccessToken");
-    console.log(accessToken);
-    if (!!accessToken) {
-        const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
+    // If access token found, continue to page
+    if (request.cookies.has("AccessToken")) {
+        return NextResponse.next();
+    }
+
+    // If access token not found but refresh token is, attempt to refresh session
+    // If refreshed successfully, continue to page
+    if (!request.cookies.get("AccessToken") && !!request.cookies.get("RefreshToken")) {
+        // Try refresh
+        const refreshResponse = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/refresh`, {
             credentials: "include",
-            next: {
-                tags: ["session"],
-            },
+            headers: new Headers(request.headers),
         });
 
-        if (response.ok) {
-            return NextResponse.next();
+        // Continue if refreshed successfully
+        if (refreshResponse.ok) {
+            const response = NextResponse.next();
+            
+            const responseCookies = refreshResponse.headers.get("Set-Cookie") || "";
+            response.headers.set("Set-Cookie", responseCookies);
+
+            applySetCookie(request, response);
+
+            return response;
         }
     }
 
-    // Unauthenticated
-    // If not authed, do not allow access to protected pages
+    // Assume client unauthenticated beyond this point (No AccessToken and failed to refresh)
+    // Check if attempted route is protected and redirect if protected
     // Run authentication for file view in file component
     if (request.nextUrl.pathname.startsWith("/folder") || request.nextUrl.pathname.startsWith("/profile")) {
         // Store attempted url in search params
@@ -45,4 +57,26 @@ export async function middleware(request: NextRequest) {
 
         return response;
     }
+}
+
+/**
+ * Copy cookies from the Set-Cookie header of the response to the Cookie header of the request,
+ * so that it will appear to SSR/RSC as if the user already has the new cookies.
+ */
+// Workaround from https://github.com/vercel/next.js/issues/49442#issuecomment-1679807704
+function applySetCookie(req: NextRequest, res: NextResponse): void {
+    // parse the outgoing Set-Cookie header
+    const setCookies = new ResponseCookies(res.headers);
+    // Build a new Cookie header for the request by adding the setCookies
+    const newReqHeaders = new Headers(req.headers);
+    const newReqCookies = new RequestCookies(newReqHeaders);
+    setCookies.getAll().forEach((cookie) => newReqCookies.set(cookie));
+    // set “request header overrides” on the outgoing response
+    NextResponse.next({
+      request: { headers: newReqHeaders },
+    }).headers.forEach((value, key) => {
+      if (key === 'x-middleware-override-headers' || key.startsWith('x-middleware-request-')) {
+        res.headers.set(key, value);
+      }
+    });
 }
