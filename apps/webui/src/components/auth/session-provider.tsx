@@ -71,18 +71,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (firstLoad.current) {
             firstLoad.current = false;
 
-            // Attempt to refresh token
-            axios
-                .get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/refresh`, {
-                    withCredentials: true,
-                })
-                .then(() => {
-                    // Get session details from server and set session
-                    contextValue.update();
-                })
-                .catch((error) => {
-                    // Token invalid/expired/does not exist
-                });
+            // Attempt to get session details
+            contextValue.update();
         }
     }, []);
 
