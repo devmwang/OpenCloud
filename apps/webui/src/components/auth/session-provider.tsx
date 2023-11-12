@@ -58,10 +58,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                     if (newSession) {
                         setSession(newSession);
                         setAuthenticated(true);
-
-                        // Update localStorage
-                        localStorage.setItem("accessTokenExpires", parsedResponse.data.accessTokenExpires);
-                        localStorage.setItem("refreshTokenExpires", parsedResponse.data.refreshTokenExpires);
                     }
 
                     return newSession;
@@ -75,29 +71,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (firstLoad.current) {
             firstLoad.current = false;
 
-            // Check for existing session in localStorage
-            const refreshTokenExpiresString = localStorage.getItem("refreshTokenExpires");
-
-            // Verify refresh token expiration time exists in localStorage
-            if (!!refreshTokenExpiresString) {
-                const refreshTokenExpires = new Date(refreshTokenExpiresString);
-
-                // Verify refresh token expiration time is in the future
-                if (refreshTokenExpires > new Date()) {
-                    // Proactively refresh session
-                    axios
-                        .get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/refresh`, {
-                            withCredentials: true,
-                        })
-                        .then(() => {
-                            // Get session details from server and set session
-                            contextValue.update();
-                        })
-                        .catch((error) => {
-                            console.log(error);
-                        });
-                }
-            }
+            // Attempt to get session details
+            contextValue.update();
         }
     }, []);
 
@@ -122,10 +97,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                                 accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
                                 refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
                             };
-
-                            // Update localStorage
-                            localStorage.setItem("accessTokenExpires", parsedResponse.data.accessTokenExpires);
-                            localStorage.setItem("refreshTokenExpires", parsedResponse.data.refreshTokenExpires);
 
                             if (newSession) {
                                 setSession(newSession);
