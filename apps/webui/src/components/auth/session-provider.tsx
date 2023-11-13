@@ -71,17 +71,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (firstLoad.current) {
             firstLoad.current = false;
 
-            axios
-                .get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/refresh`, {
-                    withCredentials: true,
-                })
-                .then(() => {
-                    // Get session details from server and set session
-                    contextValue.update();
-                })
-                .catch((error) => {
-                    console.log(error);
-                });
+            // Workaround to account for non-ideal latency conditions
+            setTimeout(() => contextValue.update(), 3);
         }
     }, []);
 
