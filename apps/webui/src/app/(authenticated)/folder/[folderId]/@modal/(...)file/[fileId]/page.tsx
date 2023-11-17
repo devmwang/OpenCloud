@@ -28,7 +28,7 @@ export default async function FileView({ params }: { params: { fileId: string } 
                 {fileDetails.data.name}
             </div>
             <div className="relative h-full overflow-hidden">
-                <PreviewPane fileId={params.fileId} />
+                <PreviewPane fileId={params.fileId} fileType={fileDetails.data.fileType} />
             </div>
         </>
     );
