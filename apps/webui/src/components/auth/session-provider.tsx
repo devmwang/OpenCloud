@@ -71,8 +71,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (firstLoad.current) {
             firstLoad.current = false;
 
-            // Workaround to account for non-ideal latency conditions
-            setTimeout(() => contextValue.update(), 3);
+            contextValue.update();
         }
     }, []);
 
