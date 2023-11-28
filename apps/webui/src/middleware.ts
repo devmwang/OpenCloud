@@ -34,12 +34,10 @@ export async function middleware(request: NextRequest) {
 
         // Continue if refreshed successfully
         if (refreshResponse.ok) {
-            const response = NextResponse.next();
-            
+            const response = NextResponse.redirect(new URL(request.nextUrl));
+
             const responseCookies = refreshResponse.headers.get("Set-Cookie") || "";
             response.headers.set("Set-Cookie", responseCookies);
-
-            applySetCookie(request, response);
 
             return response;
         }
@@ -57,26 +55,4 @@ export async function middleware(request: NextRequest) {
 
         return response;
     }
-}
-
-/**
- * Copy cookies from the Set-Cookie header of the response to the Cookie header of the request,
- * so that it will appear to SSR/RSC as if the user already has the new cookies.
- */
-// Workaround from https://github.com/vercel/next.js/issues/49442#issuecomment-1679807704
-function applySetCookie(req: NextRequest, res: NextResponse): void {
-    // parse the outgoing Set-Cookie header
-    const setCookies = new ResponseCookies(res.headers);
-    // Build a new Cookie header for the request by adding the setCookies
-    const newReqHeaders = new Headers(req.headers);
-    const newReqCookies = new RequestCookies(newReqHeaders);
-    setCookies.getAll().forEach((cookie) => newReqCookies.set(cookie));
-    // set “request header overrides” on the outgoing response
-    NextResponse.next({
-      request: { headers: newReqHeaders },
-    }).headers.forEach((value, key) => {
-      if (key === 'x-middleware-override-headers' || key.startsWith('x-middleware-request-')) {
-        res.headers.set(key, value);
-      }
-    });
 }
