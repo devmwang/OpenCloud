@@ -7,7 +7,7 @@ import ms from "ms";
 
 import { env } from "@/env/env.mjs";
 
-interface SessionInterface {
+type SessionType = {
     user: {
         id: string;
         username: string;
@@ -17,29 +17,35 @@ interface SessionInterface {
     };
     accessTokenExpires: Date;
     refreshTokenExpires: Date;
-}
+};
 
 type SessionContextType = {
-    session: SessionInterface | undefined;
+    session: SessionType | undefined;
     authenticated: boolean;
-    update: (data?: any) => Promise<SessionInterface | undefined>;
+    update: (
+        data?: any,
+    ) => Promise<{ status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }>;
 };
 
 export const SessionContext = createContext<SessionContextType>({
     session: undefined,
     authenticated: false,
-    update: async () => undefined,
+    update: async () => {
+        return { status: "error", error: "SessionContext not initialized" };
+    },
 });
 export function SessionProvider({ children }: { children: React.ReactNode }) {
     const firstLoad = useRef(true);
-    const [session, setSession] = useState<SessionInterface | undefined>(undefined);
+    const [session, setSession] = useState<SessionType | undefined>(undefined);
     const [authenticated, setAuthenticated] = useState<boolean>(false);
 
     const contextValue = useMemo(
         () => ({
             session: session,
             authenticated: authenticated,
-            update: async () => {
+            update: async (): Promise<
+                { status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }
+            > => {
                 try {
                     const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
                         withCredentials: true,
@@ -47,9 +53,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
                     const parsedResponse = getSessionDetailsSchema.safeParse(response.data);
 
-                    if (parsedResponse.success === false) return;
+                    if (parsedResponse.success === false) return { status: "error", error: parsedResponse.error };
 
-                    const newSession = {
+                    const newSession: SessionType = {
                         user: parsedResponse.data.user,
                         accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
                         refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
@@ -60,8 +66,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                         setAuthenticated(true);
                     }
 
-                    return newSession;
-                } catch (error) {}
+                    return { status: "success", sessionData: newSession };
+                } catch (error) {
+                    return { status: "error", error: error };
+                }
             },
         }),
         [session],
@@ -71,7 +79,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (firstLoad.current) {
             firstLoad.current = false;
 
-            contextValue.update();
+            contextValue.update().then((initialStatus) => {
+                if (initialStatus.status === "success") return;
+
+                // Try updating every 5 seconds until successful
+                const updateIntervalTimer = setInterval(async () => {
+                    contextValue.update().then((updateStatus) => {
+                        if (updateStatus.status === "success") {
+                            clearInterval(updateIntervalTimer);
+                            return;
+                        }
+                    });
+                }, ms("5s"));
+            });
         }
     }, []);
 
