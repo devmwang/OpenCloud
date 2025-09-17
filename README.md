@@ -44,4 +44,4 @@ OpenCloud uses a token-based authentication system. On login, this server return
 
 ## Legal
 
-OpenCloud is developed and maintained by Controllyx. OpenCloud is distributed under the AGPL v3.0 license.
+OpenCloud is distributed under the AGPL v3.0 license.
