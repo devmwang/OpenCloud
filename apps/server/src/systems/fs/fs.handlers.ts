@@ -33,17 +33,15 @@ export async function getDetailsHandler(
         }
     }
 
-    return reply
-        .code(200)
-        .send({
-            id: fileId,
-            name: file.fileName,
-            ownerId: file.ownerId,
-            parentId: file.parentId,
-            fileType: file.fileType,
-            createdAt: file.createdAt,
-            updatedAt: file.updatedAt,
-        });
+    return reply.code(200).send({
+        id: fileId,
+        name: file.fileName,
+        ownerId: file.ownerId,
+        parentId: file.parentId,
+        fileType: file.fileType,
+        createdAt: file.createdAt,
+        updatedAt: file.updatedAt,
+    });
 }
 
 export async function getFileHandler(

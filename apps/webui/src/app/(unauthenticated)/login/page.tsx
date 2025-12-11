@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useState } from "react";
+import { Suspense, useContext, useState } from "react";
 import { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
@@ -14,6 +14,20 @@ import { SessionContext } from "@/components/auth/session-provider";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 export default function LoginPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex h-full min-h-screen w-full items-center justify-center">
+                    <span className="text-lg text-zinc-600 dark:text-zinc-300">Loading login…</span>
+                </div>
+            }
+        >
+            <LoginForm />
+        </Suspense>
+    );
+}
+
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
 

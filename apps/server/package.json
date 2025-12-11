@@ -10,7 +10,7 @@
         "db:generate": "prisma generate",
         "db:migrate": "prisma migrate dev",
         "db:validate": "prisma validate",
-        "build": "rimraf dist && prisma db push && prisma generate && tsup src/index.ts --format esm",
+        "build": "rimraf dist && prisma generate && tsup src/index.ts --format esm",
         "clean": "rimraf dist",
         "start": "node ./dist/index.mjs"
     },

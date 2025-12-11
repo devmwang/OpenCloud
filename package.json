@@ -2,12 +2,12 @@
     "name": "opencloud",
     "private": true,
     "scripts": {
-        "build": "dotenv -- turbo build",
+        "build": "dotenv -e .env.local -- turbo build",
         "clean": "turbo clean",
-        "dev": "dotenv -- turbo dev",
+        "dev": "dotenv -e .env.local -- turbo dev",
         "lint": "turbo lint",
         "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-        "start": "dotenv -- turbo start"
+        "start": "dotenv -e .env.local -- turbo start"
     },
     "devDependencies": {
         "@turbo/gen": "^1.10.16",
