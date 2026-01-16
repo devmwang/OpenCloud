@@ -7,18 +7,17 @@ import { env } from "./src/env/env.mjs";
 
 /** @type {import("next").NextConfig} */
 
+const serverUrl = new URL(env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL);
+
 const config = {
-    experimental: {
-        typedRoutes: true,
-    },
+    typedRoutes: true,
     reactStrictMode: true,
-    swcMinify: true,
     images: {
         remotePatterns: [
             {
-                protocol: "https",
-                hostname: env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL,
-                port: "",
+                protocol: serverUrl.protocol.replace(":", ""),
+                hostname: serverUrl.hostname,
+                port: serverUrl.port,
                 pathname: "/*/files/get/**",
             },
         ],

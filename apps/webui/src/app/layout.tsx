@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata } from "next/dist/types";
 
 import "@/styles/globals.css";
 
@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/ui/theme-provider";
 
 export const metadata: Metadata = {
     title: "OpenCloud",
-    description: "OpenCloud by Controllyx",
+    description: "OpenCloud",
     icons: {
         icon: "/OpenCloud-Circle.svg",
     },
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="en">
+        <html lang="en" suppressHydrationWarning>
             <body className="min-h-screen bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
                 <SessionProvider>
                     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

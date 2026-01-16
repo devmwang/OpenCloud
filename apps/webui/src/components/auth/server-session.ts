@@ -4,8 +4,9 @@ import * as z from "zod";
 import { env } from "@/env/env.mjs";
 
 export async function getServerSession() {
+    const cookieStore = await cookies();
     const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
-        headers: { Cookie: cookies().toString() },
+        headers: { Cookie: cookieStore.toString() },
         next: {
             tags: ["session"],
         },

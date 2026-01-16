@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { buildJsonSchemas } from "fastify-zod";
+import { z } from "zod/v3";
+import { buildJsonSchemas } from "@/utils/zod-schema";
 
 const uploadFileQuerySchema = z.object({
     parentFolderId: z.string({

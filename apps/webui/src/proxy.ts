@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ResponseCookies, RequestCookies } from "next/dist/server/web/spec-extension/cookies";
 
 import { env } from "@/env/env.mjs";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     // Handle discordbot user agent
     if (request.nextUrl.pathname.startsWith("/file")) {
         if (

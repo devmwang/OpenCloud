@@ -87,6 +87,7 @@ function LoginForm() {
                                     <FormControl>
                                         <input
                                             {...field}
+                                            value={field.value ?? ""}
                                             type="text"
                                             id="username"
                                             placeholder="Username"
@@ -105,6 +106,7 @@ function LoginForm() {
                                     <FormControl>
                                         <input
                                             {...field}
+                                            value={field.value ?? ""}
                                             type="password"
                                             id="password"
                                             placeholder="Password"
@@ -131,15 +133,11 @@ function LoginForm() {
 
 const loginSchema = z.object({
     username: z
-        .string({
-            required_error: "Username is required",
-            invalid_type_error: "Username must be a string",
-        })
+        .string()
+        .min(1, { message: "Username is required" })
         .min(3, { message: "Username must be at least 3 characters long" }),
     password: z
-        .string({
-            required_error: "Password is required",
-            invalid_type_error: "Password must be a string",
-        })
-        .min(8, { message: "Password must be at least 3 characters long" }),
+        .string()
+        .min(1, { message: "Password is required" })
+        .min(8, { message: "Password must be at least 8 characters long" }),
 });

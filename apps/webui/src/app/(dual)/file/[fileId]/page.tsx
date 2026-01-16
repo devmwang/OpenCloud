@@ -1,4 +1,4 @@
-import { Metadata } from "next";
+import type { Metadata } from "next/dist/types";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import path from "path";
@@ -6,7 +6,8 @@ import path from "path";
 import { env } from "@/env/env.mjs";
 import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
 
-export async function generateMetadata({ params }: { params: { fileId: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ fileId: string }> }): Promise<Metadata> {
+    const params = await props.params;
     const fileId = path.parse(params.fileId).name;
 
     const fileDetails = await getFileDetails(fileId);
@@ -32,7 +33,8 @@ export async function generateMetadata({ params }: { params: { fileId: string } 
     };
 }
 
-export default async function FileView({ params }: { params: { fileId: string } }) {
+export default async function FileView(props: { params: Promise<{ fileId: string }> }) {
+    const params = await props.params;
     const fileId = path.parse(params.fileId).name;
     const fileDetailsPromise = getFileDetails(fileId);
 
@@ -77,9 +79,10 @@ export default async function FileView({ params }: { params: { fileId: string } 
 }
 
 async function getFileDetails(fileId: string) {
+    const cookieStore = await cookies();
     const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get-details?fileId=${fileId}`, {
         cache: "no-store",
-        headers: { Cookie: cookies().toString() },
+        headers: { Cookie: cookieStore.toString() },
     });
 
     if (response.status == 401 || response.status == 403) {

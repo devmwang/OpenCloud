@@ -17,7 +17,7 @@ export default function StatusBar() {
     const profileMenuRef = useRef<HTMLDivElement>(null);
 
     const menuTransition = {
-        duration: "0.2",
+        duration: 0.2,
     };
 
     const selectMenu = (menu: string) => {
@@ -74,7 +74,7 @@ export default function StatusBar() {
                                         exit={{
                                             opacity: 0,
                                             scaleY: 0.9,
-                                            transition: { menuTransition },
+                                            transition: menuTransition,
                                         }}
                                         transition={menuTransition}
                                     >
@@ -99,7 +99,7 @@ export default function StatusBar() {
                                         exit={{
                                             opacity: 0,
                                             scaleY: 0.9,
-                                            transition: { menuTransition },
+                                            transition: menuTransition,
                                         }}
                                         transition={menuTransition}
                                     >

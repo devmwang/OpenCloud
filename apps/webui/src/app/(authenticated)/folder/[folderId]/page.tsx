@@ -6,7 +6,8 @@ import { env } from "@/env/env.mjs";
 import { Breadcrumb } from "@/components/file-system/breadcrumb";
 import { GridLayout } from "@/components/file-system/grid/core-layout";
 
-export default async function FolderView({ params }: { params: { folderId: string } }) {
+export default async function FolderView(props: { params: Promise<{ folderId: string }> }) {
+    const params = await props.params;
     const folderDetailsPromise = getFolderDetails(params.folderId);
     const folderContentsPromise = getFolderContents(params.folderId);
 
@@ -24,9 +25,10 @@ export default async function FolderView({ params }: { params: { folderId: strin
 }
 
 async function getFolderDetails(folderId: string) {
+    const cookieStore = await cookies();
     const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-details?folderId=${folderId}`, {
         cache: "no-store",
-        headers: { Cookie: cookies().toString() },
+        headers: { Cookie: cookieStore.toString() },
     });
 
     if (!response.ok) {
@@ -43,11 +45,12 @@ async function getFolderDetails(folderId: string) {
 }
 
 async function getFolderContents(folderId: string) {
+    const cookieStore = await cookies();
     const response = await fetch(
         `${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-contents?folderId=${folderId}`,
         {
             cache: "no-store",
-            headers: { Cookie: cookies().toString() },
+            headers: { Cookie: cookieStore.toString() },
         },
     );
 

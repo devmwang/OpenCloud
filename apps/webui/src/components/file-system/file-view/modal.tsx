@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Modal({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
-    function onKeyDown(e: KeyboardEvent) {
-        if (e.key === "Escape") {
-            router.back();
-        }
-    }
+    const onKeyDown = useCallback(
+        (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                router.back();
+            }
+        },
+        [router],
+    );
 
     useEffect(() => {
         document.addEventListener("keydown", onKeyDown);

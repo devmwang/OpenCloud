@@ -5,8 +5,9 @@ import path from "path";
 import { env } from "@/env/env.mjs";
 import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
 
-export default async function FileView({ params }: { params: { fileId: string } }) {
-    const cookieStore = cookies();
+export default async function FileView(props: { params: Promise<{ fileId: string }> }) {
+    const params = await props.params;
+    const cookieStore = await cookies();
 
     const accessToken = cookieStore.get("AccessToken");
 
@@ -35,9 +36,10 @@ export default async function FileView({ params }: { params: { fileId: string } 
 }
 
 async function getFileDetails(fileId: string) {
+    const cookieStore = await cookies();
     const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get-details?fileId=${fileId}`, {
         cache: "no-store",
-        headers: { Cookie: cookies().toString() },
+        headers: { Cookie: cookieStore.toString() },
     });
 
     if (!response.ok) {

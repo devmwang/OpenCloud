@@ -1,16 +1,17 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../../tailwind.config.cjs";
+@import "tailwindcss";
 
-::-webkit-scrollbar {
-    @apply w-2;
-}
+@layer base {
+    ::-webkit-scrollbar {
+        @apply w-2;
+    }
 
-::-webkit-scrollbar-track {
-    @apply bg-zinc-900;
-}
+    ::-webkit-scrollbar-track {
+        @apply bg-zinc-900;
+    }
 
-::-webkit-scrollbar-thumb {
-    @apply bg-neutral-500;
-    @apply rounded-full;
+    ::-webkit-scrollbar-thumb {
+        @apply bg-neutral-500;
+        @apply rounded-full;
+    }
 }

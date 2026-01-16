@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, createContext } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, createContext } from "react";
 import axios from "axios";
 import * as z from "zod";
 import ms from "ms";
@@ -39,52 +39,54 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const [session, setSession] = useState<SessionType | undefined>(undefined);
     const [authenticated, setAuthenticated] = useState<boolean>(false);
 
+    const update = useCallback(async (): Promise<
+        { status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }
+    > => {
+        try {
+            const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
+                withCredentials: true,
+            });
+
+            const parsedResponse = getSessionDetailsSchema.safeParse(response.data);
+
+            if (parsedResponse.success === false) return { status: "error", error: parsedResponse.error };
+
+            const newSession: SessionType = {
+                user: parsedResponse.data.user,
+                accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
+                refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
+            };
+
+            if (newSession) {
+                setSession(newSession);
+                setAuthenticated(true);
+            }
+
+            return { status: "success", sessionData: newSession };
+        } catch (error) {
+            return { status: "error", error: error };
+        }
+    }, []);
+
     const contextValue = useMemo(
         () => ({
-            session: session,
-            authenticated: authenticated,
-            update: async (): Promise<
-                { status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }
-            > => {
-                try {
-                    const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
-                        withCredentials: true,
-                    });
-
-                    const parsedResponse = getSessionDetailsSchema.safeParse(response.data);
-
-                    if (parsedResponse.success === false) return { status: "error", error: parsedResponse.error };
-
-                    const newSession: SessionType = {
-                        user: parsedResponse.data.user,
-                        accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
-                        refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
-                    };
-
-                    if (newSession) {
-                        setSession(newSession);
-                        setAuthenticated(true);
-                    }
-
-                    return { status: "success", sessionData: newSession };
-                } catch (error) {
-                    return { status: "error", error: error };
-                }
-            },
+            session,
+            authenticated,
+            update,
         }),
-        [session],
+        [authenticated, session, update],
     );
 
     useEffect(() => {
         if (firstLoad.current) {
             firstLoad.current = false;
 
-            contextValue.update().then((initialStatus) => {
+            update().then((initialStatus) => {
                 if (initialStatus.status === "success") return;
 
                 // Try updating every 5 seconds until successful
                 const updateIntervalTimer = setInterval(async () => {
-                    contextValue.update().then((updateStatus) => {
+                    update().then((updateStatus) => {
                         if (updateStatus.status === "success") {
                             clearInterval(updateIntervalTimer);
                             return;
@@ -93,7 +95,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 }, ms("5s"));
             });
         }
-    }, []);
+    }, [update]);
 
     // Token refresh system
     useEffect(() => {
@@ -135,7 +137,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 clearInterval(refetchIntervalTimer);
             };
         }
-    }, [authenticated]);
+    }, [authenticated, session]);
 
     return <SessionContext.Provider value={contextValue}>{children}</SessionContext.Provider>;
 }

@@ -2,20 +2,25 @@
     "name": "opencloud",
     "private": true,
     "scripts": {
-        "build": "dotenv -e .env.local -- turbo build",
+        "build": "dotenvx run --convention=nextjs -- turbo build",
         "clean": "turbo clean",
-        "dev": "dotenv -e .env.local -- turbo dev",
+        "dev": "dotenvx run --convention=nextjs -- turbo dev",
         "lint": "turbo lint",
+        "typecheck": "turbo typecheck",
         "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-        "start": "dotenv -e .env.local -- turbo start"
+        "start": "dotenvx run --convention=nextjs -- turbo start"
     },
     "devDependencies": {
-        "@turbo/gen": "^1.10.16",
-        "dotenv-cli": "^7.3.0",
-        "eslint": "^8.53.0",
+        "@dotenvx/dotenvx": "^1.51.4",
+        "@turbo/gen": "^2.7.4",
+        "eslint": "^9.39.2",
         "eslint-config-custom": "workspace:*",
-        "prettier": "^3.0.3",
-        "turbo": "^1.10.16"
+        "prettier": "^3.8.0",
+        "turbo": "^2.7.4",
+        "typescript-eslint": "^8.53.0"
     },
-    "packageManager": "pnpm@10.15.0"
+    "engines": {
+        "node": ">=22.12.0"
+    },
+    "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
 }

@@ -1,5 +1,38 @@
-import { z } from "zod";
+import fs from "node:fs";
+import path from "node:path";
+import dotenvx from "@dotenvx/dotenvx";
 import { createEnv } from "@t3-oss/env-core";
+import { z } from "zod";
+
+const findEnvFile = (fileName: string) => {
+    let currentDir = process.cwd();
+
+    while (true) {
+        const candidate = path.join(currentDir, fileName);
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) {
+            return null;
+        }
+
+        currentDir = parentDir;
+    }
+};
+
+const envPaths = [findEnvFile(".env.local"), findEnvFile(".env")].filter(
+    (value): value is string => Boolean(value),
+);
+
+if (envPaths.length > 0) {
+    dotenvx.config({
+        path: envPaths,
+        ignore: ["MISSING_ENV_FILE"],
+        quiet: true,
+    });
+}
 
 export const env = createEnv({
     server: {
@@ -9,11 +42,12 @@ export const env = createEnv({
         DATABASE_URL: z.string().url(),
         FILE_STORE_PATH: z.string(),
     },
-    clientPrefix: "",
-    client: {},
+
     /**
      * What object holds the environment variables at runtime.
      * Often `process.env` or `import.meta.env`
      */
     runtimeEnv: process.env,
+
+    emptyStringAsUndefined: true,
 });

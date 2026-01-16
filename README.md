@@ -28,11 +28,11 @@ Clone the repository and install dependencies. Copy the `.env.example` file to `
 
 ### Server
 
-The [backend server](https://github.com/Controllyx/OpenCloud/tree/main/apps/server) is built using [TypeScript](https://www.typescriptlang.org/docs/), [Fastify](https://www.fastify.io/docs/latest/), [Prisma](https://www.prisma.io/docs), [argon2](https://www.npmjs.com/package/argon2), and [Zod](https://zod.dev/).
+The [backend server](https://github.com/devmwang/OpenCloud/tree/main/apps/server) is built using [TypeScript](https://www.typescriptlang.org/docs/), [Fastify](https://www.fastify.io/docs/latest/), [Prisma](https://www.prisma.io/docs), [argon2](https://www.npmjs.com/package/argon2), and [Zod](https://zod.dev/).
 
 ### Client
 
-The [web client (WebUI)](https://github.com/Controllyx/OpenCloud/tree/main/apps/webui) is built using [TypeScript](https://www.typescriptlang.org/docs/), [Next.js](https://nextjs.org), [React](https://reactjs.org/), [Tailwind](https://tailwindcss.com/), [Zod](https://zod.dev/), [Framer Motion](https://www.framer.com/motion/), and [shadcn/ui](https://ui.shadcn.com/docs).
+The [web client (WebUI)](https://github.com/devmwang/OpenCloud/tree/main/apps/webui) is built using [TypeScript](https://www.typescriptlang.org/docs/), [Next.js](https://nextjs.org), [React](https://reactjs.org/), [Tailwind](https://tailwindcss.com/), [Zod](https://zod.dev/), [Framer Motion](https://www.framer.com/motion/), and [shadcn/ui](https://ui.shadcn.com/docs).
 
 ### Server-Client Communication
 
