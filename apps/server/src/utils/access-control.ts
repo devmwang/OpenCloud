@@ -1,5 +1,8 @@
 import type { FastifyRequest, FastifyPluginAsync } from "fastify";
+import { eq } from "drizzle-orm";
 import fp from "fastify-plugin";
+
+import { accessRules } from "@/db/schema/access-rules";
 
 declare module "fastify" {
     interface FastifyInstance {
@@ -10,7 +13,11 @@ declare module "fastify" {
 const accessControlPlugin: FastifyPluginAsync = fp(async (server) => {
     // If route is protected by AC rule, verify that user has access or return 403
     server.decorate("verifyAccessControlRule", async function (request: FastifyRequest, ruleId: string) {
-        const accessRule = await this.prisma.accessRule.findUnique({ where: { id: ruleId } });
+        const [accessRule] = await this.db
+            .select()
+            .from(accessRules)
+            .where(eq(accessRules.id, ruleId))
+            .limit(1);
 
         if (!accessRule) {
             return false;

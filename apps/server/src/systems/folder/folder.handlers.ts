@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { and, eq } from "drizzle-orm";
 
+import { files, folders } from "@/db/schema/storage";
 import type { getDetailsQuerystring, getContentsQuerystring, createFolderInput } from "./folder.schemas";
 
 export async function getDetailsHandler(
@@ -9,7 +11,16 @@ export async function getDetailsHandler(
 ) {
     const folderId = request.query.folderId;
 
-    const folder = await this.prisma.folder.findUnique({ where: { id: folderId } });
+    const [folder] = await this.db
+        .select({
+            id: folders.id,
+            folderName: folders.folderName,
+            type: folders.type,
+            parentFolderId: folders.parentFolderId,
+        })
+        .from(folders)
+        .where(eq(folders.id, folderId))
+        .limit(1);
 
     if (!folder) {
         return reply.code(404).send({ message: "Something went wrong. Please try again." });
@@ -19,7 +30,16 @@ export async function getDetailsHandler(
     const hierarchy: { id: string; name: string; type: string }[] = [];
 
     while (currentFolder.type != "ROOT" && currentFolder.parentFolderId) {
-        const parent = await this.prisma.folder.findUnique({ where: { id: currentFolder.parentFolderId } });
+        const [parent] = await this.db
+            .select({
+                id: folders.id,
+                folderName: folders.folderName,
+                type: folders.type,
+                parentFolderId: folders.parentFolderId,
+            })
+            .from(folders)
+            .where(eq(folders.id, currentFolder.parentFolderId))
+            .limit(1);
 
         if (!parent) {
             return reply.code(404).send({ message: "Something went wrong. Please try again." });
@@ -40,23 +60,23 @@ export async function getContentsHandler(
 ) {
     const folderId = request.query.folderId;
 
-    const contents = await this.prisma.folder.findFirst({
-        where: { id: folderId },
-        select: {
-            childFiles: {
-                select: { id: true, fileName: true },
-            },
-            childFolders: {
-                select: { id: true, folderName: true },
-            },
-        },
-    });
+    const [folder] = await this.db.select({ id: folders.id }).from(folders).where(eq(folders.id, folderId)).limit(1);
 
-    if (!contents) {
+    if (!folder) {
         return reply.code(404).send({ message: "Something went wrong. Please try again." });
     }
 
-    return reply.code(200).send({ id: folderId, folders: contents.childFolders, files: contents.childFiles });
+    const childFolders = await this.db
+        .select({ id: folders.id, folderName: folders.folderName })
+        .from(folders)
+        .where(eq(folders.parentFolderId, folderId));
+
+    const childFiles = await this.db
+        .select({ id: files.id, fileName: files.fileName })
+        .from(files)
+        .where(eq(files.parentId, folderId));
+
+    return reply.code(200).send({ id: folderId, folders: childFolders, files: childFiles });
 }
 
 export async function createFolderHandler(
@@ -67,21 +87,33 @@ export async function createFolderHandler(
     const userId = request.user.id;
     const { folderName, parentFolderId } = request.body;
 
-    const existingFolder = await this.prisma.folder.findFirst({
-        where: { ownerId: userId, folderName: folderName, parentFolderId: parentFolderId },
-    });
+    const existingFolder = await this.db
+        .select({ id: folders.id })
+        .from(folders)
+        .where(
+            and(
+                eq(folders.ownerId, userId),
+                eq(folders.folderName, folderName),
+                eq(folders.parentFolderId, parentFolderId),
+            ),
+        )
+        .limit(1);
 
-    if (existingFolder) {
+    if (existingFolder.length > 0) {
         return reply.code(400).send({ message: "A folder with this name already exists in the folder" });
     }
 
-    const folder = await this.prisma.folder.create({
-        data: {
+    const [folder] = await this.db
+        .insert(folders)
+        .values({
             ownerId: userId,
             folderName: folderName,
             parentFolderId: parentFolderId,
-        },
-    });
+        })
+        .returning({ id: folders.id });
+    if (!folder) {
+        return reply.code(500).send({ message: "Failed to create folder" });
+    }
 
     return reply.code(201).send({ id: folder.id });
 }

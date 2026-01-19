@@ -7,11 +7,12 @@ import FastifyCookie from "@fastify/cookie";
 import FastifyRateLimit from "@fastify/rate-limit";
 import FastifyMultipart from "@fastify/multipart";
 import FastifyStatic from "@fastify/static";
+import fs from "fs";
 import path from "path";
 
 import { env } from "@/env/env";
 
-import prismaPlugin from "@/utils/prisma";
+import dbPlugin from "@/utils/db";
 import authenticationPlugin from "@/utils/authentication";
 import accessControlPlugin from "@/utils/access-control";
 
@@ -37,7 +38,7 @@ const server = Fastify({
 });
 
 // Register Utility Plugins
-void server.register(prismaPlugin);
+void server.register(dbPlugin);
 void server.register(authenticationPlugin);
 void server.register(accessControlPlugin);
 
@@ -62,8 +63,13 @@ void server.register(FastifyMultipart, {
     },
 });
 
+const fileStoreRoot = path.resolve(env.FILE_STORE_PATH);
+if (!fs.existsSync(fileStoreRoot)) {
+    fs.mkdirSync(fileStoreRoot, { recursive: true });
+}
+
 void server.register(FastifyStatic, {
-    root: path.resolve(env.FILE_STORE_PATH),
+    root: fileStoreRoot,
     prefix: "/FileStore/",
 });
 

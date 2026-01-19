@@ -1,9 +1,14 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { FastifyJWT } from "@fastify/jwt";
+import { eq } from "drizzle-orm";
 import * as argon2 from "argon2";
 import ms from "ms";
 
 import { env } from "@/env/env";
+import { accessRules } from "@/db/schema/access-rules";
+import { refreshTokens, uploadTokens } from "@/db/schema/auth";
+import { users } from "@/db/schema/users";
+import { folders } from "@/db/schema/storage";
 import type { CreateUserInput, LoginInput, CreateAccessRuleInput, CreateUploadTokenInput } from "./auth.schemas";
 
 export async function createUserHandler(
@@ -15,36 +20,54 @@ export async function createUserHandler(
 
     try {
         // Verify that user does not already exist
-        if (await this.prisma.user.findUnique({ where: { username: username } })) {
+        const existingUser = await this.db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.username, username))
+            .limit(1);
+        if (existingUser.length > 0) {
             return reply.code(400).send({ message: "User with username already exists" });
         }
 
         // Create user in db
         const hashedPassword = await argon2.hash(password);
 
-        // Create user in db
-        const user = await this.prisma.user.create({
-            data: {
-                username: username,
-                firstName: firstName != undefined ? firstName : null,
-                lastName: lastName != undefined ? lastName : null,
-                password: hashedPassword,
-            },
-        });
+        const userWithRoot = await this.db.transaction(async (tx) => {
+            const [user] = await tx
+                .insert(users)
+                .values({
+                    username: username,
+                    firstName: firstName != undefined ? firstName : null,
+                    lastName: lastName != undefined ? lastName : null,
+                    password: hashedPassword,
+                })
+                .returning();
+            if (!user) {
+                throw new Error("Failed to create user");
+            }
 
-        // Create Root folder with default name "Files"
-        const rootFolder = await this.prisma.folder.create({
-            data: {
-                folderName: "Files",
-                ownerId: user.id,
-                type: "ROOT",
-            },
-        });
+            const [rootFolder] = await tx
+                .insert(folders)
+                .values({
+                    folderName: "Files",
+                    ownerId: user.id,
+                    type: "ROOT",
+                })
+                .returning({ id: folders.id });
+            if (!rootFolder) {
+                throw new Error("Failed to create root folder");
+            }
 
-        // Add root folder id to user
-        const userWithRoot = await this.prisma.user.update({
-            where: { id: user.id },
-            data: { rootFolderId: rootFolder.id },
+            const [updatedUser] = await tx
+                .update(users)
+                .set({ rootFolderId: rootFolder.id })
+                .where(eq(users.id, user.id))
+                .returning();
+            if (!updatedUser) {
+                throw new Error("Failed to update user");
+            }
+
+            return updatedUser;
         });
 
         // Return user
@@ -62,9 +85,7 @@ export async function loginHandler(
 ) {
     const body = request.body;
 
-    const user = await this.prisma.user.findUnique({
-        where: { username: body.username },
-    });
+    const [user] = await this.db.select().from(users).where(eq(users.username, body.username)).limit(1);
 
     if (!user) {
         return reply.code(401).send({ message: "Invalid username or password" });
@@ -76,14 +97,16 @@ export async function loginHandler(
         const refreshExpiration = new Date(Date.now() + ms("7d"));
 
         // Create refresh token in db
-        const refreshToken = await this.prisma.refreshToken.create({
-            data: {
-                user: {
-                    connect: { id: user.id },
-                },
+        const [refreshToken] = await this.db
+            .insert(refreshTokens)
+            .values({
+                userId: user.id,
                 expiresAt: refreshExpiration,
-            },
-        });
+            })
+            .returning();
+        if (!refreshToken) {
+            return reply.code(500).send({ message: "Failed to create refresh token" });
+        }
 
         // Set Access and Refresh Token Cookies
         reply.setCookie("AccessToken", this.jwt.sign({ id: user.id, type: "AccessToken" }, { expiresIn: "15m" }), {
@@ -138,7 +161,7 @@ export async function sessionHandler(this: FastifyInstance, request: FastifyRequ
     const accessTokenExpires = new Date(decodedAccessToken.exp * 1000);
     const refreshTokenExpires = new Date(decodedRefreshToken.exp * 1000);
 
-    const user = await this.prisma.user.findUnique({ where: { id: request.user.id } });
+    const [user] = await this.db.select().from(users).where(eq(users.id, request.user.id)).limit(1);
 
     if (!user) {
         return reply.code(500).send({ message: "Invalid session" });
@@ -167,9 +190,11 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
     const tokenPayload: FastifyJWT["decoded"] = this.jwt.verify(refreshToken);
 
     // Get current token from db and verify that it is valid
-    const currentRefreshToken = await this.prisma.refreshToken.findUnique({
-        where: { id: tokenPayload.id },
-    });
+    const [currentRefreshToken] = await this.db
+        .select()
+        .from(refreshTokens)
+        .where(eq(refreshTokens.id, tokenPayload.id))
+        .limit(1);
 
     // No token found in db with id from token payload
     if (!currentRefreshToken) {
@@ -178,14 +203,10 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
 
     // User refresh token already used (potentially stolen), invalidate all of user's refresh tokens
     if (!currentRefreshToken.valid) {
-        await this.prisma.refreshToken.updateMany({
-            where: {
-                userId: currentRefreshToken.userId,
-            },
-            data: {
-                valid: false,
-            },
-        });
+        await this.db
+            .update(refreshTokens)
+            .set({ valid: false })
+            .where(eq(refreshTokens.userId, currentRefreshToken.userId));
 
         // Clear cookies on client
         reply.clearCookie("AccessToken", { domain: env.COOKIE_URL, path: "/" });
@@ -199,19 +220,19 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
         reply.clearCookie("AccessToken", { domain: env.COOKIE_URL, path: "/" });
         reply.clearCookie("RefreshToken", { domain: env.COOKIE_URL, path: "/" });
 
-        await this.prisma.refreshToken.update({
-            where: { id: currentRefreshToken.id },
-            data: { valid: false },
-        });
+        await this.db
+            .update(refreshTokens)
+            .set({ valid: false })
+            .where(eq(refreshTokens.id, currentRefreshToken.id));
 
         return reply.code(401).send({ message: "Expired refresh token" });
     }
 
     // Invalidate current refresh token
-    await this.prisma.refreshToken.update({
-        where: { id: tokenPayload.id },
-        data: { valid: false },
-    });
+    await this.db
+        .update(refreshTokens)
+        .set({ valid: false })
+        .where(eq(refreshTokens.id, tokenPayload.id));
 
     const userId = currentRefreshToken.userId;
 
@@ -219,14 +240,16 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
     const accessTokenExpires = new Date(Date.now() + ms("15m"));
     const refreshTokenExpires = new Date(Date.now() + ms("7d"));
 
-    const newRefreshToken = await this.prisma.refreshToken.create({
-        data: {
-            user: {
-                connect: { id: userId },
-            },
+    const [newRefreshToken] = await this.db
+        .insert(refreshTokens)
+        .values({
+            userId: userId,
             expiresAt: refreshTokenExpires,
-        },
-    });
+        })
+        .returning();
+    if (!newRefreshToken) {
+        return reply.code(500).send({ message: "Failed to create refresh token" });
+    }
 
     // Set Access and Refresh Token Cookies
     reply.setCookie("AccessToken", this.jwt.sign({ id: userId, type: "AccessToken" }, { expiresIn: "15m" }), {
@@ -257,7 +280,7 @@ export async function refreshHandler(this: FastifyInstance, request: FastifyRequ
 }
 
 export async function infoHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
-    const user = await this.prisma.user.findUnique({ where: { id: request.user.id } });
+    const [user] = await this.db.select().from(users).where(eq(users.id, request.user.id)).limit(1);
 
     if (!user) {
         return reply.code(500).send({ message: "Something went wrong. Please try again." });
@@ -273,13 +296,11 @@ export async function createAccessRuleHandler(
 ) {
     const { name, type, method, match } = request.body;
 
-    await this.prisma.accessRule.create({
-        data: {
-            name: name,
-            type: type,
-            method: method,
-            match: match,
-        },
+    await this.db.insert(accessRules).values({
+        name: name,
+        type: type,
+        method: method,
+        match: match,
     });
 
     return reply.code(200).send({ status: "success", message: "Access Rule created" });
@@ -290,8 +311,12 @@ export async function createUploadTokenHandler(
     request: FastifyRequest<{ Body: CreateUploadTokenInput }>,
     reply: FastifyReply,
 ) {
-    const user = await this.prisma.user.findUnique({ where: { id: request.user.id } });
-    const folder = await this.prisma.folder.findUnique({ where: { id: request.body.folderId } });
+    const [user] = await this.db.select().from(users).where(eq(users.id, request.user.id)).limit(1);
+    const [folder] = await this.db
+        .select({ id: folders.id, ownerId: folders.ownerId })
+        .from(folders)
+        .where(eq(folders.id, request.body.folderId))
+        .limit(1);
 
     if (!user || !folder) {
         return reply.code(500).send({ message: "Something went wrong. Please try again." });
@@ -305,16 +330,18 @@ export async function createUploadTokenHandler(
 
     const { description, folderId, fileAccess } = request.body;
 
-    const uploadToken = await this.prisma.uploadToken.create({
-        data: {
-            user: {
-                connect: { id: user.id },
-            },
+    const [uploadToken] = await this.db
+        .insert(uploadTokens)
+        .values({
+            userId: user.id,
             description: description != undefined ? description : null,
             folderId: folderId,
             fileAccess: fileAccess,
-        },
-    });
+        })
+        .returning();
+    if (!uploadToken) {
+        return reply.code(500).send({ message: "Failed to create upload token" });
+    }
 
     return reply.code(200).send({ uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }) });
 }

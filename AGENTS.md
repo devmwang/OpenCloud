@@ -1,7 +1,7 @@
 # OpenCloud Agent Guide
 
 ## Repository layout
-- `apps/server`: Fastify API server (TypeScript, Prisma, JWT auth).
+- `apps/server`: Fastify API server (TypeScript, Drizzle, JWT auth).
 - `apps/webui`: Next.js 16 App Router UI (React 19, Tailwind CSS).
 - `common/tsconfig`: Shared TypeScript base configs.
 - `common/eslint-config-custom`: Shared ESLint flat config composition.
@@ -23,9 +23,10 @@
   - Zod schemas live in `*.schemas.ts`.
   - `apps/server/src/utils/zod-schema.ts` converts Zod -> JSON Schema.
   - Schemas are registered in `apps/server/src/index.ts`.
-- Prisma:
-  - Schema: `apps/server/prisma/schema.prisma` (PostgreSQL).
-  - Plugin: `apps/server/src/utils/prisma.ts` attaches `server.prisma`.
+- Drizzle:
+  - Schema: `apps/server/src/db/schema/*` (PostgreSQL).
+  - Config: `apps/server/drizzle.config.ts`.
+  - Plugin: `apps/server/src/utils/db.ts` attaches `server.db`.
 
 ## WebUI overview (`apps/webui`)
 - App Router with route groups:
@@ -48,10 +49,10 @@ Client (`.env.local`):
 - `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: Base URL for the API server.
 
 ## Tooling and versions
-- Node.js: `>=22.12.0` (Prisma 7 supports 20.19+, 22.12+, 24+).
+- Node.js: `>=22.12.0`.
 - pnpm: `10.28.0` (workspace manager).
 - Next.js 16, React 19, Tailwind 4.
-- Fastify 5, Prisma 6, TypeScript 5.9.
+- Fastify 5, Drizzle ORM, TypeScript 5.9.
 - ESLint 9 with flat config (`eslint.config.js`).
 - dotenvx for env loading (CLI + server bootstrap).
 - Server dev uses `tsx`; production builds use `tsdown`.
@@ -65,6 +66,7 @@ Client (`.env.local`):
 - Server-only:
   - `pnpm --filter server db:generate`
   - `pnpm --filter server db:migrate`
+  - `pnpm --filter server db:studio`
   - `pnpm --filter server dev`
   - `pnpm --filter server typecheck`
 - WebUI-only:

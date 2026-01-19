@@ -1,9 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import util from "util";
 import sharp from "sharp";
 
+import { files } from "@/db/schema/storage";
 import { env } from "@/env/env";
 
 import type { GetDetailsQuerystring, GetFileParams, GetThumbnailParams, DeleteFileQuerystring } from "./fs.schemas";
@@ -17,7 +19,7 @@ export async function getDetailsHandler(
 ) {
     const fileId = request.query.fileId;
 
-    const file = await this.prisma.file.findUnique({ where: { id: fileId } });
+    const [file] = await this.db.select().from(files).where(eq(files.id, fileId)).limit(1);
 
     if (!file) {
         return reply.code(404).send({ message: "Something went wrong. Please try again." });
@@ -56,9 +58,11 @@ export async function getFileHandler(
         return reply.code(404).send({ message: "File not found" });
     }
 
-    const fileDetails = await this.prisma.file.findUnique({
-        where: { id: cleanedFileId },
-    });
+    const [fileDetails] = await this.db
+        .select()
+        .from(files)
+        .where(eq(files.id, cleanedFileId))
+        .limit(1);
 
     if (!fileDetails) {
         return reply.code(404).send({ message: "File not found" });
@@ -92,9 +96,11 @@ export async function getThumbnailHandler(
         return reply.code(404).send({ message: "File not found" });
     }
 
-    const fileDetails = await this.prisma.file.findUnique({
-        where: { id: cleanedFileId },
-    });
+    const [fileDetails] = await this.db
+        .select()
+        .from(files)
+        .where(eq(files.id, cleanedFileId))
+        .limit(1);
 
     if (!fileDetails) {
         return reply.code(404).send({ message: "File not found" });
@@ -124,9 +130,11 @@ export async function deleteFileHandler(
     request: FastifyRequest<{ Querystring: DeleteFileQuerystring }>,
     reply: FastifyReply,
 ) {
-    const fileDetails = await this.prisma.file.findUnique({
-        where: { id: request.query.fileId },
-    });
+    const [fileDetails] = await this.db
+        .select()
+        .from(files)
+        .where(eq(files.id, request.query.fileId))
+        .limit(1);
 
     if (!fileDetails) {
         return reply.code(404).send({ message: "File not found" });
@@ -136,8 +144,8 @@ export async function deleteFileHandler(
         return reply.code(403).send({ error: "Forbidden", message: "You do not have permission to edit this file" });
     }
 
-    const folderPath = "./FileStore/" + request.user.id;
-    const filePath = folderPath + "/" + fileDetails.id;
+    const folderPath = path.join(env.FILE_STORE_PATH, request.user.id);
+    const filePath = path.join(folderPath, fileDetails.id);
 
     try {
         await unlinkAsync(filePath);
@@ -145,9 +153,7 @@ export async function deleteFileHandler(
         return reply.code(403).send({ status: "fail", message: "File deletion failed" });
     }
 
-    await this.prisma.file.delete({
-        where: { id: fileDetails.id },
-    });
+    await this.db.delete(files).where(eq(files.id, fileDetails.id));
 
     return reply.code(200).send({ status: "success", message: "File deleted successfully" });
 }

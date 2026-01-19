@@ -1,12 +1,16 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
-import type { PrismaClient, FileAccess } from "@prisma/client";
+import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import util from "util";
 import { pipeline } from "stream";
 
+import type { Database } from "@/db";
+import { uploadTokens } from "@/db/schema/auth";
+import type { FileAccess } from "@/db/schema/enums";
+import { files } from "@/db/schema/storage";
 import { env } from "@/env/env";
 
 import type { UploadFileQuerystring } from "./upload.schemas";
@@ -28,7 +32,7 @@ export async function uploadHandler(
     }
 
     const newFileId = await createFileDetails(
-        this.prisma,
+        this.db,
         fileData.filename,
         fileData.mimetype,
         request.user.id,
@@ -36,7 +40,7 @@ export async function uploadHandler(
         "PROTECTED",
     );
 
-    await coreUploadHandler(this.prisma, request.user.id, newFileId, fileData.file);
+    await coreUploadHandler(this.db, request.user.id, newFileId, fileData.file);
 
     return reply.code(201).send({ status: "success", id: newFileId, fileExtension: path.extname(fileData.filename) });
 }
@@ -54,9 +58,11 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
 
     const uploadTokenPayload: FastifyJWT["payload"] = this.jwt.verify(fileData.fields["uploadToken"].value as string);
 
-    const uploadToken = await this.prisma.uploadToken.findUnique({
-        where: { id: uploadTokenPayload.id },
-    });
+    const [uploadToken] = await this.db
+        .select()
+        .from(uploadTokens)
+        .where(eq(uploadTokens.id, uploadTokenPayload.id))
+        .limit(1);
 
     if (!uploadToken) {
         return reply.code(401).send({ status: "fail", error: "Invalid upload token" });
@@ -72,7 +78,7 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
     }
 
     const newFileId = await createFileDetails(
-        this.prisma,
+        this.db,
         fileData.filename,
         fileData.mimetype,
         uploadToken.userId,
@@ -80,13 +86,13 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
         uploadToken.fileAccess,
     );
 
-    await coreUploadHandler(this.prisma, uploadToken.userId, newFileId, fileData.file);
+    await coreUploadHandler(this.db, uploadToken.userId, newFileId, fileData.file);
 
     return reply.code(201).send({ status: "success", id: newFileId, fileExtension: path.extname(fileData.filename) });
 }
 
 async function createFileDetails(
-    prisma: PrismaClient,
+    db: Database,
     fileName: string,
     fileType: string,
     ownerId: string,
@@ -94,22 +100,24 @@ async function createFileDetails(
     fileAccess: FileAccess,
 ) {
     // Create file in db
-    const fileDetails = await prisma.file.create({
-        data: {
+    const [fileDetails] = await db
+        .insert(files)
+        .values({
             fileName: fileName,
             fileType: fileType,
             ownerId: ownerId,
             fileAccess: fileAccess,
-            parentFolder: {
-                connect: { id: parentFolderId },
-            },
-        },
-    });
+            parentId: parentFolderId,
+        })
+        .returning({ id: files.id });
+    if (!fileDetails) {
+        throw new Error("Failed to create file details");
+    }
 
     return fileDetails.id;
 }
 
-async function coreUploadHandler(prisma: PrismaClient, ownerId: string, fileId: string, file: BusboyFileStream) {
+async function coreUploadHandler(db: Database, ownerId: string, fileId: string, file: BusboyFileStream) {
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
     const filePath = path.join(folderPath, fileId);
 
@@ -124,8 +132,5 @@ async function coreUploadHandler(prisma: PrismaClient, ownerId: string, fileId: 
     // Save file size to db
     const sizeInBytes = fs.statSync(filePath).size;
 
-    await prisma.file.update({
-        where: { id: fileId },
-        data: { fileSize: sizeInBytes },
-    });
+    await db.update(files).set({ fileSize: sizeInBytes }).where(eq(files.id, fileId));
 }
