@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState, useContext } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Bell, UserCircle2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
+import { authClient } from "@/components/auth/auth-client";
 import { SessionContext } from "@/components/auth/session-provider";
 
 export default function StatusBar() {
+    const router = useRouter();
     const sessionContext = useContext(SessionContext);
 
     const [activeMenu, setActiveMenu] = useState("");
@@ -48,6 +51,13 @@ export default function StatusBar() {
         };
     });
 
+    const signOut = async () => {
+        await authClient.signOut();
+        await sessionContext.update();
+        router.push("/login");
+        router.refresh();
+    };
+
     return (
         <>
             <div className="h-full w-full border-b border-zinc-300 dark:border-zinc-700">
@@ -55,7 +65,7 @@ export default function StatusBar() {
                     {/* Site Title */}
                     <div className="w-width-sidebar text-center">
                         <Link href={`/folder/${sessionContext.session?.user.rootFolderId}`} className="block">
-                            <span className="self-center whitespace-nowrap text-4xl font-semibold">{"OpenCloud"}</span>
+                            <span className="self-center text-4xl font-semibold whitespace-nowrap">{"OpenCloud"}</span>
                         </Link>
                     </div>
                     <div></div>
@@ -115,6 +125,13 @@ export default function StatusBar() {
                                         >
                                             <span className="self-center whitespace-nowrap">{"Profile"}</span>
                                         </Link>
+                                        <button
+                                            onClick={signOut}
+                                            className="block w-full rounded-lg px-5 py-1 text-left hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                                            type="button"
+                                        >
+                                            <span className="self-center whitespace-nowrap">{"Sign out"}</span>
+                                        </button>
                                     </motion.div>
                                 )}
                             </AnimatePresence>

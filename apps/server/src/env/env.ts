@@ -22,9 +22,7 @@ const findEnvFile = (fileName: string) => {
     }
 };
 
-const envPaths = [findEnvFile(".env.local"), findEnvFile(".env")].filter(
-    (value): value is string => Boolean(value),
-);
+const envPaths = [findEnvFile(".env.local"), findEnvFile(".env")].filter((value): value is string => Boolean(value));
 
 if (envPaths.length > 0) {
     dotenvx.config({

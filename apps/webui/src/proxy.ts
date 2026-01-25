@@ -17,34 +17,13 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    // If access token found, continue to page
-    if (request.cookies.has("AccessToken")) {
+    const hasBetterAuthSession =
+        request.cookies.has("better-auth.session_token") || request.cookies.has("__Secure-better-auth.session_token");
+
+    if (hasBetterAuthSession) {
         return NextResponse.next();
     }
 
-    // If access token not found but refresh token is, attempt to refresh session
-    // If refreshed successfully, continue to page
-    if (!request.cookies.get("AccessToken") && !!request.cookies.get("RefreshToken")) {
-        // Try refresh
-        const refreshResponse = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/refresh`, {
-            credentials: "include",
-            headers: new Headers(request.headers),
-        });
-
-        // Continue if refreshed successfully
-        if (refreshResponse.ok) {
-            const response = NextResponse.redirect(new URL(request.nextUrl));
-
-            const responseCookies = refreshResponse.headers.get("Set-Cookie") || "";
-            response.headers.set("Set-Cookie", responseCookies);
-
-            return response;
-        }
-    }
-
-    // Assume client unauthenticated beyond this point (No AccessToken and failed to refresh)
-    // Check if attempted route is protected and redirect if protected
-    // Run authentication for file view in file component
     if (request.nextUrl.pathname.startsWith("/folder") || request.nextUrl.pathname.startsWith("/profile")) {
         // Store attempted url in search params
         const searchParams = new URLSearchParams(request.nextUrl.searchParams);

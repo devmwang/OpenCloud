@@ -23,6 +23,12 @@ export async function uploadHandler(
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
     reply: FastifyReply,
 ) {
+    if (!request.user?.id) {
+        return reply.code(401).send({ status: "fail", error: "Unauthorized" });
+    }
+
+    const userId = request.user.id;
+
     const parentFolderId = request.query.parentFolderId;
 
     const fileData = await request.file();
@@ -35,12 +41,12 @@ export async function uploadHandler(
         this.db,
         fileData.filename,
         fileData.mimetype,
-        request.user.id,
+        userId,
         parentFolderId,
         "PROTECTED",
     );
 
-    await coreUploadHandler(this.db, request.user.id, newFileId, fileData.file);
+    await coreUploadHandler(this.db, userId, newFileId, fileData.file);
 
     return reply.code(201).send({ status: "success", id: newFileId, fileExtension: path.extname(fileData.filename) });
 }

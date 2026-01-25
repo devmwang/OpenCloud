@@ -4,7 +4,9 @@ import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { accessRuleMethodEnum, allowDisallowEnum } from "./enums";
 
 export const accessRules = pgTable("AccessRules", {
-    id: text("id").primaryKey().$defaultFn(() => createId()),
+    id: text("id")
+        .primaryKey()
+        .$defaultFn(() => createId()),
     name: text("name").notNull(),
     type: allowDisallowEnum("type").notNull(),
     method: accessRuleMethodEnum("method").notNull(),

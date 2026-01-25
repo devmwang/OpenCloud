@@ -10,7 +10,7 @@ export function GridLayout({
     return (
         <>
             <div className="mb-2 text-xl font-medium">Folders</div>
-            <div className="mb-6 grid grid-cols-fs-grid-view gap-4">
+            <div className="grid-cols-fs-grid-view mb-6 grid gap-4">
                 {folders.map((folder) => {
                     return (
                         <div key={folder.id}>
@@ -21,7 +21,7 @@ export function GridLayout({
             </div>
 
             <div className="mb-2 text-xl font-medium">Files</div>
-            <div className="mb-6 grid grid-cols-fs-grid-view gap-4">
+            <div className="grid-cols-fs-grid-view mb-6 grid gap-4">
                 {files.map((file) => {
                     return (
                         <div key={file.id}>

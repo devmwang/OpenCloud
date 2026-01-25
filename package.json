@@ -7,7 +7,7 @@
         "dev": "dotenvx run --convention=nextjs -- turbo dev",
         "lint": "turbo lint",
         "typecheck": "turbo typecheck",
-        "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+        "prettier:write": "prettier --write \"**/*.{ts,tsx,md}\"",
         "start": "dotenvx run --convention=nextjs -- turbo start"
     },
     "devDependencies": {

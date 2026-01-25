@@ -52,12 +52,12 @@ export default async function FileView(props: { params: Promise<{ fileId: string
     }
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 top-0 z-20 mx-auto bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-            <div className="grid h-full w-full grid-rows-core-layout">
+        <div className="fixed top-0 right-0 bottom-0 left-0 z-20 mx-auto bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+            <div className="grid-rows-core-layout grid h-full w-full">
                 <div className="flex h-full w-full flex-row items-center border-b border-zinc-300 dark:border-zinc-700">
                     <div className="flex basis-1/3 justify-start">
                         <div className="w-width-sidebar text-center">
-                            <span className="self-center whitespace-nowrap text-4xl font-semibold">{"OpenCloud"}</span>
+                            <span className="self-center text-4xl font-semibold whitespace-nowrap">{"OpenCloud"}</span>
                         </div>
                     </div>
 

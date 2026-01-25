@@ -13,11 +13,7 @@ declare module "fastify" {
 const accessControlPlugin: FastifyPluginAsync = fp(async (server) => {
     // If route is protected by AC rule, verify that user has access or return 403
     server.decorate("verifyAccessControlRule", async function (request: FastifyRequest, ruleId: string) {
-        const [accessRule] = await this.db
-            .select()
-            .from(accessRules)
-            .where(eq(accessRules.id, ruleId))
-            .limit(1);
+        const [accessRule] = await this.db.select().from(accessRules).where(eq(accessRules.id, ruleId)).limit(1);
 
         if (!accessRule) {
             return false;

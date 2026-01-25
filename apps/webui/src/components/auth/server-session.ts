@@ -5,7 +5,7 @@ import { env } from "@/env/env.mjs";
 
 export async function getServerSession() {
     const cookieStore = await cookies();
-    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
+    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/api/auth/get-session`, {
         headers: { Cookie: cookieStore.toString() },
         next: {
             tags: ["session"],
@@ -16,13 +16,29 @@ export async function getServerSession() {
         throw new Error("Failed to fetch data");
     }
 
-    const parsedSessionDetails = getSessionDetailsSchema.safeParse(await response.json());
+    const parsedSession = betterAuthSessionResponseSchema.safeParse(await response.json());
 
-    if (parsedSessionDetails.success === false) {
+    if (parsedSession.success === false || parsedSession.data === null) {
         throw new Error("Failed to fetch data");
     }
 
-    return parsedSessionDetails;
+    const mappedSession = getSessionDetailsSchema.safeParse({
+        user: {
+            id: parsedSession.data.user.id,
+            username: parsedSession.data.user.username,
+            rootFolderId: parsedSession.data.user.rootFolderId,
+            firstName: parsedSession.data.user.firstName ?? null,
+            lastName: parsedSession.data.user.lastName ?? null,
+        },
+        accessTokenExpires: parsedSession.data.session.expiresAt,
+        refreshTokenExpires: parsedSession.data.session.expiresAt,
+    });
+
+    if (mappedSession.success === false) {
+        throw new Error("Failed to fetch data");
+    }
+
+    return mappedSession;
 }
 
 const getSessionDetailsSchema = z.object({
@@ -36,3 +52,19 @@ const getSessionDetailsSchema = z.object({
     accessTokenExpires: z.string().datetime(),
     refreshTokenExpires: z.string().datetime(),
 });
+
+const betterAuthSessionResponseSchema = z.union([
+    z.object({
+        session: z.object({
+            expiresAt: z.string().datetime(),
+        }),
+        user: z.object({
+            id: z.string(),
+            username: z.string(),
+            rootFolderId: z.string(),
+            firstName: z.string().nullable().optional(),
+            lastName: z.string().nullable().optional(),
+        }),
+    }),
+    z.null(),
+]);
