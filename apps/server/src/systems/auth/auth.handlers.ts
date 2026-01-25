@@ -1,14 +1,13 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { createId } from "@paralleldrive/cuid2";
 import { eq } from "drizzle-orm";
 import * as argon2 from "argon2";
 
-import { accounts } from "@/db/schema/better-auth";
 import { accessRules } from "@/db/schema/access-rules";
 import { uploadTokens } from "@/db/schema/auth";
 import { users } from "@/db/schema/users";
 import { folders } from "@/db/schema/storage";
 import type { CreateUserInput, CreateAccessRuleInput, CreateUploadTokenInput } from "./auth.schemas";
+import { createUserWithRootFolder } from "./auth.utils";
 
 export async function createUserHandler(
     this: FastifyInstance,
@@ -43,62 +42,12 @@ export async function createUserHandler(
             return reply.code(400).send({ message: "User with username already exists" });
         }
 
-        // Create user in db
-        const userId = createId();
-        const trimmedFirstName = firstName?.trim() ?? "";
-        const trimmedLastName = lastName?.trim() ?? "";
-        const fullName = [trimmedFirstName, trimmedLastName].filter(Boolean).join(" ");
-        const displayName = fullName.length > 0 ? fullName : username;
         const hashedPassword = await argon2.hash(password);
-
-        const userWithRoot = await this.db.transaction(async (tx) => {
-            const [user] = await tx
-                .insert(users)
-                .values({
-                    id: userId,
-                    username: username,
-                    displayUsername: username,
-                    name: displayName,
-                    email: `${userId}@opencloud.local`,
-                    emailVerified: false,
-                    image: null,
-                    firstName: firstName != undefined ? firstName : null,
-                    lastName: lastName != undefined ? lastName : null,
-                })
-                .returning();
-            if (!user) {
-                throw new Error("Failed to create user");
-            }
-
-            const [rootFolder] = await tx
-                .insert(folders)
-                .values({
-                    folderName: "Files",
-                    ownerId: user.id,
-                    type: "ROOT",
-                })
-                .returning({ id: folders.id });
-            if (!rootFolder) {
-                throw new Error("Failed to create root folder");
-            }
-
-            const [updatedUser] = await tx
-                .update(users)
-                .set({ rootFolderId: rootFolder.id })
-                .where(eq(users.id, user.id))
-                .returning();
-            if (!updatedUser) {
-                throw new Error("Failed to update user");
-            }
-
-            await tx.insert(accounts).values({
-                userId: updatedUser.id,
-                accountId: updatedUser.id,
-                providerId: "credential",
-                password: hashedPassword,
-            });
-
-            return updatedUser;
+        const userWithRoot = await createUserWithRootFolder(this.db, {
+            username,
+            passwordHash: hashedPassword,
+            firstName,
+            lastName,
         });
 
         // Return user

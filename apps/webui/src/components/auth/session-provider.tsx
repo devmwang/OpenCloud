@@ -20,9 +20,7 @@ type SessionType = {
 type SessionContextType = {
     session: SessionType | undefined;
     authenticated: boolean;
-    update: (
-        data?: any,
-    ) => Promise<{ status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }>;
+    update: () => Promise<{ status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }>;
 };
 
 type BetterAuthSessionQuery = ReturnType<typeof authClient.useSession>;
@@ -71,13 +69,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     const update = useCallback(async (): Promise<UpdateResult> => {
         try {
-            await sessionQuery.refetch();
-            const latestData =
-                (authClient.$store?.atoms?.session?.get?.() as BetterAuthSessionData | undefined) ?? sessionQuery.data;
-            const refreshed = mapBetterAuthSession(latestData);
+            const { data, error } = await sessionQuery.refetch();
+            const refreshed = mapBetterAuthSession(data ?? sessionQuery.data);
 
             if (!refreshed) {
-                return { status: "error", error: sessionQuery.error ?? "Invalid session" };
+                return { status: "error", error: error ?? sessionQuery.error ?? "Invalid session" };
             }
 
             return { status: "success", sessionData: refreshed };

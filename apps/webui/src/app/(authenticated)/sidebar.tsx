@@ -15,7 +15,7 @@ export default async function Navbar() {
                 <div className="px-4 py-4 text-left text-2xl font-normal">
                     <div className="flex flex-col">
                         <NavbarLinkComponent
-                            LinkDestination={`/folder/${session.data.user.rootFolderId}`}
+                            LinkDestination={`/folder/${session.user.rootFolderId}`}
                             SectionTitle="My Files"
                         >
                             <FolderClosed className="mt-1 mr-4 h-6" />

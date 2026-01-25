@@ -1,11 +1,9 @@
-import { createId } from "@paralleldrive/cuid2";
 import * as argon2 from "argon2";
 import { eq } from "drizzle-orm";
 
 import { createDatabase } from "@/db";
-import { accounts } from "@/db/schema/better-auth";
 import { users } from "@/db/schema/users";
-import { folders } from "@/db/schema/storage";
+import { createUserWithRootFolder } from "@/systems/auth/auth.utils";
 
 type ProvisionArgs = {
     username: string;
@@ -120,61 +118,15 @@ const run = async () => {
             return;
         }
 
-        const userId = createId();
-        const trimmedFirstName = parsed.firstName?.trim() ?? "";
-        const trimmedLastName = parsed.lastName?.trim() ?? "";
-        const fullName = [trimmedFirstName, trimmedLastName].filter(Boolean).join(" ");
-        const displayName = fullName.length > 0 ? fullName : parsed.username;
-        const email = parsed.email ?? `${userId}@opencloud.local`;
         const hashedPassword = await argon2.hash(parsed.password);
 
-        await db.transaction(async (tx) => {
-            const [user] = await tx
-                .insert(users)
-                .values({
-                    id: userId,
-                    username: parsed.username,
-                    displayUsername: parsed.username,
-                    name: displayName,
-                    email,
-                    emailVerified: false,
-                    image: null,
-                    firstName: parsed.firstName ?? null,
-                    lastName: parsed.lastName ?? null,
-                    role: "ADMIN",
-                })
-                .returning();
-            if (!user) {
-                throw new Error("Failed to create admin user");
-            }
-
-            const [rootFolder] = await tx
-                .insert(folders)
-                .values({
-                    folderName: "Files",
-                    ownerId: user.id,
-                    type: "ROOT",
-                })
-                .returning({ id: folders.id });
-            if (!rootFolder) {
-                throw new Error("Failed to create root folder");
-            }
-
-            const [updatedUser] = await tx
-                .update(users)
-                .set({ rootFolderId: rootFolder.id })
-                .where(eq(users.id, user.id))
-                .returning();
-            if (!updatedUser) {
-                throw new Error("Failed to update admin user");
-            }
-
-            await tx.insert(accounts).values({
-                userId: updatedUser.id,
-                accountId: updatedUser.id,
-                providerId: "credential",
-                password: hashedPassword,
-            });
+        await createUserWithRootFolder(db, {
+            username: parsed.username,
+            passwordHash: hashedPassword,
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            email: parsed.email,
+            role: "ADMIN",
         });
 
         console.log(`Admin user created: ${parsed.username}`);
