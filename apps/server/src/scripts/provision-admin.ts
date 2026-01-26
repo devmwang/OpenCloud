@@ -123,9 +123,9 @@ const run = async () => {
         await createUserWithRootFolder(db, {
             username: parsed.username,
             passwordHash: hashedPassword,
-            firstName: parsed.firstName,
-            lastName: parsed.lastName,
-            email: parsed.email,
+            ...(parsed.firstName !== undefined ? { firstName: parsed.firstName } : {}),
+            ...(parsed.lastName !== undefined ? { lastName: parsed.lastName } : {}),
+            ...(parsed.email !== undefined ? { email: parsed.email } : {}),
             role: "ADMIN",
         });
 

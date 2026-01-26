@@ -69,11 +69,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     const update = useCallback(async (): Promise<UpdateResult> => {
         try {
-            const { data, error } = await sessionQuery.refetch();
-            const refreshed = mapBetterAuthSession(data ?? sessionQuery.data);
+            await sessionQuery.refetch();
+            const refreshed = mapBetterAuthSession(sessionQuery.data);
 
             if (!refreshed) {
-                return { status: "error", error: error ?? sessionQuery.error ?? "Invalid session" };
+                return { status: "error", error: sessionQuery.error ?? "Invalid session" };
             }
 
             return { status: "success", sessionData: refreshed };

@@ -46,8 +46,8 @@ export async function createUserHandler(
         const userWithRoot = await createUserWithRootFolder(this.db, {
             username,
             passwordHash: hashedPassword,
-            firstName,
-            lastName,
+            ...(firstName !== undefined ? { firstName } : {}),
+            ...(lastName !== undefined ? { lastName } : {}),
         });
 
         // Return user
