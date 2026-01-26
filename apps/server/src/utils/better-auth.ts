@@ -57,6 +57,30 @@ const buildAuthRequest = (request: FastifyRequest) => {
     return new Request(url.toString(), init);
 };
 
+const extractResponseSetCookies = (headers: Headers) => {
+    const headerApi = headers as { getSetCookie?: () => string[]; get?: (name: string) => string | null };
+    if (typeof headerApi.getSetCookie === "function") {
+        const setCookies = headerApi.getSetCookie();
+        if (setCookies.length > 0) {
+            return setCookies;
+        }
+    }
+
+    const fallback = headerApi.get ? headerApi.get("set-cookie") : headers.get("set-cookie");
+    return fallback ? [fallback] : [];
+};
+
+const appendSetCookies = (reply: FastifyReply, setCookies: string[]) => {
+    if (setCookies.length === 0) {
+        return;
+    }
+
+    const existing = reply.getHeader("set-cookie");
+    const existingValues = Array.isArray(existing) ? existing : typeof existing === "string" ? [existing] : [];
+
+    reply.header("set-cookie", [...existingValues, ...setCookies]);
+};
+
 const applyAuthResponse = async (reply: FastifyReply, response: Response) => {
     reply.code(response.status);
 
@@ -67,10 +91,7 @@ const applyAuthResponse = async (reply: FastifyReply, response: Response) => {
         reply.header(key, value);
     });
 
-    const setCookies = response.headers.getSetCookie?.() ?? [];
-    if (setCookies.length > 0) {
-        reply.header("set-cookie", setCookies);
-    }
+    appendSetCookies(reply, extractResponseSetCookies(response.headers));
 
     const payload = await response.arrayBuffer();
     if (payload.byteLength > 0) {

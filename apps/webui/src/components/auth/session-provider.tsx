@@ -25,11 +25,12 @@ type SessionContextType = {
 
 type BetterAuthSessionQuery = ReturnType<typeof authClient.useSession>;
 type BetterAuthSessionData = BetterAuthSessionQuery["data"];
+type BetterAuthSessionInput = BetterAuthSessionData | null | undefined;
 type UpdateResult = { status: "success"; sessionData: SessionType } | { status: "error"; error: unknown };
 
 const toDate = (value: Date | string) => (value instanceof Date ? value : new Date(value));
 
-const mapBetterAuthSession = (data: BetterAuthSessionData): SessionType | undefined => {
+const mapBetterAuthSession = (data: BetterAuthSessionInput): SessionType | undefined => {
     if (!data || !("session" in data) || !data.session || !data.user) {
         return undefined;
     }
@@ -54,6 +55,16 @@ const mapBetterAuthSession = (data: BetterAuthSessionData): SessionType | undefi
     };
 };
 
+const getRefetchData = (result: unknown): BetterAuthSessionInput => {
+    if (!result || typeof result !== "object") {
+        return undefined;
+    }
+    if ("data" in result) {
+        return (result as { data?: BetterAuthSessionInput }).data;
+    }
+    return undefined;
+};
+
 export const SessionContext = createContext<SessionContextType>({
     session: undefined,
     authenticated: false,
@@ -69,8 +80,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     const update = useCallback(async (): Promise<UpdateResult> => {
         try {
-            await sessionQuery.refetch();
-            const refreshed = mapBetterAuthSession(sessionQuery.data);
+            const refetchResult = await (sessionQuery.refetch as unknown as () => Promise<unknown>)();
+            const refreshed = mapBetterAuthSession(getRefetchData(refetchResult) ?? sessionQuery.data);
 
             if (!refreshed) {
                 return { status: "error", error: sessionQuery.error ?? "Invalid session" };

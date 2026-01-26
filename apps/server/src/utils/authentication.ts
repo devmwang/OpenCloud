@@ -49,14 +49,46 @@ const buildHeaders = (request: FastifyRequest) => {
     return headers;
 };
 
-const applySetCookieHeaders = (reply: FastifyReply, headers?: Headers | null) => {
+type SetCookieHeaderSource = Headers | Record<string, string | string[] | undefined>;
+
+const extractSetCookies = (headers: SetCookieHeaderSource) => {
+    const headerApi = headers as { getSetCookie?: () => string[]; get?: (name: string) => string | null };
+    if (typeof headerApi.getSetCookie === "function") {
+        const setCookies = headerApi.getSetCookie();
+        if (setCookies.length > 0) {
+            return setCookies;
+        }
+    }
+    if (typeof headerApi.get === "function") {
+        const setCookie = headerApi.get("set-cookie");
+        if (setCookie) {
+            return [setCookie];
+        }
+    }
+
+    const raw = (headers as Record<string, string | string[] | undefined>)["set-cookie"];
+    if (!raw) {
+        return [];
+    }
+    return Array.isArray(raw) ? raw : [raw];
+};
+
+const appendSetCookies = (reply: FastifyReply, setCookies: string[]) => {
+    if (setCookies.length === 0) {
+        return;
+    }
+
+    const existing = reply.getHeader("set-cookie");
+    const existingValues = Array.isArray(existing) ? existing : typeof existing === "string" ? [existing] : [];
+
+    reply.header("set-cookie", [...existingValues, ...setCookies]);
+};
+
+const applySetCookieHeaders = (reply: FastifyReply, headers?: SetCookieHeaderSource | null) => {
     if (!headers) {
         return;
     }
-    const setCookies = headers.getSetCookie?.() ?? [];
-    if (setCookies.length > 0) {
-        reply.header("set-cookie", setCookies);
-    }
+    appendSetCookies(reply, extractSetCookies(headers));
 };
 
 const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
@@ -95,6 +127,7 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
 
         if (required) {
             reply.code(401).send({ error: "Unauthorized" });
+            return;
         }
     };
 
