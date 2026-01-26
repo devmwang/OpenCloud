@@ -24,6 +24,7 @@ export const createAuth = (db: Database) =>
     betterAuth({
         basePath: "/api/auth",
         trustedOrigins: [env.OPENCLOUD_WEBUI_URL],
+        secret: env.AUTH_SECRET,
         database: drizzleAdapter(db, {
             provider: "pg",
             schema: authSchema,
