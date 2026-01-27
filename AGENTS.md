@@ -17,8 +17,14 @@ OpenCloud is a Turborepo monorepo for a self-hosted cloud file server (Fastify A
 - Start: `pnpm run start`
 - Lint: `pnpm run lint`
 - Typecheck: `pnpm run typecheck`
-- Format: `pnpm run format`
+- Format: `pnpm run prettier:write`
 - Tests: no repo-wide `test` script (yet)
+
+## After edits (required for agents)
+
+- Run: `pnpm run typecheck`
+- Run: `pnpm run lint`
+- Then format everything: `pnpm run prettier:write`
 
 ## Repo structure (see per-package guides)
 
