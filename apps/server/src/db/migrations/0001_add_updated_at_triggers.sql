@@ -41,3 +41,9 @@ CREATE TRIGGER set_updated_at_files
 BEFORE UPDATE ON "Files"
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at_display_orders ON "DisplayOrders";
+CREATE TRIGGER set_updated_at_display_orders
+BEFORE UPDATE ON "DisplayOrders"
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();

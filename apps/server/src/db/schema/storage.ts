@@ -18,20 +18,29 @@ export const folders = pgTable(
         parentFolderIdFk: foreignKey({
             columns: [table.parentFolderId],
             foreignColumns: [table.id],
-        }),
+            name: "Folders_parentFolderId_fkey",
+        }).onUpdate("cascade").onDelete("set null"),
     }),
 );
 
-export const files = pgTable("Files", {
-    id: text("id").primaryKey().$defaultFn(() => createId()),
-    fileName: text("fileName").notNull(),
-    fileSize: integer("fileSize"),
-    fileType: text("fileType").notNull(),
-    ownerId: text("ownerId").notNull(),
-    fileAccess: fileAccessEnum("fileAccess").notNull().default("PRIVATE"),
-    parentId: text("parentId")
-        .notNull()
-        .references(() => folders.id),
-    createdAt: timestamp("createdAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
-});
+export const files = pgTable(
+    "Files",
+    {
+        id: text("id").primaryKey().$defaultFn(() => createId()),
+        fileName: text("fileName").notNull(),
+        fileSize: integer("fileSize"),
+        fileType: text("fileType").notNull(),
+        ownerId: text("ownerId").notNull(),
+        fileAccess: fileAccessEnum("fileAccess").notNull().default("PRIVATE"),
+        parentId: text("parentId").notNull(),
+        createdAt: timestamp("createdAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
+        updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
+    },
+    (table) => ({
+        parentIdFk: foreignKey({
+            columns: [table.parentId],
+            foreignColumns: [folders.id],
+            name: "Files_parentId_fkey",
+        }).onUpdate("cascade").onDelete("restrict"),
+    }),
+);

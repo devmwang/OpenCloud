@@ -1,5 +1,5 @@
 {
-  "id": "21aeb98b-33b2-4d9b-9dad-bb465f2bc352",
+  "id": "5addc015-2e6f-4364-aa6a-05b86a0b83cd",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -56,8 +56,15 @@
           "name": "accessControlRuleIds",
           "type": "text[]",
           "primaryKey": false,
+          "notNull": false
+        },
+        "defaultDisplayType": {
+          "name": "defaultDisplayType",
+          "type": "DisplayType",
+          "typeSchema": "public",
+          "primaryKey": false,
           "notNull": true,
-          "default": "'{}'::text[]"
+          "default": "'GRID'"
         },
         "createdAt": {
           "name": "createdAt",
@@ -74,18 +81,26 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "Users_username_unique": {
-          "name": "Users_username_unique",
-          "nullsNotDistinct": false,
+      "indexes": {
+        "Users_username_key": {
+          "name": "Users_username_key",
           "columns": [
-            "username"
-          ]
+            {
+              "expression": "username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -195,8 +210,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "RefreshTokens_userId_Users_id_fk": {
-          "name": "RefreshTokens_userId_Users_id_fk",
+        "RefreshTokens_userId_fkey": {
+          "name": "RefreshTokens_userId_fkey",
           "tableFrom": "RefreshTokens",
           "tableTo": "Users",
           "columnsFrom": [
@@ -205,8 +220,8 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -254,8 +269,7 @@
           "name": "accessControlRuleIds",
           "type": "text[]",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -274,8 +288,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "UploadTokens_userId_Users_id_fk": {
-          "name": "UploadTokens_userId_Users_id_fk",
+        "UploadTokens_userId_fkey": {
+          "name": "UploadTokens_userId_fkey",
           "tableFrom": "UploadTokens",
           "tableTo": "Users",
           "columnsFrom": [
@@ -284,8 +298,8 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -359,8 +373,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "Files_parentId_Folders_id_fk": {
-          "name": "Files_parentId_Folders_id_fk",
+        "Files_parentId_fkey": {
+          "name": "Files_parentId_fkey",
           "tableFrom": "Files",
           "tableTo": "Folders",
           "columnsFrom": [
@@ -369,8 +383,8 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -432,8 +446,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "Folders_parentFolderId_Folders_id_fk": {
-          "name": "Folders_parentFolderId_Folders_id_fk",
+        "Folders_parentFolderId_fkey": {
+          "name": "Folders_parentFolderId_fkey",
           "tableFrom": "Folders",
           "tableTo": "Folders",
           "columnsFrom": [
@@ -442,8 +456,88 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.DisplayOrders": {
+      "name": "DisplayOrders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "folderId": {
+          "name": "folderId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "DisplayType": {
+          "name": "DisplayType",
+          "type": "DisplayType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "SortOrder": {
+          "name": "SortOrder",
+          "type": "SortDirection",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "SortType": {
+          "name": "SortType",
+          "type": "SortType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "DisplayOrders_userId_fkey": {
+          "name": "DisplayOrders_userId_fkey",
+          "tableFrom": "DisplayOrders",
+          "tableTo": "Users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -469,6 +563,14 @@
         "DISALLOW"
       ]
     },
+    "public.DisplayType": {
+      "name": "DisplayType",
+      "schema": "public",
+      "values": [
+        "GRID",
+        "LIST"
+      ]
+    },
     "public.FileAccess": {
       "name": "FileAccess",
       "schema": "public",
@@ -492,6 +594,23 @@
       "values": [
         "ADMIN",
         "USER"
+      ]
+    },
+    "public.SortDirection": {
+      "name": "SortDirection",
+      "schema": "public",
+      "values": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "public.SortType": {
+      "name": "SortType",
+      "schema": "public",
+      "values": [
+        "NAME",
+        "DATE_CREATED",
+        "SIZE"
       ]
     }
   },

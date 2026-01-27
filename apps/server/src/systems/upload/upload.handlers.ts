@@ -68,7 +68,7 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
         return reply.code(401).send({ status: "fail", error: "Invalid upload token" });
     }
 
-    for (const ruleId of uploadToken.accessControlRuleIds) {
+    for (const ruleId of uploadToken.accessControlRuleIds ?? []) {
         const result = await this.verifyAccessControlRule(request, ruleId);
         if (!result) {
             return reply
