@@ -134,4 +134,6 @@ DROP TRIGGER IF EXISTS set_updated_at_verifications ON "Verification";--> statem
 CREATE TRIGGER set_updated_at_verifications
 BEFORE UPDATE ON "Verification"
 FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
+EXECUTE FUNCTION set_updated_at();--> statement-breakpoint
+ALTER TABLE "Users" DROP COLUMN IF EXISTS "password";--> statement-breakpoint
+DROP TABLE IF EXISTS "RefreshTokens";--> statement-breakpoint

@@ -1,2 +1,0 @@
-ALTER TABLE "Users" DROP COLUMN IF EXISTS "password";
-DROP TABLE IF EXISTS "RefreshTokens";
