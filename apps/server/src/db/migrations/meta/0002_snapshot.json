@@ -121,19 +121,26 @@
           "with": {},
           "method": "btree",
           "concurrently": false
+        },
+        "Users_email_unique": {
+          "name": "Users_email_unique",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "Users_email_unique": {
-          "name": "Users_email_unique",
-          "columns": [
-            "email"
-          ],
-          "nullsNotDistinct": false
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -572,18 +579,32 @@
         "Session_token_unique": {
           "name": "Session_token_unique",
           "columns": [
-            "token"
+            {
+              "expression": "token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
           "isUnique": true,
-          "nullsNotDistinct": false
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         },
         "Session_userId_idx": {
           "name": "Session_userId_idx",
           "columns": [
-            "userId"
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
           "isUnique": false,
-          "nullsNotDistinct": false
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
@@ -696,19 +717,38 @@
         "Account_userId_idx": {
           "name": "Account_userId_idx",
           "columns": [
-            "userId"
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
           "isUnique": false,
-          "nullsNotDistinct": false
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         },
         "Account_provider_account_unique": {
           "name": "Account_provider_account_unique",
           "columns": [
-            "providerId",
-            "accountId"
+            {
+              "expression": "providerId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "accountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
           "isUnique": true,
-          "nullsNotDistinct": false
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
@@ -779,10 +819,17 @@
         "Verification_identifier_idx": {
           "name": "Verification_identifier_idx",
           "columns": [
-            "identifier"
+            {
+              "expression": "identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
           "isUnique": false,
-          "nullsNotDistinct": false
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},

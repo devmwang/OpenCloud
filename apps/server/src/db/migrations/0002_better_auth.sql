@@ -26,17 +26,7 @@ DO $$ BEGIN
         ALTER TABLE "Users" ALTER COLUMN "email" SET NOT NULL;
     END IF;
 END $$;--> statement-breakpoint
-DO $$ BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = 'Users'
-    ) AND NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'Users_email_unique'
-    ) THEN
-        ALTER TABLE "Users" ADD CONSTRAINT "Users_email_unique" UNIQUE("email");
-    END IF;
-END $$;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "Users_email_unique" ON "Users" ("email");--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "Session" (
 	"id" text PRIMARY KEY NOT NULL,
 	"expiresAt" timestamp (3) NOT NULL,
