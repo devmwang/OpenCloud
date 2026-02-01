@@ -6,7 +6,9 @@ import { fileAccessEnum, folderTypeEnum } from "./enums";
 export const folders = pgTable(
     "Folders",
     {
-        id: text("id").primaryKey().$defaultFn(() => createId()),
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => createId()),
         folderName: text("folderName").notNull(),
         ownerId: text("ownerId").notNull(),
         type: folderTypeEnum("type").notNull().default("STANDARD"),
@@ -19,14 +21,18 @@ export const folders = pgTable(
             columns: [table.parentFolderId],
             foreignColumns: [table.id],
             name: "Folders_parentFolderId_fkey",
-        }).onUpdate("cascade").onDelete("set null"),
+        })
+            .onUpdate("cascade")
+            .onDelete("set null"),
     }),
 );
 
 export const files = pgTable(
     "Files",
     {
-        id: text("id").primaryKey().$defaultFn(() => createId()),
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => createId()),
         fileName: text("fileName").notNull(),
         fileSize: integer("fileSize"),
         fileType: text("fileType").notNull(),
@@ -41,6 +47,8 @@ export const files = pgTable(
             columns: [table.parentId],
             foreignColumns: [folders.id],
             name: "Files_parentId_fkey",
-        }).onUpdate("cascade").onDelete("restrict"),
+        })
+            .onUpdate("cascade")
+            .onDelete("restrict"),
     }),
 );

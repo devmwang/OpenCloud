@@ -50,8 +50,15 @@
           "name": "accessControlRuleIds",
           "type": "text[]",
           "primaryKey": false,
+          "notNull": false
+        },
+        "defaultDisplayType": {
+          "name": "defaultDisplayType",
+          "type": "DisplayType",
+          "typeSchema": "public",
+          "primaryKey": false,
           "notNull": true,
-          "default": "'{}'::text[]"
+          "default": "'GRID'"
         },
         "createdAt": {
           "name": "createdAt",
@@ -99,17 +106,26 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "Users_username_key": {
+          "name": "Users_username_key",
+          "columns": [
+            {
+              "expression": "username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "Users_username_unique": {
-          "name": "Users_username_unique",
-          "columns": [
-            "username"
-          ],
-          "nullsNotDistinct": false
-        },
         "Users_email_unique": {
           "name": "Users_email_unique",
           "columns": [
@@ -220,8 +236,7 @@
           "name": "accessControlRuleIds",
           "type": "text[]",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -240,8 +255,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "UploadTokens_userId_Users_id_fk": {
-          "name": "UploadTokens_userId_Users_id_fk",
+        "UploadTokens_userId_fkey": {
+          "name": "UploadTokens_userId_fkey",
           "tableFrom": "UploadTokens",
           "columnsFrom": [
             "userId"
@@ -250,8 +265,8 @@
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onUpdate": "cascade",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -325,8 +340,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "Files_parentId_Folders_id_fk": {
-          "name": "Files_parentId_Folders_id_fk",
+        "Files_parentId_fkey": {
+          "name": "Files_parentId_fkey",
           "tableFrom": "Files",
           "columnsFrom": [
             "parentId"
@@ -335,8 +350,8 @@
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onUpdate": "cascade",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -398,8 +413,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "Folders_parentFolderId_Folders_id_fk": {
-          "name": "Folders_parentFolderId_Folders_id_fk",
+        "Folders_parentFolderId_fkey": {
+          "name": "Folders_parentFolderId_fkey",
           "tableFrom": "Folders",
           "columnsFrom": [
             "parentFolderId"
@@ -408,8 +423,88 @@
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onUpdate": "cascade",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.DisplayOrders": {
+      "name": "DisplayOrders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "folderId": {
+          "name": "folderId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "DisplayType": {
+          "name": "DisplayType",
+          "type": "DisplayType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "SortOrder": {
+          "name": "SortOrder",
+          "type": "SortDirection",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "SortType": {
+          "name": "SortType",
+          "type": "SortType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "DisplayOrders_userId_fkey": {
+          "name": "DisplayOrders_userId_fkey",
+          "tableFrom": "DisplayOrders",
+          "columnsFrom": [
+            "userId"
+          ],
+          "tableTo": "Users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "cascade",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -714,6 +809,14 @@
         "DISALLOW"
       ]
     },
+    "public.DisplayType": {
+      "name": "DisplayType",
+      "schema": "public",
+      "values": [
+        "GRID",
+        "LIST"
+      ]
+    },
     "public.FileAccess": {
       "name": "FileAccess",
       "schema": "public",
@@ -737,6 +840,23 @@
       "values": [
         "ADMIN",
         "USER"
+      ]
+    },
+    "public.SortDirection": {
+      "name": "SortDirection",
+      "schema": "public",
+      "values": [
+        "ASC",
+        "DESC"
+      ]
+    },
+    "public.SortType": {
+      "name": "SortType",
+      "schema": "public",
+      "values": [
+        "NAME",
+        "DATE_CREATED",
+        "SIZE"
       ]
     }
   },
