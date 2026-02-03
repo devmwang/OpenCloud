@@ -22,32 +22,50 @@ export async function proxy(request: NextRequest) {
     const hasBetterAuthSession =
         request.cookies.has("better-auth.session_token") || request.cookies.has("__Secure-better-auth.session_token");
 
-    if (isProtectedRoute && hasBetterAuthSession) {
-        const cookieHeader = request.headers.get("cookie") ?? "";
-        const sessionResponse = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/api/auth/get-session`, {
-            headers: { Cookie: cookieHeader },
-            cache: "no-store",
-        });
-        const sessionPayload = sessionResponse.ok ? await sessionResponse.json().catch(() => null) : null;
-        const hasValidSession = Boolean(sessionPayload?.session && sessionPayload?.user);
-
-        if (hasValidSession) {
-            return NextResponse.next();
-        }
-    }
-
-    if (isProtectedRoute) {
+    const redirectToLogin = (clearCookies: boolean, reason?: string) => {
         // Store attempted url in search params
         const searchParams = new URLSearchParams(request.nextUrl.searchParams);
         searchParams.set("next", request.nextUrl.pathname);
 
-        const response = NextResponse.redirect(new URL(`/login?${searchParams}`, request.url));
-        if (hasBetterAuthSession) {
+        const response = NextResponse.redirect(new URL(`/login?${searchParams}`, request.url), { status: 307 });
+        if (clearCookies) {
             response.cookies.delete("better-auth.session_token");
             response.cookies.delete("__Secure-better-auth.session_token");
         }
+        if (reason) {
+            response.headers.set("X-Auth-Redirect-Reason", reason);
+        }
 
         return response;
+    };
+
+    if (isProtectedRoute) {
+        if (!hasBetterAuthSession) {
+            return redirectToLogin(false, "missing-session-cookie");
+        }
+
+        try {
+            const cookieHeader = request.headers.get("cookie") ?? "";
+            const sessionResponse = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/api/auth/get-session`, {
+                headers: { Cookie: cookieHeader },
+                cache: "no-store",
+            });
+
+            if (sessionResponse.ok) {
+                const sessionPayload = await sessionResponse.json().catch(() => null);
+                const hasValidSession = Boolean(sessionPayload?.session && sessionPayload?.user);
+
+                if (hasValidSession) {
+                    return NextResponse.next();
+                }
+
+                return redirectToLogin(true, "session-missing");
+            }
+
+            return redirectToLogin(true, `session-status-${sessionResponse.status}`);
+        } catch {
+            return redirectToLogin(true, "session-check-failed");
+        }
     }
 
     return NextResponse.next();
