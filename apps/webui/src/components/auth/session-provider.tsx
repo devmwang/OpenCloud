@@ -55,16 +55,6 @@ const mapBetterAuthSession = (data: BetterAuthSessionInput): SessionType | undef
     };
 };
 
-const getRefetchData = (result: unknown): BetterAuthSessionInput => {
-    if (!result || typeof result !== "object") {
-        return undefined;
-    }
-    if ("data" in result) {
-        return (result as { data?: BetterAuthSessionInput }).data;
-    }
-    return undefined;
-};
-
 export const SessionContext = createContext<SessionContextType>({
     session: undefined,
     authenticated: false,
@@ -80,11 +70,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     const update = useCallback(async (): Promise<UpdateResult> => {
         try {
-            const refetchResult = await (sessionQuery.refetch as unknown as () => Promise<unknown>)();
-            const refreshed = mapBetterAuthSession(getRefetchData(refetchResult) ?? sessionQuery.data);
+            await sessionQuery.refetch();
+            const sessionAtom = authClient.$store.atoms.session;
+            const snapshot = sessionAtom ? sessionAtom.get() : undefined;
+            const refreshed = mapBetterAuthSession(snapshot?.data ?? sessionQuery.data);
 
             if (!refreshed) {
-                return { status: "error", error: sessionQuery.error ?? "Invalid session" };
+                return { status: "error", error: snapshot?.error ?? sessionQuery.error ?? "Invalid session" };
             }
 
             return { status: "success", sessionData: refreshed };
