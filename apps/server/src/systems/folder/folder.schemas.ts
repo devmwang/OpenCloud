@@ -1,4 +1,5 @@
 import { z } from "zod/v3";
+
 import { buildJsonSchemas } from "@/utils/zod-schema";
 
 const getDetailsQuerySchema = z.object({

@@ -1,5 +1,5 @@
-import { createAuthClient } from "better-auth/react";
 import { inferAdditionalFields, usernameClient } from "better-auth/client/plugins";
+import { createAuthClient } from "better-auth/react";
 
 import { env } from "@/env/env.mjs";
 

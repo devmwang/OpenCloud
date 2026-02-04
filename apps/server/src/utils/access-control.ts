@@ -1,5 +1,5 @@
-import type { FastifyRequest, FastifyPluginAsync } from "fastify";
 import { and, eq } from "drizzle-orm";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
 import { accessRules } from "@/db/schema/access-rules";

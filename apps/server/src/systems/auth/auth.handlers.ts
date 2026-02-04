@@ -1,12 +1,13 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { and, eq, inArray } from "drizzle-orm";
 import * as argon2 from "argon2";
+import { and, eq, inArray } from "drizzle-orm";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { accessRules } from "@/db/schema/access-rules";
 import { uploadTokens } from "@/db/schema/auth";
-import { users } from "@/db/schema/users";
 import { folders } from "@/db/schema/storage";
-import type { CreateUserInput, CreateAccessRuleInput, CreateUploadTokenInput } from "./auth.schemas";
+import { users } from "@/db/schema/users";
+
+import type { CreateAccessRuleInput, CreateUploadTokenInput, CreateUserInput } from "./auth.schemas";
 import { createUserWithRootFolder } from "./auth.utils";
 
 export async function createUserHandler(

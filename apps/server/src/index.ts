@@ -1,30 +1,29 @@
-export const SERVER_HOST = "0.0.0.0";
-export const SERVER_PORT = 8080;
-
-import Fastify from "fastify";
-import FastifyCORS from "@fastify/cors";
-import FastifyCookie from "@fastify/cookie";
-import FastifyRateLimit from "@fastify/rate-limit";
-import FastifyMultipart from "@fastify/multipart";
-import FastifyStatic from "@fastify/static";
 import fs from "fs";
 import path from "path";
 
+import FastifyCookie from "@fastify/cookie";
+import FastifyCORS from "@fastify/cors";
+import FastifyMultipart from "@fastify/multipart";
+import FastifyRateLimit from "@fastify/rate-limit";
+import FastifyStatic from "@fastify/static";
+import Fastify from "fastify";
+
 import { env } from "@/env/env";
-
-import dbPlugin from "@/utils/db";
-import betterAuthPlugin from "@/utils/better-auth";
-import authenticationPlugin from "@/utils/authentication";
-import accessControlPlugin from "@/utils/access-control";
-
 import authRouter from "@/systems/auth/auth.routes";
 import { authSchemas } from "@/systems/auth/auth.schemas";
-import uploadRouter from "@/systems/upload/upload.routes";
-import { uploadSchemas } from "@/systems/upload/upload.schemas";
-import fileSystemRouter from "@/systems/fs/fs.routes";
-import { fsSchemas } from "@/systems/fs/fs.schemas";
 import folderRouter from "@/systems/folder/folder.routes";
 import { folderSchemas } from "@/systems/folder/folder.schemas";
+import fileSystemRouter from "@/systems/fs/fs.routes";
+import { fsSchemas } from "@/systems/fs/fs.schemas";
+import uploadRouter from "@/systems/upload/upload.routes";
+import { uploadSchemas } from "@/systems/upload/upload.schemas";
+import accessControlPlugin from "@/utils/access-control";
+import authenticationPlugin from "@/utils/authentication";
+import betterAuthPlugin from "@/utils/better-auth";
+import dbPlugin from "@/utils/db";
+
+export const SERVER_HOST = "0.0.0.0";
+export const SERVER_PORT = 8080;
 
 // Fastify Types
 declare module "fastify" {

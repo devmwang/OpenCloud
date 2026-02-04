@@ -1,11 +1,12 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import fs from "fs";
+import path from "path";
+import { pipeline } from "stream";
+import util from "util";
+
 import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
 import { eq } from "drizzle-orm";
-import fs from "fs";
-import path from "path";
-import util from "util";
-import { pipeline } from "stream";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { Database } from "@/db";
 import { uploadTokens } from "@/db/schema/auth";

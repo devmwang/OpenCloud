@@ -1,6 +1,6 @@
 // zod-to-json-schema expects Zod v3 schemas.
-import { z } from "zod/v3";
 import { zodToJsonSchema, type Targets } from "zod-to-json-schema";
+import { z } from "zod/v3";
 
 type SchemaMap = Record<string, z.ZodTypeAny>;
 type SchemaRef = string | { key: string; description?: string };

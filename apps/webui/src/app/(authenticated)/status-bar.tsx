@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useContext } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bell, UserCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
-import { Bell, UserCircle2 } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useContext, useEffect, useRef, useState } from "react";
 
 import { authClient } from "@/components/auth/auth-client";
 import { SessionContext } from "@/components/auth/session-provider";

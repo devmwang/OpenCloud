@@ -1,9 +1,10 @@
-import { cookies } from "next/headers";
-import { z } from "zod";
 import path from "path";
 
-import { env } from "@/env/env.mjs";
+import { cookies } from "next/headers";
+import { z } from "zod";
+
 import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
+import { env } from "@/env/env.mjs";
 
 export default async function FileView(props: { params: Promise<{ fileId: string }> }) {
     const params = await props.params;

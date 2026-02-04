@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
+import { tokenUploadHandler, uploadHandler } from "./upload.handlers";
 import { $ref } from "./upload.schemas";
-import { uploadHandler, tokenUploadHandler } from "./upload.handlers";
 
 async function uploadRouter(server: FastifyInstance) {
     server.route({

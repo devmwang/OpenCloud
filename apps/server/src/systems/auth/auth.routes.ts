@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
+import { createAccessRuleHandler, createUploadTokenHandler, createUserHandler, infoHandler } from "./auth.handlers";
 import { $ref } from "./auth.schemas";
-import { createUserHandler, infoHandler, createUploadTokenHandler, createAccessRuleHandler } from "./auth.handlers";
 
 async function authRouter(server: FastifyInstance) {
     server.route({

@@ -1,7 +1,7 @@
-import React from "react";
+import { FolderClosed } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { FolderClosed } from "lucide-react";
+import React from "react";
 
 import { getServerSession } from "@/components/auth/server-session";
 

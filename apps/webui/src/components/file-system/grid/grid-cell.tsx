@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { Folder, File } from "lucide-react";
 import path from "path";
+
+import { File, Folder } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 import { env } from "@/env/env.mjs";
 

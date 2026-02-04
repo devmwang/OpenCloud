@@ -1,8 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 
-import type { Database } from "@/db";
-import { createDatabase } from "@/db";
+import { createDatabase, type Database } from "@/db";
 
 declare module "fastify" {
     interface FastifyInstance {

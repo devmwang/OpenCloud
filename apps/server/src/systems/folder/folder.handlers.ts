@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { and, eq } from "drizzle-orm";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { files, folders } from "@/db/schema/storage";
-import type { getDetailsQuerystring, getContentsQuerystring, createFolderInput } from "./folder.schemas";
+
+import type { createFolderInput, getContentsQuerystring, getDetailsQuerystring } from "./folder.schemas";
 
 export async function getDetailsHandler(
     this: FastifyInstance,

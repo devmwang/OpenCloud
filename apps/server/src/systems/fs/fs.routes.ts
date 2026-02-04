@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
+import { deleteFileHandler, getDetailsHandler, getFileHandler, getThumbnailHandler } from "./fs.handlers";
 import { $ref } from "./fs.schemas";
-import { getDetailsHandler, getFileHandler, getThumbnailHandler, deleteFileHandler } from "./fs.handlers";
 
 async function fileSystemRouter(server: FastifyInstance) {
     server.route({

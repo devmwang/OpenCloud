@@ -1,4 +1,4 @@
-import { ChevronRight, Folder, File } from "lucide-react";
+import { ChevronRight, File, Folder } from "lucide-react";
 
 export default function Loading() {
     return (

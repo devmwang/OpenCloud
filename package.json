@@ -8,14 +8,17 @@
         "lint": "turbo lint",
         "typecheck": "turbo typecheck",
         "prettier:write": "prettier --write \"**/*.{ts,tsx,md}\"",
+        "format": "prettier --write \"**/*.{ts,tsx,md}\"",
         "start": "dotenvx run --convention=nextjs -- turbo start"
     },
     "devDependencies": {
         "@dotenvx/dotenvx": "^1.52.0",
+        "@ianvs/prettier-plugin-sort-imports": "^4.7.0",
         "@turbo/gen": "^2.8.3",
         "eslint": "^9.39.2",
         "eslint-config-custom": "workspace:*",
         "prettier": "^3.8.1",
+        "prettier-plugin-tailwindcss": "^0.7.2",
         "turbo": "^2.8.3",
         "typescript-eslint": "^8.54.0"
     },

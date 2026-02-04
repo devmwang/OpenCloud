@@ -11,5 +11,5 @@ Workspace ESLint flat config composition shared by apps/packages.
 
 - Keep `common/eslint-config-custom/index.js` broadly applicable; put app-specific rules in the consuming app or root `eslint.config.js`.
 - After changing ESLint config, run from repo root:
-  - `pnpm run lint`
-  - `pnpm run typecheck`
+    - `pnpm run lint`
+    - `pnpm run typecheck`
