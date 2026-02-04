@@ -115,9 +115,7 @@ const run = async () => {
         );
 
         if (existing.rowCount && !force) {
-            throw new Error(
-                `__drizzle_migrations already has entries. Use --force to insert anyway.`,
-            );
+            throw new Error(`__drizzle_migrations already has entries. Use --force to insert anyway.`);
         }
 
         const alreadyInserted = await client.query(
@@ -130,10 +128,10 @@ const run = async () => {
             return;
         }
 
-        await client.query(
-            `INSERT INTO "public"."__drizzle_migrations" ("hash", "created_at") VALUES ($1, $2)`,
-            [hash, entry.when],
-        );
+        await client.query(`INSERT INTO "public"."__drizzle_migrations" ("hash", "created_at") VALUES ($1, $2)`, [
+            hash,
+            entry.when,
+        ]);
 
         console.log("Baseline inserted into __drizzle_migrations.");
     } finally {

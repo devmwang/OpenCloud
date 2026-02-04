@@ -84,7 +84,10 @@ export async function createFolderHandler(
     request: FastifyRequest<{ Body: createFolderInput }>,
     reply: FastifyReply,
 ) {
-    const userId = request.user.id;
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
     const { folderName, parentFolderId } = request.body;
 
     const existingFolder = await this.db

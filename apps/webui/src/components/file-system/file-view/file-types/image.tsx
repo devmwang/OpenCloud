@@ -39,14 +39,14 @@ export function ImagePreviewPane({ fileId }: { fileId: string }) {
     return (
         <>
             <Image
-                className="select-none object-scale-down transition-transform duration-200 ease-in-out"
+                className="object-scale-down transition-transform duration-200 ease-in-out select-none"
                 style={{ transform: `scale(${scale})` }}
                 src={`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`}
                 fill={true}
                 alt="File View"
                 unoptimized={true}
             />
-            <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 select-none flex-row items-center rounded-full bg-zinc-800/60">
+            <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-row items-center rounded-full bg-zinc-800/60 select-none">
                 <ZoomOut className="m-4 h-6 cursor-pointer" onClick={decrementScale} />
                 <span className="text-lg font-medium">{Math.round(scale * 100)}%</span>
                 <ZoomIn className="m-4 h-6 cursor-pointer" onClick={incrementScale} />

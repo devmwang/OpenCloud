@@ -8,10 +8,11 @@ import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
 export default async function FileView(props: { params: Promise<{ fileId: string }> }) {
     const params = await props.params;
     const cookieStore = await cookies();
+    const hasSessionCookie = Boolean(
+        cookieStore.get("better-auth.session_token") ?? cookieStore.get("__Secure-better-auth.session_token"),
+    );
 
-    const accessToken = cookieStore.get("AccessToken");
-
-    if (!accessToken) {
+    if (!hasSessionCookie) {
         return (
             <div>
                 {/* TODO: Add auth check failed message, not required since it should be impossible to get here without valid auth */}

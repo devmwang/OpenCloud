@@ -30,7 +30,12 @@ export async function getDetailsHandler(
             return reply.code(401).send({ error: "Unauthorized", message: "You do not have access to this file" });
         }
 
-        if (request.user.id != file.ownerId) {
+        const userId = request.user?.id;
+        if (!userId) {
+            return reply.code(401).send({ error: "Unauthorized", message: "You do not have access to this file" });
+        }
+
+        if (userId != file.ownerId) {
             return reply.code(403).send({ error: "Forbidden", message: "You do not have access to this file" });
         }
     }
@@ -58,11 +63,7 @@ export async function getFileHandler(
         return reply.code(404).send({ message: "File not found" });
     }
 
-    const [fileDetails] = await this.db
-        .select()
-        .from(files)
-        .where(eq(files.id, cleanedFileId))
-        .limit(1);
+    const [fileDetails] = await this.db.select().from(files).where(eq(files.id, cleanedFileId)).limit(1);
 
     if (!fileDetails) {
         return reply.code(404).send({ message: "File not found" });
@@ -73,7 +74,12 @@ export async function getFileHandler(
             return reply.code(401).send({ error: "Unauthorized", message: "You do not have access to this file" });
         }
 
-        if (request.user.id != fileDetails.ownerId) {
+        const userId = request.user?.id;
+        if (!userId) {
+            return reply.code(401).send({ error: "Unauthorized", message: "You do not have access to this file" });
+        }
+
+        if (userId != fileDetails.ownerId) {
             return reply.code(403).send({ error: "Forbidden", message: "You do not have access to this file" });
         }
     }
@@ -96,11 +102,7 @@ export async function getThumbnailHandler(
         return reply.code(404).send({ message: "File not found" });
     }
 
-    const [fileDetails] = await this.db
-        .select()
-        .from(files)
-        .where(eq(files.id, cleanedFileId))
-        .limit(1);
+    const [fileDetails] = await this.db.select().from(files).where(eq(files.id, cleanedFileId)).limit(1);
 
     if (!fileDetails) {
         return reply.code(404).send({ message: "File not found" });
@@ -111,7 +113,12 @@ export async function getThumbnailHandler(
             return reply.code(401).send({ error: "Unauthorized", message: "You do not have access to this file" });
         }
 
-        if (request.user.id != fileDetails.ownerId) {
+        const userId = request.user?.id;
+        if (!userId) {
+            return reply.code(401).send({ error: "Unauthorized", message: "You do not have access to this file" });
+        }
+
+        if (userId != fileDetails.ownerId) {
             return reply.code(403).send({ error: "Forbidden", message: "You do not have access to this file" });
         }
     }
@@ -130,21 +137,22 @@ export async function deleteFileHandler(
     request: FastifyRequest<{ Querystring: DeleteFileQuerystring }>,
     reply: FastifyReply,
 ) {
-    const [fileDetails] = await this.db
-        .select()
-        .from(files)
-        .where(eq(files.id, request.query.fileId))
-        .limit(1);
+    const [fileDetails] = await this.db.select().from(files).where(eq(files.id, request.query.fileId)).limit(1);
 
     if (!fileDetails) {
         return reply.code(404).send({ message: "File not found" });
     }
 
-    if (request.user.id != fileDetails.ownerId) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "You do not have permission to edit this file" });
+    }
+
+    if (userId != fileDetails.ownerId) {
         return reply.code(403).send({ error: "Forbidden", message: "You do not have permission to edit this file" });
     }
 
-    const folderPath = path.join(env.FILE_STORE_PATH, request.user.id);
+    const folderPath = path.join(env.FILE_STORE_PATH, userId);
     const filePath = path.join(folderPath, fileDetails.id);
 
     try {

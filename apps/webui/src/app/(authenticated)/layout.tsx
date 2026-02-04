@@ -3,7 +3,7 @@ import StatusBar from "@/app/(authenticated)/status-bar";
 
 export default function RootAuthenticatedLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="absolute grid h-full w-full grid-cols-core-layout grid-rows-core-layout">
+        <div className="grid-cols-core-layout grid-rows-core-layout absolute grid h-full w-full">
             <div className="col-span-2 row-start-1 row-end-1">
                 <StatusBar />
             </div>

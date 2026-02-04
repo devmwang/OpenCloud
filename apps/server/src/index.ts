@@ -13,6 +13,7 @@ import path from "path";
 import { env } from "@/env/env";
 
 import dbPlugin from "@/utils/db";
+import betterAuthPlugin from "@/utils/better-auth";
 import authenticationPlugin from "@/utils/authentication";
 import accessControlPlugin from "@/utils/access-control";
 
@@ -39,13 +40,13 @@ const server = Fastify({
 
 // Register Utility Plugins
 void server.register(dbPlugin);
-void server.register(authenticationPlugin);
-void server.register(accessControlPlugin);
-
 void server.register(FastifyCORS, {
     origin: [/localhost(?::\d{1,5})?/, /127\.0\.0\.1(?::\d{1,5})?/, env.OPENCLOUD_WEBUI_URL],
     credentials: true,
 });
+void server.register(betterAuthPlugin);
+void server.register(authenticationPlugin);
+void server.register(accessControlPlugin);
 
 void server.register(FastifyCookie, {
     secret: env.AUTH_SECRET,

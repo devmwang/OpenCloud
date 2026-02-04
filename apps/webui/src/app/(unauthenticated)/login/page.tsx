@@ -3,15 +3,12 @@
 import { Suspense, useContext, useState } from "react";
 import { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
-import axios from "axios";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
-
-import { env } from "@/env/env.mjs";
+import { authClient } from "@/components/auth/auth-client";
 import { SessionContext } from "@/components/auth/session-provider";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 
 export default function LoginPage() {
     return (
@@ -46,30 +43,32 @@ function LoginForm() {
 
     function submitLoginForm(values: z.infer<typeof loginSchema>) {
         setAttemptingLogin(true);
+        setLoginError("");
 
-        axios
-            .post(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/login`, values, {
-                withCredentials: true,
-            })
-            .then((response) => {
-                if (response.status === 200) {
-                    sessionContext.update();
-
-                    const nextUrl = searchParams.get("next") ?? `/folder/${response.data.rootFolderId}`;
-                    router.push(nextUrl as Route);
-                    router.refresh();
-                } else {
+        authClient.signIn
+            .username({ username: values.username, password: values.password })
+            .then(async (result) => {
+                if (result.error) {
                     setAttemptingLogin(false);
+                    setLoginError(result.error.message ?? "Invalid username or password");
+                    return;
                 }
+
+                const sessionResult = await sessionContext.update();
+                const rootFolderId =
+                    sessionResult.status === "success" ? sessionResult.sessionData.user.rootFolderId : undefined;
+                const nextUrl = searchParams.get("next") ?? (rootFolderId ? `/folder/${rootFolderId}` : "/");
+                router.push(nextUrl as Route);
+                router.refresh();
             })
             .catch((error) => {
                 setAttemptingLogin(false);
-                setLoginError(error.response.data.message);
+                setLoginError(error?.message ?? "Login failed");
             });
     }
 
     return (
-        <div className="relative flex h-full min-h-screen w-full flex-col items-center justify-center ">
+        <div className="relative flex h-full min-h-screen w-full flex-col items-center justify-center">
             <div className="mb-4 text-3xl font-bold">Log in to OpenCloud</div>
             {loginError && (
                 <div className="mb-2">
@@ -91,7 +90,7 @@ function LoginForm() {
                                             type="text"
                                             id="username"
                                             placeholder="Username"
-                                            className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-2 py-1 text-xl ring-offset-zinc-50 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-700 focus-visible:ring-offset-2 dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-200"
+                                            className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-2 py-1 text-xl ring-offset-zinc-50 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-700 focus-visible:ring-offset-2 focus-visible:outline-none dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-200"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -110,7 +109,7 @@ function LoginForm() {
                                             type="password"
                                             id="password"
                                             placeholder="Password"
-                                            className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-2 py-1 text-xl ring-offset-zinc-50 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-700 focus-visible:ring-offset-2 dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-200"
+                                            className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-2 py-1 text-xl ring-offset-zinc-50 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-zinc-700 focus-visible:ring-offset-2 focus-visible:outline-none dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-200"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -122,7 +121,7 @@ function LoginForm() {
                             type="submit"
                             className="flex w-full items-center justify-center rounded-md bg-zinc-900 px-2 py-2 hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-75 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                         >
-                            <span className="whitespace-nowrap text-xl font-semibold text-zinc-50">Login</span>
+                            <span className="text-xl font-semibold whitespace-nowrap text-zinc-50">Login</span>
                         </button>
                     </form>
                 </Form>

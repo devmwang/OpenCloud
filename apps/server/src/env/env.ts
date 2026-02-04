@@ -22,9 +22,7 @@ const findEnvFile = (fileName: string) => {
     }
 };
 
-const envPaths = [findEnvFile(".env.local"), findEnvFile(".env")].filter(
-    (value): value is string => Boolean(value),
-);
+const envPaths = [findEnvFile(".env.local"), findEnvFile(".env")].filter((value): value is string => Boolean(value));
 
 if (envPaths.length > 0) {
     dotenvx.config({
@@ -37,6 +35,7 @@ if (envPaths.length > 0) {
 export const env = createEnv({
     server: {
         OPENCLOUD_WEBUI_URL: z.string(),
+        NEXT_PUBLIC_OPENCLOUD_SERVER_URL: z.string().url(),
         COOKIE_URL: z.string(),
         AUTH_SECRET: z.string(),
         DATABASE_URL: z.string().url(),

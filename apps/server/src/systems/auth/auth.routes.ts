@@ -2,51 +2,18 @@
 import type { FastifyInstance } from "fastify";
 
 import { $ref } from "./auth.schemas";
-import {
-    createUserHandler,
-    loginHandler,
-    sessionHandler,
-    refreshHandler,
-    infoHandler,
-    createUploadTokenHandler,
-    createAccessRuleHandler,
-} from "./auth.handlers";
+import { createUserHandler, infoHandler, createUploadTokenHandler, createAccessRuleHandler } from "./auth.handlers";
 
 async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/create",
+        onRequest: [server.authenticate],
         schema: {
             body: $ref("createUserSchema"),
             response: { 201: $ref("userInfoResponseSchema") },
         },
         handler: createUserHandler,
-    });
-
-    server.route({
-        method: "POST",
-        url: "/login",
-        schema: {
-            body: $ref("loginSchema"),
-            response: { 200: $ref("loginResponseSchema") },
-        },
-        handler: loginHandler,
-    });
-
-    server.route({
-        method: "GET",
-        url: "/session",
-        onRequest: [server.authenticate],
-        schema: {
-            response: { 200: $ref("sessionResponseSchema") },
-        },
-        handler: sessionHandler,
-    });
-
-    server.route({
-        method: "GET",
-        url: "/refresh",
-        handler: refreshHandler,
     });
 
     server.route({

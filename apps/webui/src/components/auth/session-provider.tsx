@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback, createContext } from "react";
-import axios from "axios";
-import * as z from "zod";
-import ms from "ms";
+import type { ReactNode } from "react";
+import { useMemo, useCallback, createContext } from "react";
 
-import { env } from "@/env/env.mjs";
+import { authClient } from "@/components/auth/auth-client";
 
 type SessionType = {
     user: {
@@ -22,9 +20,39 @@ type SessionType = {
 type SessionContextType = {
     session: SessionType | undefined;
     authenticated: boolean;
-    update: (
-        data?: any,
-    ) => Promise<{ status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }>;
+    update: () => Promise<{ status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }>;
+};
+
+type BetterAuthSessionQuery = ReturnType<typeof authClient.useSession>;
+type BetterAuthSessionData = BetterAuthSessionQuery["data"];
+type BetterAuthSessionInput = BetterAuthSessionData | null | undefined;
+type UpdateResult = { status: "success"; sessionData: SessionType } | { status: "error"; error: unknown };
+
+const toDate = (value: Date | string) => (value instanceof Date ? value : new Date(value));
+
+const mapBetterAuthSession = (data: BetterAuthSessionInput): SessionType | undefined => {
+    if (!data || !("session" in data) || !data.session || !data.user) {
+        return undefined;
+    }
+
+    const rootFolderId = data.user.rootFolderId;
+    const username = data.user.username;
+
+    if (!rootFolderId || !username) {
+        return undefined;
+    }
+
+    return {
+        user: {
+            id: data.user.id,
+            username,
+            rootFolderId,
+            firstName: data.user.firstName ?? null,
+            lastName: data.user.lastName ?? null,
+        },
+        accessTokenExpires: toDate(data.session.expiresAt),
+        refreshTokenExpires: toDate(data.session.expiresAt),
+    };
 };
 
 export const SessionContext = createContext<SessionContextType>({
@@ -34,39 +62,28 @@ export const SessionContext = createContext<SessionContextType>({
         return { status: "error", error: "SessionContext not initialized" };
     },
 });
-export function SessionProvider({ children }: { children: React.ReactNode }) {
-    const firstLoad = useRef(true);
-    const [session, setSession] = useState<SessionType | undefined>(undefined);
-    const [authenticated, setAuthenticated] = useState<boolean>(false);
 
-    const update = useCallback(async (): Promise<
-        { status: "success"; sessionData: SessionType } | { status: "error"; error: unknown }
-    > => {
+export function SessionProvider({ children }: { children: ReactNode }) {
+    const sessionQuery = authClient.useSession();
+    const session = useMemo(() => mapBetterAuthSession(sessionQuery.data), [sessionQuery.data]);
+    const authenticated = Boolean(session);
+
+    const update = useCallback(async (): Promise<UpdateResult> => {
         try {
-            const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/session`, {
-                withCredentials: true,
-            });
+            await sessionQuery.refetch();
+            const sessionAtom = authClient.$store.atoms.session;
+            const snapshot = sessionAtom ? sessionAtom.get() : undefined;
+            const refreshed = mapBetterAuthSession(snapshot?.data ?? sessionQuery.data);
 
-            const parsedResponse = getSessionDetailsSchema.safeParse(response.data);
-
-            if (parsedResponse.success === false) return { status: "error", error: parsedResponse.error };
-
-            const newSession: SessionType = {
-                user: parsedResponse.data.user,
-                accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
-                refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
-            };
-
-            if (newSession) {
-                setSession(newSession);
-                setAuthenticated(true);
+            if (!refreshed) {
+                return { status: "error", error: snapshot?.error ?? sessionQuery.error ?? "Invalid session" };
             }
 
-            return { status: "success", sessionData: newSession };
+            return { status: "success", sessionData: refreshed };
         } catch (error) {
-            return { status: "error", error: error };
+            return { status: "error", error };
         }
-    }, []);
+    }, [sessionQuery]);
 
     const contextValue = useMemo(
         () => ({
@@ -77,84 +94,5 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         [authenticated, session, update],
     );
 
-    useEffect(() => {
-        if (firstLoad.current) {
-            firstLoad.current = false;
-
-            update().then((initialStatus) => {
-                if (initialStatus.status === "success") return;
-
-                // Try updating every 5 seconds until successful
-                const updateIntervalTimer = setInterval(async () => {
-                    update().then((updateStatus) => {
-                        if (updateStatus.status === "success") {
-                            clearInterval(updateIntervalTimer);
-                            return;
-                        }
-                    });
-                }, ms("5s"));
-            });
-        }
-    }, [update]);
-
-    // Token refresh system
-    useEffect(() => {
-        if (authenticated && session) {
-            // Refetch 10 seconds prior to expiry
-            const refetchIntervalTimer = setInterval(
-                async () => {
-                    try {
-                        const response = await axios.get(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/auth/refresh`, {
-                            withCredentials: true,
-                        });
-
-                        if (response.status === 200) {
-                            const parsedResponse = refreshSessionSchema.safeParse(response.data);
-
-                            if (parsedResponse.success === false) return;
-
-                            const newSession = {
-                                user: session.user,
-                                accessTokenExpires: new Date(parsedResponse.data.accessTokenExpires),
-                                refreshTokenExpires: new Date(parsedResponse.data.refreshTokenExpires),
-                            };
-
-                            if (newSession) {
-                                setSession(newSession);
-                            }
-                        }
-                    } catch (error) {
-                        console.log(error);
-
-                        // Failed to refresh, so clear session
-                        setSession(undefined);
-                    }
-                },
-                ms("15m") - ms("10s"),
-            );
-
-            return () => {
-                clearInterval(refetchIntervalTimer);
-            };
-        }
-    }, [authenticated, session]);
-
     return <SessionContext.Provider value={contextValue}>{children}</SessionContext.Provider>;
 }
-
-const getSessionDetailsSchema = z.object({
-    user: z.object({
-        id: z.string(),
-        username: z.string(),
-        rootFolderId: z.string(),
-        firstName: z.string().nullable(),
-        lastName: z.string().nullable(),
-    }),
-    accessTokenExpires: z.string().datetime(),
-    refreshTokenExpires: z.string().datetime(),
-});
-
-const refreshSessionSchema = z.object({
-    accessTokenExpires: z.string().datetime(),
-    refreshTokenExpires: z.string().datetime(),
-});
