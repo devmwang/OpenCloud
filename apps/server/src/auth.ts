@@ -22,6 +22,7 @@ const authSchema = {
 
 export const createAuth = (db: Database) =>
     betterAuth({
+        baseURL: env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL,
         basePath: "/api/auth",
         trustedOrigins: [env.OPENCLOUD_WEBUI_URL],
         secret: env.AUTH_SECRET,

@@ -21,4 +21,4 @@ Server:
 
 WebUI:
 
-- `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by Next.js runtime + `next.config.mjs`)
+- `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by Next.js runtime + `next.config.mjs`, and by the Server for Better Auth `baseURL`)
