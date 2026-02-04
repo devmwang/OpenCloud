@@ -171,10 +171,8 @@ export async function createUploadTokenHandler(
         return reply.code(500).send({ message: "Failed to create upload token" });
     }
 
-    return reply
-        .code(200)
-        .send({
-            uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }),
-            expiresAt: expiry.toISOString(),
-        });
+    return reply.code(200).send({
+        uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }),
+        expiresAt: expiry.toISOString(),
+    });
 }
