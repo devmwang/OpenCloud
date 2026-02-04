@@ -1,14 +1,15 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import util from "util";
+
+import { eq } from "drizzle-orm";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import sharp from "sharp";
 
 import { files } from "@/db/schema/storage";
 import { env } from "@/env/env";
 
-import type { GetDetailsQuerystring, GetFileParams, GetThumbnailParams, DeleteFileQuerystring } from "./fs.schemas";
+import type { DeleteFileQuerystring, GetDetailsQuerystring, GetFileParams, GetThumbnailParams } from "./fs.schemas";
 
 const unlinkAsync = util.promisify(fs.unlink);
 
@@ -157,7 +158,7 @@ export async function deleteFileHandler(
 
     try {
         await unlinkAsync(filePath);
-    } catch (e) {
+    } catch {
         return reply.code(403).send({ status: "fail", message: "File deletion failed" });
     }
 

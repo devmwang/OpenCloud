@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
 import { ZoomIn, ZoomOut } from "lucide-react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 
 import { env } from "@/env/env.mjs";
 

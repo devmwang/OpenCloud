@@ -1,5 +1,5 @@
-import type { FastifyRequest, FastifyReply, FastifyPluginAsync } from "fastify";
 import FastifyJWT from "@fastify/jwt";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
 import { env } from "@/env/env";
@@ -120,7 +120,7 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
                 request.user = { id: response.user.id };
                 return;
             }
-        } catch (err) {
+        } catch {
             request.authenticated = false;
             request.user = undefined;
         }

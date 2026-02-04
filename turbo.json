@@ -1,11 +1,14 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "globalDependencies": ["**/.env.*local"],
+    "globalEnv": ["NEXT_PUBLIC_OPENCLOUD_SERVER_URL"],
     "tasks": {
         "build": {
             "dependsOn": ["^build"]
         },
-        "lint": {},
+        "lint": {
+            "outputs": []
+        },
         "dev": {
             "cache": false,
             "persistent": true

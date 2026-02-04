@@ -39,7 +39,7 @@ Working directory: repo root (wrap with dotenvx so `DATABASE_URL` is loaded).
 - REST API routes are mounted under `/v1/*` (see prefixes in `apps/server/src/index.ts`).
 - File storage:
     - Root directory is `FILE_STORE_PATH` (from `.env*`).
-    - Files are served statically under `/FileStore/` (Fastify static in `apps/server/src/index.ts`).
+    - Files are served via API routes (see `apps/server/src/systems/fs`).
 
 ## Shared docs
 

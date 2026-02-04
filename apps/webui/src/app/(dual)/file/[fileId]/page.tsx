@@ -1,10 +1,11 @@
+import path from "path";
+
 import type { Metadata } from "next/dist/types";
 import { cookies } from "next/headers";
 import { z } from "zod";
-import path from "path";
 
-import { env } from "@/env/env.mjs";
 import { PreviewPane } from "@/components/file-system/file-view/preview-pane";
+import { env } from "@/env/env.mjs";
 
 export async function generateMetadata(props: { params: Promise<{ fileId: string }> }): Promise<Metadata> {
     const params = await props.params;

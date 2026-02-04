@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect } from "react";
 
 export default function Modal({ children }: { children: React.ReactNode }) {
     const router = useRouter();

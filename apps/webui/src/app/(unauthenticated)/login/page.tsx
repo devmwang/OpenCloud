@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useContext, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
-import * as z from "zod";
+import { Suspense, useContext, useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
 import { authClient } from "@/components/auth/auth-client";
 import { SessionContext } from "@/components/auth/session-provider";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";

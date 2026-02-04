@@ -1,12 +1,13 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
 import * as argon2 from "argon2";
+import { and, eq, inArray } from "drizzle-orm";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { accessRules } from "@/db/schema/access-rules";
 import { uploadTokens } from "@/db/schema/auth";
-import { users } from "@/db/schema/users";
 import { folders } from "@/db/schema/storage";
-import type { CreateUserInput, CreateAccessRuleInput, CreateUploadTokenInput } from "./auth.schemas";
+import { users } from "@/db/schema/users";
+
+import type { CreateAccessRuleInput, CreateUploadTokenInput, CreateUserInput } from "./auth.schemas";
 import { createUserWithRootFolder } from "./auth.utils";
 
 export async function createUserHandler(
@@ -94,12 +95,17 @@ export async function createAccessRuleHandler(
     reply: FastifyReply,
 ) {
     const { name, type, method, match } = request.body;
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
 
     await this.db.insert(accessRules).values({
         name: name,
         type: type,
         method: method,
         match: match,
+        ownerId: userId,
     });
 
     return reply.code(200).send({ status: "success", message: "Access Rule created" });
@@ -133,7 +139,23 @@ export async function createUploadTokenHandler(
             .send({ message: "You do not have permission to create an upload token for this folder" });
     }
 
-    const { description, folderId, fileAccess } = request.body;
+    const { description, folderId, fileAccess, accessControlRuleIds, expiresAt } = request.body;
+
+    const expiry = expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(expiry.getTime())) {
+        return reply.code(400).send({ message: "Invalid expiresAt value" });
+    }
+
+    const ruleIds = accessControlRuleIds?.length ? Array.from(new Set(accessControlRuleIds)) : undefined;
+    if (ruleIds && ruleIds.length > 0) {
+        const existingRules = await this.db
+            .select({ id: accessRules.id })
+            .from(accessRules)
+            .where(and(inArray(accessRules.id, ruleIds), eq(accessRules.ownerId, user.id)));
+        if (existingRules.length !== ruleIds.length) {
+            return reply.code(400).send({ message: "One or more access control rules are invalid" });
+        }
+    }
 
     const [uploadToken] = await this.db
         .insert(uploadTokens)
@@ -142,11 +164,16 @@ export async function createUploadTokenHandler(
             description: description != undefined ? description : null,
             folderId: folderId,
             fileAccess: fileAccess,
+            accessControlRuleIds: ruleIds && ruleIds.length > 0 ? ruleIds : null,
+            expiresAt: expiry,
         })
         .returning();
     if (!uploadToken) {
         return reply.code(500).send({ message: "Failed to create upload token" });
     }
 
-    return reply.code(200).send({ uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }) });
+    return reply.code(200).send({
+        uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }),
+        expiresAt: expiry.toISOString(),
+    });
 }

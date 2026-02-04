@@ -1,10 +1,9 @@
+import { cookies } from "next/headers";
 import { z } from "zod";
 
-import { cookies } from "next/headers";
-
-import { env } from "@/env/env.mjs";
 import { Breadcrumb } from "@/components/file-system/breadcrumb";
 import { GridLayout } from "@/components/file-system/grid/core-layout";
+import { env } from "@/env/env.mjs";
 
 export default async function FolderView(props: { params: Promise<{ folderId: string }> }) {
     const params = await props.params;

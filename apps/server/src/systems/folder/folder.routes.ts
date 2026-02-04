@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
+import { createFolderHandler, getContentsHandler, getDetailsHandler } from "./folder.handlers";
 import { $ref } from "./folder.schemas";
-import { getDetailsHandler, getContentsHandler, createFolderHandler } from "./folder.handlers";
 
 async function folderRouter(server: FastifyInstance) {
     server.route({

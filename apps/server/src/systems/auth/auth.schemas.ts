@@ -1,4 +1,5 @@
 import { z } from "zod/v3";
+
 import { buildJsonSchemas } from "@/utils/zod-schema";
 
 const userBase = {
@@ -49,10 +50,13 @@ const createUploadTokenSchema = z.object({
         invalid_type_error: "Parent folder ID must be a string",
     }),
     fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    accessControlRuleIds: z.array(z.string()).min(1).optional(),
+    expiresAt: z.string().datetime().optional(),
 });
 
 const createUploadTokenResponseSchema = z.object({
     uploadToken: z.string(),
+    expiresAt: z.string().datetime(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
