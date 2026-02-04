@@ -1,5 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
-import { foreignKey, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, foreignKey, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 import { fileAccessEnum, folderTypeEnum } from "./enums";
 
@@ -34,7 +34,7 @@ export const files = pgTable(
             .primaryKey()
             .$defaultFn(() => createId()),
         fileName: text("fileName").notNull(),
-        fileSize: integer("fileSize"),
+        fileSize: bigint("fileSize", { mode: "number" }),
         fileType: text("fileType").notNull(),
         ownerId: text("ownerId").notNull(),
         fileAccess: fileAccessEnum("fileAccess").notNull().default("PRIVATE"),

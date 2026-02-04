@@ -71,7 +71,7 @@ if (!fs.existsSync(fileStoreRoot)) {
 
 void server.register(FastifyStatic, {
     root: fileStoreRoot,
-    prefix: "/FileStore/",
+    serve: false,
 });
 
 // Register Route Schemas

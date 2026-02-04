@@ -10,14 +10,12 @@ import { pipeline } from "stream";
 import type { Database } from "@/db";
 import { uploadTokens } from "@/db/schema/auth";
 import type { FileAccess } from "@/db/schema/enums";
-import { files } from "@/db/schema/storage";
+import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
 
 import type { UploadFileQuerystring } from "./upload.schemas";
 
 const pump = util.promisify(pipeline);
-const unlinkAsync = util.promisify(fs.unlink);
-
 export async function uploadHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
@@ -30,6 +28,18 @@ export async function uploadHandler(
     const userId = request.user.id;
 
     const parentFolderId = request.query.parentFolderId;
+
+    const [parentFolder] = await this.db
+        .select({ id: folders.id, ownerId: folders.ownerId })
+        .from(folders)
+        .where(eq(folders.id, parentFolderId))
+        .limit(1);
+    if (!parentFolder) {
+        return reply.code(404).send({ status: "fail", error: "Parent folder not found" });
+    }
+    if (parentFolder.ownerId !== userId) {
+        return reply.code(403).send({ status: "fail", error: "You do not have permission to upload to this folder" });
+    }
 
     const fileData = await request.file();
 
@@ -62,7 +72,16 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
         return reply.code(401).send({ status: "fail", error: "No upload token provided" });
     }
 
-    const uploadTokenPayload: FastifyJWT["payload"] = this.jwt.verify(fileData.fields["uploadToken"].value as string);
+    let uploadTokenPayload: FastifyJWT["payload"];
+    try {
+        uploadTokenPayload = this.jwt.verify(fileData.fields["uploadToken"].value as string) as FastifyJWT["payload"];
+    } catch {
+        return reply.code(401).send({ status: "fail", error: "Invalid upload token" });
+    }
+
+    if (!uploadTokenPayload || uploadTokenPayload.type !== "UploadToken" || !uploadTokenPayload.id) {
+        return reply.code(401).send({ status: "fail", error: "Invalid upload token" });
+    }
 
     const [uploadToken] = await this.db
         .select()
@@ -74,8 +93,24 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
         return reply.code(401).send({ status: "fail", error: "Invalid upload token" });
     }
 
+    if (uploadToken.expiresAt && uploadToken.expiresAt.getTime() <= Date.now()) {
+        return reply.code(401).send({ status: "fail", error: "Upload token expired" });
+    }
+
+    const [tokenFolder] = await this.db
+        .select({ id: folders.id, ownerId: folders.ownerId })
+        .from(folders)
+        .where(eq(folders.id, uploadToken.folderId))
+        .limit(1);
+    if (!tokenFolder) {
+        return reply.code(404).send({ status: "fail", error: "Parent folder not found" });
+    }
+    if (tokenFolder.ownerId !== uploadToken.userId) {
+        return reply.code(403).send({ status: "fail", error: "You do not have permission to upload to this folder" });
+    }
+
     for (const ruleId of uploadToken.accessControlRuleIds ?? []) {
-        const result = await this.verifyAccessControlRule(request, ruleId);
+        const result = await this.verifyAccessControlRule(request, ruleId, uploadToken.userId);
         if (!result) {
             return reply
                 .code(401)

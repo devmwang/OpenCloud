@@ -15,6 +15,7 @@ export const uploadTokens = pgTable(
         folderId: text("folderId").notNull(),
         fileAccess: fileAccessEnum("fileAccess").notNull(),
         accessControlRuleIds: text("accessControlRuleIds").array(),
+        expiresAt: timestamp("expiresAt", { mode: "date", precision: 3 }),
         createdAt: timestamp("createdAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
         updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
     },

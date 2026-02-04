@@ -10,6 +10,10 @@ export async function getDetailsHandler(
     reply: FastifyReply,
 ) {
     const folderId = request.query.folderId;
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
 
     const [folder] = await this.db
         .select({
@@ -19,11 +23,11 @@ export async function getDetailsHandler(
             parentFolderId: folders.parentFolderId,
         })
         .from(folders)
-        .where(eq(folders.id, folderId))
+        .where(and(eq(folders.id, folderId), eq(folders.ownerId, userId)))
         .limit(1);
 
     if (!folder) {
-        return reply.code(404).send({ message: "Something went wrong. Please try again." });
+        return reply.code(404).send({ message: "Folder not found" });
     }
 
     let currentFolder = folder;
@@ -38,11 +42,11 @@ export async function getDetailsHandler(
                 parentFolderId: folders.parentFolderId,
             })
             .from(folders)
-            .where(eq(folders.id, currentFolder.parentFolderId))
+            .where(and(eq(folders.id, currentFolder.parentFolderId), eq(folders.ownerId, userId)))
             .limit(1);
 
         if (!parent) {
-            return reply.code(404).send({ message: "Something went wrong. Please try again." });
+            return reply.code(404).send({ message: "Folder not found" });
         }
 
         hierarchy.push({ id: parent.id, name: parent.folderName, type: parent.type });
@@ -59,22 +63,34 @@ export async function getContentsHandler(
     reply: FastifyReply,
 ) {
     const folderId = request.query.folderId;
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
 
-    const [folder] = await this.db.select({ id: folders.id }).from(folders).where(eq(folders.id, folderId)).limit(1);
+    const [folder] = await this.db
+        .select({ id: folders.id, ownerId: folders.ownerId })
+        .from(folders)
+        .where(eq(folders.id, folderId))
+        .limit(1);
 
     if (!folder) {
-        return reply.code(404).send({ message: "Something went wrong. Please try again." });
+        return reply.code(404).send({ message: "Folder not found" });
+    }
+
+    if (folder.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to access this folder" });
     }
 
     const childFolders = await this.db
         .select({ id: folders.id, folderName: folders.folderName })
         .from(folders)
-        .where(eq(folders.parentFolderId, folderId));
+        .where(and(eq(folders.parentFolderId, folderId), eq(folders.ownerId, userId)));
 
     const childFiles = await this.db
         .select({ id: files.id, fileName: files.fileName })
         .from(files)
-        .where(eq(files.parentId, folderId));
+        .where(and(eq(files.parentId, folderId), eq(files.ownerId, userId)));
 
     return reply.code(200).send({ id: folderId, folders: childFolders, files: childFiles });
 }
@@ -89,6 +105,18 @@ export async function createFolderHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
     const { folderName, parentFolderId } = request.body;
+
+    const [parentFolder] = await this.db
+        .select({ id: folders.id, ownerId: folders.ownerId })
+        .from(folders)
+        .where(eq(folders.id, parentFolderId))
+        .limit(1);
+    if (!parentFolder) {
+        return reply.code(404).send({ message: "Parent folder not found" });
+    }
+    if (parentFolder.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to access this folder" });
+    }
 
     const existingFolder = await this.db
         .select({ id: folders.id })
