@@ -120,7 +120,7 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
                 request.user = { id: response.user.id };
                 return;
             }
-        } catch (err) {
+        } catch {
             request.authenticated = false;
             request.user = undefined;
         }

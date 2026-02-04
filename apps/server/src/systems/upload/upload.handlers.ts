@@ -75,7 +75,7 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
 
     let uploadTokenPayload: FastifyJWT["payload"];
     try {
-        uploadTokenPayload = this.jwt.verify(fileData.fields["uploadToken"].value as string) as FastifyJWT["payload"];
+        uploadTokenPayload = this.jwt.verify(fileData.fields["uploadToken"].value as string);
     } catch {
         return reply.code(401).send({ status: "fail", error: "Invalid upload token" });
     }

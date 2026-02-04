@@ -13,6 +13,13 @@ module.exports = [
     {
         ignores: ["**/.next/**", "**/dist/**", "**/.turbo/**", "**/node_modules/**"],
     },
+    {
+        settings: {
+            react: {
+                version: "19.2.3",
+            },
+        },
+    },
     ...typeCheckedConfigs,
     {
         files: serverFiles,

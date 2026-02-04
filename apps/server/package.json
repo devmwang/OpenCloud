@@ -13,6 +13,7 @@
         "db:baseline": "tsx src/scripts/baseline-drizzle.ts",
         "admin:provision": "tsx src/scripts/provision-admin.ts",
         "build": "rimraf dist && tsdown src/index.ts --format esm --out-dir dist",
+        "lint": "eslint .",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "clean": "rimraf dist",
         "start": "node ./dist/index.mjs"

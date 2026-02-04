@@ -158,7 +158,7 @@ export async function deleteFileHandler(
 
     try {
         await unlinkAsync(filePath);
-    } catch (e) {
+    } catch {
         return reply.code(403).send({ status: "fail", message: "File deletion failed" });
     }
 

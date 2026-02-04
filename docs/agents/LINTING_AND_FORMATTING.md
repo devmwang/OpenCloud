@@ -11,4 +11,3 @@ Working directory: repo root.
 ## Notes
 
 - ESLint uses a flat config at `eslint.config.js`, composed from `common/eslint-config-custom`.
-- `apps/server` currently has no `lint` script, so `pnpm run lint` only runs on packages that define `lint` (for example `apps/webui`).
