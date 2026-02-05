@@ -31,6 +31,7 @@ async function folderRouter(server: FastifyInstance) {
         method: "POST",
         url: "/create-folder",
         onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             body: $ref("createFolderSchema"),
             response: { 201: $ref("createFolderResponseSchema") },

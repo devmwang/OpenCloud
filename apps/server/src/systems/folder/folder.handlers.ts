@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { files, folders } from "@/db/schema/storage";
@@ -64,6 +64,8 @@ export async function getContentsHandler(
     reply: FastifyReply,
 ) {
     const folderId = request.query.folderId;
+    const limit = request.query.limit ?? 100;
+    const offset = request.query.offset ?? 0;
     const userId = request.user?.id;
     if (!userId) {
         return reply.code(401).send({ message: "Unauthorized" });
@@ -86,14 +88,20 @@ export async function getContentsHandler(
     const childFolders = await this.db
         .select({ id: folders.id, folderName: folders.folderName })
         .from(folders)
-        .where(and(eq(folders.parentFolderId, folderId), eq(folders.ownerId, userId)));
+        .where(and(eq(folders.parentFolderId, folderId), eq(folders.ownerId, userId)))
+        .orderBy(asc(folders.folderName), asc(folders.id))
+        .limit(limit)
+        .offset(offset);
 
     const childFiles = await this.db
         .select({ id: files.id, fileName: files.fileName })
         .from(files)
-        .where(and(eq(files.parentId, folderId), eq(files.ownerId, userId)));
+        .where(and(eq(files.parentId, folderId), eq(files.ownerId, userId), isNull(files.deletedAt)))
+        .orderBy(asc(files.fileName), asc(files.id))
+        .limit(limit)
+        .offset(offset);
 
-    return reply.code(200).send({ id: folderId, folders: childFolders, files: childFiles });
+    return reply.code(200).send({ id: folderId, folders: childFolders, files: childFiles, limit, offset });
 }
 
 export async function createFolderHandler(

@@ -17,7 +17,12 @@ Server:
 - `COOKIE_URL`: cookie domain
 - `AUTH_SECRET`: signing secret
 - `DATABASE_URL`: Postgres connection string
-- `FILE_STORE_PATH`: directory for stored files (served under `/FileStore/`)
+- `FILE_STORE_PATH`: directory for stored files
+- `SERVER_HOST`: host interface for the API server (default `0.0.0.0`)
+- `SERVER_PORT`: port for the API server (default `8080`)
+- `TRUST_PROXY_HOPS`: number of trusted proxy hops (default `0`)
+- `FILE_PURGE_RETENTION_DAYS`: soft-delete retention window for purge (default `7`)
+- `RATE_LIMIT_REDIS_URL`: optional Redis URL for shared rate limiting
 
 WebUI:
 

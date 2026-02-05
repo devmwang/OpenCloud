@@ -1,5 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
-import { bigint, foreignKey, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, foreignKey, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { fileAccessEnum, folderTypeEnum } from "./enums";
 
@@ -17,6 +17,7 @@ export const folders = pgTable(
         updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
     },
     (table) => ({
+        ownerIdIdx: index("Folders_ownerId_idx").on(table.ownerId),
         parentFolderIdFk: foreignKey({
             columns: [table.parentFolderId],
             foreignColumns: [table.id],
@@ -24,6 +25,12 @@ export const folders = pgTable(
         })
             .onUpdate("cascade")
             .onDelete("set null"),
+        parentFolderIdIdx: index("Folders_parentFolderId_idx").on(table.parentFolderId),
+        ownerParentNameUnique: uniqueIndex("Folders_owner_parent_name_unique").on(
+            table.ownerId,
+            table.parentFolderId,
+            table.folderName,
+        ),
     }),
 );
 
@@ -39,6 +46,7 @@ export const files = pgTable(
         ownerId: text("ownerId").notNull(),
         fileAccess: fileAccessEnum("fileAccess").notNull().default("PRIVATE"),
         parentId: text("parentId").notNull(),
+        deletedAt: timestamp("deletedAt", { mode: "date", precision: 3 }),
         createdAt: timestamp("createdAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
         updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
     },
@@ -50,5 +58,7 @@ export const files = pgTable(
         })
             .onUpdate("cascade")
             .onDelete("restrict"),
+        parentIdIdx: index("Files_parentId_idx").on(table.parentId),
+        ownerIdIdx: index("Files_ownerId_idx").on(table.ownerId),
     }),
 );

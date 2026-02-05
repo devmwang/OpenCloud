@@ -1,13 +1,18 @@
 import * as argon2 from "argon2";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { accessRules } from "@/db/schema/access-rules";
-import { uploadTokens } from "@/db/schema/auth";
-import { folders } from "@/db/schema/storage";
+import { fileReadTokens, uploadTokens } from "@/db/schema/auth";
+import { files, folders } from "@/db/schema/storage";
 import { users } from "@/db/schema/users";
 
-import type { CreateAccessRuleInput, CreateUploadTokenInput, CreateUserInput } from "./auth.schemas";
+import type {
+    CreateAccessRuleInput,
+    CreateReadTokenInput,
+    CreateUploadTokenInput,
+    CreateUserInput,
+} from "./auth.schemas";
 import { createUserWithRootFolder } from "./auth.utils";
 
 export async function createUserHandler(
@@ -61,8 +66,8 @@ export async function createUserHandler(
             rootFolderId: userWithRoot.rootFolderId,
         });
     } catch (e) {
-        console.log(e);
-        return reply.code(500).send(e);
+        request.log.error({ err: e }, "Failed to create user");
+        return reply.code(500).send({ error: "InternalServerError", message: "Failed to create user" });
     }
 }
 
@@ -176,4 +181,65 @@ export async function createUploadTokenHandler(
         uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }),
         expiresAt: expiry.toISOString(),
     });
+}
+
+export async function createReadTokenHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Body: CreateReadTokenInput }>,
+    reply: FastifyReply,
+) {
+    if (!request.user?.id) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const userId = request.user.id;
+    const { fileId, description, expiresAt } = request.body;
+
+    const [file] = await this.db
+        .select({ id: files.id, ownerId: files.ownerId, fileAccess: files.fileAccess })
+        .from(files)
+        .where(and(eq(files.id, fileId), isNull(files.deletedAt)))
+        .limit(1);
+
+    if (!file) {
+        return reply.code(404).send({ message: "File not found" });
+    }
+
+    if (file.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to create a read token for this file" });
+    }
+
+    if (file.fileAccess !== "PROTECTED") {
+        return reply.code(400).send({ message: "Read tokens can only be created for protected files" });
+    }
+
+    const expiry = expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(expiry.getTime())) {
+        return reply.code(400).send({ message: "Invalid expiresAt value" });
+    }
+
+    const [readToken] = await this.db
+        .insert(fileReadTokens)
+        .values({
+            userId,
+            fileId,
+            description: description != undefined ? description : null,
+            expiresAt: expiry,
+        })
+        .returning();
+
+    if (!readToken) {
+        return reply.code(500).send({ message: "Failed to create read token" });
+    }
+
+    return reply.code(200).send({
+        readToken: this.jwt.sign({ id: readToken.id, type: "ReadToken" }),
+        expiresAt: expiry.toISOString(),
+    });
+}
+
+export async function csrfTokenHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    const csrfToken = reply.generateCsrf();
+
+    return reply.code(200).send({ csrfToken });
 }
