@@ -6,7 +6,6 @@ import FastifyCORS from "@fastify/cors";
 import FastifyHelmet from "@fastify/helmet";
 import FastifyMultipart from "@fastify/multipart";
 import FastifyRateLimit from "@fastify/rate-limit";
-import FastifyRedis from "@fastify/redis";
 import FastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 
@@ -61,25 +60,10 @@ void server.register(FastifyHelmet, {
 });
 void server.register(csrfPlugin);
 
-if (env.RATE_LIMIT_REDIS_URL) {
-    void server.register(FastifyRedis, { url: env.RATE_LIMIT_REDIS_URL });
-    void server.after((error) => {
-        if (error) {
-            throw error;
-        }
-
-        void server.register(FastifyRateLimit, {
-            max: 1000,
-            timeWindow: "1 minute",
-            redis: server.redis,
-        });
-    });
-} else {
-    void server.register(FastifyRateLimit, {
-        max: 1000,
-        timeWindow: "1 minute",
-    });
-}
+void server.register(FastifyRateLimit, {
+    max: 1000,
+    timeWindow: "1 minute",
+});
 
 void server.register(FastifyMultipart, {
     limits: {

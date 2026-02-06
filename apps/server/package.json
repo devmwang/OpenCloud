@@ -39,7 +39,6 @@
         "@fastify/jwt": "^10.0.0",
         "@fastify/multipart": "^9.3.0",
         "@fastify/rate-limit": "^10.3.0",
-        "@fastify/redis": "^7.0.2",
         "@fastify/static": "^9.0.0",
         "@paralleldrive/cuid2": "^2.2.2",
         "@t3-oss/env-core": "^0.13.10",

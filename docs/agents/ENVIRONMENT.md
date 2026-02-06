@@ -22,7 +22,6 @@ Server:
 - `SERVER_PORT`: port for the API server (default `8080`)
 - `TRUST_PROXY_HOPS`: number of trusted proxy hops (default `0`)
 - `FILE_PURGE_RETENTION_DAYS`: soft-delete retention window for purge (default `7`)
-- `RATE_LIMIT_REDIS_URL`: optional Redis URL for shared rate limiting
 
 WebUI:
 
