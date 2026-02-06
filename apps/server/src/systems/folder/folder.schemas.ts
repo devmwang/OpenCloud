@@ -64,9 +64,22 @@ const createFolderResponseSchema = z.object({
     id: z.string(),
 });
 
+const deleteFolderQuerySchema = z.object({
+    folderId: z.string({
+        required_error: "Folder ID is required",
+        invalid_type_error: "Folder ID must be a string",
+    }),
+});
+
+const deleteFolderResponseSchema = z.object({
+    status: z.string(),
+    message: z.string(),
+});
+
 export type getDetailsQuerystring = z.infer<typeof getDetailsQuerySchema>;
 export type getContentsQuerystring = z.infer<typeof getContentsQuerySchema>;
 export type createFolderInput = z.infer<typeof createFolderSchema>;
+export type deleteFolderQuerystring = z.infer<typeof deleteFolderQuerySchema>;
 
 export const { schemas: folderSchemas, $ref } = buildJsonSchemas(
     {
@@ -76,6 +89,8 @@ export const { schemas: folderSchemas, $ref } = buildJsonSchemas(
         getContentsResponseSchema,
         createFolderSchema,
         createFolderResponseSchema,
+        deleteFolderQuerySchema,
+        deleteFolderResponseSchema,
     },
     { $id: "Folder" },
 );

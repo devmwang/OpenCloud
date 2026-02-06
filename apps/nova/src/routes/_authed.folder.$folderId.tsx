@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 
-import { createFolder, getFolderContents, getFolderDetails } from "@/features/folder/api";
+import { deleteFile } from "@/features/files/api";
+import { createFolder, deleteFolder, getFolderContents, getFolderDetails } from "@/features/folder/api";
 import { uploadSingleFile } from "@/features/upload/api";
 import { getErrorMessage } from "@/lib/errors";
 import { toFileRouteId } from "@/lib/file-id";
@@ -18,9 +19,13 @@ function FolderPage() {
 
     const [createFolderResult, setCreateFolderResult] = useState<string | null>(null);
     const [uploadResult, setUploadResult] = useState<string | null>(null);
+    const [folderActionResult, setFolderActionResult] = useState<string | null>(null);
+    const [fileActionResult, setFileActionResult] = useState<string | null>(null);
 
     const [createFolderPending, setCreateFolderPending] = useState(false);
     const [uploadPending, setUploadPending] = useState(false);
+    const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
+    const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
     const detailsQuery = useQuery({
         queryKey: queryKeys.folderDetails(folderId),
@@ -48,7 +53,7 @@ function FolderPage() {
             setCreateFolderResult(`Created folder ${result.id}`);
             event.currentTarget.reset();
 
-            await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+            await refreshContents();
         } catch (error) {
             setCreateFolderResult(getErrorMessage(error));
         } finally {
@@ -79,11 +84,59 @@ function FolderPage() {
             setUploadResult(`Uploaded ${result.id}${result.fileExtension}`);
             event.currentTarget.reset();
 
-            await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+            await refreshContents();
         } catch (error) {
             setUploadResult(getErrorMessage(error));
         } finally {
             setUploadPending(false);
+        }
+    };
+
+    const refreshContents = async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+    };
+
+    const handleDeleteFolder = async (targetFolderId: string, targetFolderName: string) => {
+        if (typeof window !== "undefined") {
+            const confirmed = window.confirm(`Delete folder "${targetFolderName}"? This only works for empty folders.`);
+            if (!confirmed) {
+                return;
+            }
+        }
+
+        setFolderActionResult(null);
+        setDeletingFolderId(targetFolderId);
+
+        try {
+            const result = await deleteFolder(targetFolderId);
+            setFolderActionResult(result.message);
+            await refreshContents();
+        } catch (error) {
+            setFolderActionResult(getErrorMessage(error));
+        } finally {
+            setDeletingFolderId(null);
+        }
+    };
+
+    const handleDeleteFile = async (targetFileId: string, targetFileName: string) => {
+        if (typeof window !== "undefined") {
+            const confirmed = window.confirm(`Delete file "${targetFileName}"?`);
+            if (!confirmed) {
+                return;
+            }
+        }
+
+        setFileActionResult(null);
+        setDeletingFileId(targetFileId);
+
+        try {
+            const result = await deleteFile(targetFileId);
+            setFileActionResult(result.message);
+            await refreshContents();
+        } catch (error) {
+            setFileActionResult(getErrorMessage(error));
+        } finally {
+            setDeletingFileId(null);
         }
     };
 
@@ -159,13 +212,25 @@ function FolderPage() {
                 <section className="two content-columns grid">
                     <article className="card stack content-column">
                         <h2>Folders</h2>
+                        <p className="muted">Open folders or delete empty ones.</p>
+                        {folderActionResult ? <p className="muted">{folderActionResult}</p> : null}
                         <div className="column-scroll">
                             <ul className="list list-top">
                                 {folderContents.folders.map((entry) => (
-                                    <li key={entry.id} className="list-item">
+                                    <li key={entry.id} className="stack list-item">
                                         <Link to="/folder/$folderId" params={{ folderId: entry.id }}>
                                             {entry.folderName}
                                         </Link>
+                                        <div className="row">
+                                            <button
+                                                type="button"
+                                                className="danger"
+                                                disabled={deletingFolderId === entry.id}
+                                                onClick={() => void handleDeleteFolder(entry.id, entry.folderName)}
+                                            >
+                                                {deletingFolderId === entry.id ? "Deleting..." : "Delete"}
+                                            </button>
+                                        </div>
                                     </li>
                                 ))}
                                 {folderContents.folders.length === 0 ? <li className="muted">No folders</li> : null}
@@ -175,6 +240,8 @@ function FolderPage() {
 
                     <article className="card stack content-column">
                         <h2>Files</h2>
+                        <p className="muted">Open files, preview in a modal, or delete.</p>
+                        {fileActionResult ? <p className="muted">{fileActionResult}</p> : null}
                         <div className="column-scroll">
                             <ul className="list list-top">
                                 {folderContents.files.map((entry) => {
@@ -196,6 +263,14 @@ function FolderPage() {
                                             <Link to="/file/$fileId" params={{ fileId: fileRouteId }}>
                                                 Open full page view
                                             </Link>
+                                            <button
+                                                type="button"
+                                                className="danger"
+                                                disabled={deletingFileId === entry.id}
+                                                onClick={() => void handleDeleteFile(entry.id, entry.fileName)}
+                                            >
+                                                {deletingFileId === entry.id ? "Deleting..." : "Delete"}
+                                            </button>
                                         </li>
                                     );
                                 })}

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
-import { createFolderHandler, getContentsHandler, getDetailsHandler } from "./folder.handlers";
+import { createFolderHandler, deleteFolderHandler, getContentsHandler, getDetailsHandler } from "./folder.handlers";
 import { $ref } from "./folder.schemas";
 
 async function folderRouter(server: FastifyInstance) {
@@ -37,6 +37,18 @@ async function folderRouter(server: FastifyInstance) {
             response: { 201: $ref("createFolderResponseSchema") },
         },
         handler: createFolderHandler,
+    });
+
+    server.route({
+        method: "DELETE",
+        url: "/delete-folder",
+        onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            querystring: $ref("deleteFolderQuerySchema"),
+            response: { 200: $ref("deleteFolderResponseSchema") },
+        },
+        handler: deleteFolderHandler,
     });
 }
 

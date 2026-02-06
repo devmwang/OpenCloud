@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { createCsrfHeaders } from "@/lib/csrf";
-import { getJson, postJson } from "@/lib/http";
+import { deleteJson, getJson, postJson } from "@/lib/http";
 
 const folderEntrySchema = z
     .object({
@@ -64,6 +64,11 @@ const createFolderResponseSchema = z.object({
     id: z.string(),
 });
 
+const deleteFolderResponseSchema = z.object({
+    status: z.string(),
+    message: z.string(),
+});
+
 export type FolderDetails = z.infer<typeof folderDetailsSchema>;
 export type FolderContents = z.infer<typeof folderContentsSchema>;
 export type CreateFolderInput = z.infer<typeof createFolderInputSchema>;
@@ -85,6 +90,13 @@ export const createFolder = async (input: CreateFolderInput) => {
 
     return postJson("/v1/folder/create-folder", createFolderResponseSchema, {
         body,
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const deleteFolder = async (folderId: string) => {
+    return deleteJson("/v1/folder/delete-folder", deleteFolderResponseSchema, {
+        query: { folderId },
         headers: await createCsrfHeaders(),
     });
 };

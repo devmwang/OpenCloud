@@ -3,7 +3,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { files, folders } from "@/db/schema/storage";
 
-import type { createFolderInput, getContentsQuerystring, getDetailsQuerystring } from "./folder.schemas";
+import type {
+    createFolderInput,
+    deleteFolderQuerystring,
+    getContentsQuerystring,
+    getDetailsQuerystring,
+} from "./folder.schemas";
 
 export async function getDetailsHandler(
     this: FastifyInstance,
@@ -190,4 +195,60 @@ export async function createFolderHandler(
     }
 
     return reply.code(201).send({ id: folder.id });
+}
+
+export async function deleteFolderHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Querystring: deleteFolderQuerystring }>,
+    reply: FastifyReply,
+) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const folderId = request.query.folderId;
+
+    const [folder] = await this.db
+        .select({
+            id: folders.id,
+            ownerId: folders.ownerId,
+            type: folders.type,
+        })
+        .from(folders)
+        .where(eq(folders.id, folderId))
+        .limit(1);
+
+    if (!folder) {
+        return reply.code(404).send({ message: "Folder not found" });
+    }
+
+    if (folder.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to delete this folder" });
+    }
+
+    if (folder.type === "ROOT") {
+        return reply.code(400).send({ message: "Root folder cannot be deleted" });
+    }
+
+    const [childFolder] = await this.db
+        .select({ id: folders.id })
+        .from(folders)
+        .where(eq(folders.parentFolderId, folderId))
+        .limit(1);
+    if (childFolder) {
+        return reply.code(400).send({ message: "Folder is not empty (contains subfolders)" });
+    }
+
+    const [childFile] = await this.db.select({ id: files.id }).from(files).where(eq(files.parentId, folderId)).limit(1);
+    if (childFile) {
+        return reply.code(400).send({ message: "Folder is not empty (contains files)" });
+    }
+
+    await this.db.delete(folders).where(eq(folders.id, folderId));
+
+    return reply.code(200).send({
+        status: "success",
+        message: "Folder deleted successfully",
+    });
 }
