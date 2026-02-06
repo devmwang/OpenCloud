@@ -20,13 +20,15 @@ const accessControlPlugin: FastifyPluginAsync = fp(async (server) => {
 
             if (ipaddr.isValidCIDR(ruleMatch)) {
                 const [range, prefix] = ipaddr.parseCIDR(ruleMatch);
-                const normalizedRange = isIpv6(range) && range.isIPv4MappedAddress() ? range.toIPv4Address() : range;
+                const isMappedIpv6Cidr = isIpv6(range) && range.isIPv4MappedAddress();
+                const normalizedRange = isMappedIpv6Cidr ? range.toIPv4Address() : range;
+                const normalizedPrefix = isMappedIpv6Cidr ? Math.max(prefix - 96, 0) : prefix;
 
                 if (client.kind() !== normalizedRange.kind()) {
                     return null;
                 }
 
-                return client.match(normalizedRange, prefix);
+                return client.match(normalizedRange, normalizedPrefix);
             }
 
             if (ipaddr.isValid(ruleMatch)) {
