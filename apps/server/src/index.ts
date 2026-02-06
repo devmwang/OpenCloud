@@ -59,17 +59,25 @@ void server.register(FastifyCookie, {
 void server.register(FastifyHelmet);
 void server.register(csrfPlugin);
 
-void server.register(async (instance) => {
-    if (env.RATE_LIMIT_REDIS_URL) {
-        await instance.register(FastifyRedis, { url: env.RATE_LIMIT_REDIS_URL });
-    }
+if (env.RATE_LIMIT_REDIS_URL) {
+    void server.register(FastifyRedis, { url: env.RATE_LIMIT_REDIS_URL });
+    void server.after((error) => {
+        if (error) {
+            throw error;
+        }
 
-    await instance.register(FastifyRateLimit, {
+        void server.register(FastifyRateLimit, {
+            max: 1000,
+            timeWindow: "1 minute",
+            redis: server.redis,
+        });
+    });
+} else {
+    void server.register(FastifyRateLimit, {
         max: 1000,
         timeWindow: "1 minute",
-        ...(env.RATE_LIMIT_REDIS_URL ? { redis: instance.redis } : {}),
     });
-});
+}
 
 void server.register(FastifyMultipart, {
     limits: {

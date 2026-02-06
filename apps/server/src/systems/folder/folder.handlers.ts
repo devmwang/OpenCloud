@@ -64,8 +64,9 @@ export async function getContentsHandler(
     reply: FastifyReply,
 ) {
     const folderId = request.query.folderId;
-    const limit = request.query.limit ?? 100;
+    const limit = request.query.limit;
     const offset = request.query.offset ?? 0;
+    const hasOffset = request.query.offset !== undefined;
     const userId = request.user?.id;
     if (!userId) {
         return reply.code(401).send({ message: "Unauthorized" });
@@ -85,23 +86,39 @@ export async function getContentsHandler(
         return reply.code(403).send({ message: "You do not have permission to access this folder" });
     }
 
-    const childFolders = await this.db
+    const childFolderQuery = this.db
         .select({ id: folders.id, folderName: folders.folderName })
         .from(folders)
         .where(and(eq(folders.parentFolderId, folderId), eq(folders.ownerId, userId)))
-        .orderBy(asc(folders.folderName), asc(folders.id))
-        .limit(limit)
-        .offset(offset);
+        .orderBy(asc(folders.folderName), asc(folders.id));
 
-    const childFiles = await this.db
+    const childFolders =
+        limit !== undefined
+            ? await childFolderQuery.limit(limit).offset(offset)
+            : hasOffset
+              ? await childFolderQuery.offset(offset)
+              : await childFolderQuery;
+
+    const childFileQuery = this.db
         .select({ id: files.id, fileName: files.fileName })
         .from(files)
         .where(and(eq(files.parentId, folderId), eq(files.ownerId, userId), isNull(files.deletedAt)))
-        .orderBy(asc(files.fileName), asc(files.id))
-        .limit(limit)
-        .offset(offset);
+        .orderBy(asc(files.fileName), asc(files.id));
 
-    return reply.code(200).send({ id: folderId, folders: childFolders, files: childFiles, limit, offset });
+    const childFiles =
+        limit !== undefined
+            ? await childFileQuery.limit(limit).offset(offset)
+            : hasOffset
+              ? await childFileQuery.offset(offset)
+              : await childFileQuery;
+
+    return reply.code(200).send({
+        id: folderId,
+        folders: childFolders,
+        files: childFiles,
+        ...(limit !== undefined ? { limit } : {}),
+        ...(hasOffset ? { offset } : {}),
+    });
 }
 
 export async function createFolderHandler(

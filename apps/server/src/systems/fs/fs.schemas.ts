@@ -54,9 +54,11 @@ const deleteFileResponseSchema = z.object({
     message: z.string(),
 });
 
-const purgeDeletedBodySchema = z.object({
-    olderThanDays: z.coerce.number().int().min(1).optional(),
-});
+const purgeDeletedBodySchema = z
+    .object({
+        olderThanDays: z.coerce.number().int().min(1).optional(),
+    })
+    .optional();
 
 const purgeDeletedResponseSchema = z.object({
     status: z.string(),
