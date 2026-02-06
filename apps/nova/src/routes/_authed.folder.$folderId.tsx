@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 
 import { createFolder, getFolderContents, getFolderDetails } from "@/features/folder/api";
@@ -115,89 +115,99 @@ function FolderPage() {
     const breadcrumbTrail = [...folderDetails.hierarchy].reverse();
 
     return (
-        <main className="stack">
-            <section className="card stack">
-                <h1>Folder: {folderDetails.name}</h1>
+        <>
+            <main className="stack">
+                <section className="card stack">
+                    <h1>Folder: {folderDetails.name}</h1>
 
-                <nav className="row" aria-label="Breadcrumb">
-                    {breadcrumbTrail.map((entry) => (
-                        <Link key={entry.id} to="/folder/$folderId" params={{ folderId: entry.id }}>
-                            {entry.name}
-                        </Link>
-                    ))}
-                    <span>{folderDetails.name}</span>
-                </nav>
-            </section>
+                    <nav className="row" aria-label="Breadcrumb">
+                        {breadcrumbTrail.map((entry) => (
+                            <Link key={entry.id} to="/folder/$folderId" params={{ folderId: entry.id }}>
+                                {entry.name}
+                            </Link>
+                        ))}
+                        <span>{folderDetails.name}</span>
+                    </nav>
+                </section>
 
-            <section className="two grid">
-                <form className="card stack" onSubmit={(event) => void handleCreateFolder(event)}>
-                    <h2>Create Folder</h2>
-                    <label className="stack">
-                        <span>Folder Name</span>
-                        <input name="folderName" required />
-                    </label>
-                    {createFolderResult ? <p className="muted">{createFolderResult}</p> : null}
-                    <button type="submit" disabled={createFolderPending}>
-                        {createFolderPending ? "Creating..." : "Create Folder"}
-                    </button>
-                </form>
+                <section className="two grid">
+                    <form className="card stack" onSubmit={(event) => void handleCreateFolder(event)}>
+                        <h2>Create Folder</h2>
+                        <label className="stack">
+                            <span>Folder Name</span>
+                            <input name="folderName" required />
+                        </label>
+                        {createFolderResult ? <p className="muted">{createFolderResult}</p> : null}
+                        <button type="submit" disabled={createFolderPending}>
+                            {createFolderPending ? "Creating..." : "Create Folder"}
+                        </button>
+                    </form>
 
-                <form className="card stack" onSubmit={(event) => void handleUploadFile(event)}>
-                    <h2>Upload File</h2>
-                    <label className="stack">
-                        <span>File</span>
-                        <input name="file" type="file" required />
-                    </label>
-                    {uploadResult ? <p className="muted">{uploadResult}</p> : null}
-                    <button type="submit" disabled={uploadPending}>
-                        {uploadPending ? "Uploading..." : "Upload"}
-                    </button>
-                </form>
-            </section>
+                    <form className="card stack" onSubmit={(event) => void handleUploadFile(event)}>
+                        <h2>Upload File</h2>
+                        <label className="stack">
+                            <span>File</span>
+                            <input name="file" type="file" required />
+                        </label>
+                        {uploadResult ? <p className="muted">{uploadResult}</p> : null}
+                        <button type="submit" disabled={uploadPending}>
+                            {uploadPending ? "Uploading..." : "Upload"}
+                        </button>
+                    </form>
+                </section>
 
-            <section className="two content-columns grid">
-                <article className="card stack content-column">
-                    <h2>Folders</h2>
-                    <div className="column-scroll">
-                        <ul className="list list-top">
-                            {folderContents.folders.map((entry) => (
-                                <li key={entry.id} className="list-item">
-                                    <Link to="/folder/$folderId" params={{ folderId: entry.id }}>
-                                        {entry.folderName}
-                                    </Link>
-                                </li>
-                            ))}
-                            {folderContents.folders.length === 0 ? <li className="muted">No folders</li> : null}
-                        </ul>
-                    </div>
-                </article>
-
-                <article className="card stack content-column">
-                    <h2>Files</h2>
-                    <div className="column-scroll">
-                        <ul className="list list-top">
-                            {folderContents.files.map((entry) => {
-                                const fileRouteId = toFileRouteId(entry.id, entry.fileName);
-
-                                return (
-                                    <li key={entry.id} className="stack list-item">
-                                        <Link
-                                            to="/folder/$folderId/file/$fileId/modal"
-                                            params={{ folderId, fileId: fileRouteId }}
-                                        >
-                                            {entry.fileName}
-                                        </Link>
-                                        <Link to="/file/$fileId" params={{ fileId: fileRouteId }}>
-                                            Open full page view
+                <section className="two content-columns grid">
+                    <article className="card stack content-column">
+                        <h2>Folders</h2>
+                        <div className="column-scroll">
+                            <ul className="list list-top">
+                                {folderContents.folders.map((entry) => (
+                                    <li key={entry.id} className="list-item">
+                                        <Link to="/folder/$folderId" params={{ folderId: entry.id }}>
+                                            {entry.folderName}
                                         </Link>
                                     </li>
-                                );
-                            })}
-                            {folderContents.files.length === 0 ? <li className="muted">No files</li> : null}
-                        </ul>
-                    </div>
-                </article>
-            </section>
-        </main>
+                                ))}
+                                {folderContents.folders.length === 0 ? <li className="muted">No folders</li> : null}
+                            </ul>
+                        </div>
+                    </article>
+
+                    <article className="card stack content-column">
+                        <h2>Files</h2>
+                        <div className="column-scroll">
+                            <ul className="list list-top">
+                                {folderContents.files.map((entry) => {
+                                    const fileRouteId = toFileRouteId(entry.id, entry.fileName);
+
+                                    return (
+                                        <li key={entry.id} className="stack list-item">
+                                            <Link
+                                                to="/folder/$folderId/file/$fileId/modal"
+                                                params={{ folderId, fileId: fileRouteId }}
+                                                mask={{
+                                                    to: "/file/$fileId",
+                                                    params: { fileId: fileRouteId },
+                                                    unmaskOnReload: true,
+                                                }}
+                                            >
+                                                {entry.fileName}
+                                            </Link>
+                                            <Link to="/file/$fileId" params={{ fileId: fileRouteId }}>
+                                                Open full page view
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+                                {folderContents.files.length === 0 ? <li className="muted">No files</li> : null}
+                            </ul>
+                        </div>
+                    </article>
+                </section>
+            </main>
+
+            {/* Intercepted modal file route renders here over the folder page. */}
+            <Outlet />
+        </>
     );
 }

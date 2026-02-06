@@ -9,6 +9,7 @@ const folderFileModalMask = createRouteMask({
     from: "/folder/$folderId/file/$fileId/modal",
     to: "/file/$fileId",
     params: (prev) => ({ fileId: prev.fileId }),
+    unmaskOnReload: true,
 });
 
 const createRouterInstance = () => {
@@ -22,6 +23,7 @@ const createRouterInstance = () => {
         defaultPreload: "intent",
         defaultStructuralSharing: true,
         routeMasks: [folderFileModalMask],
+        unmaskOnReload: true,
         scrollRestoration: true,
     });
 };
