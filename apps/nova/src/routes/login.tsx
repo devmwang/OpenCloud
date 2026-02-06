@@ -3,6 +3,8 @@ import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { z } from "zod";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getSessionSafe, signInWithUsername } from "@/features/auth/api";
 import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
@@ -87,43 +89,58 @@ function LoginPage() {
     };
 
     return (
-        <main>
-            <section className="card stack" style={{ maxWidth: "460px", margin: "5rem auto" }}>
-                <h1>OpenCloud Nova</h1>
-                <p className="muted">Sign in with your existing OpenCloud account.</p>
+        <div className="relative flex min-h-screen items-center justify-center p-4">
+            {/* Background glow */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div className="bg-accent/[0.06] absolute top-1/2 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
+            </div>
 
-                <form className="stack" onSubmit={handleSubmit}>
-                    <label className="stack">
-                        <span>Username</span>
-                        <input
+            <div className="relative w-full max-w-[420px]">
+                {/* Card */}
+                <div className="border-border-bright bg-surface/80 space-y-6 rounded-2xl border p-8 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                    {/* Header */}
+                    <div className="space-y-2 text-center">
+                        <div className="bg-accent/20 mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-xl">
+                            <div className="bg-accent h-3 w-3 rounded-full shadow-[0_0_12px_var(--color-accent)]" />
+                        </div>
+                        <h1 className="text-text text-2xl font-semibold tracking-tight">OpenCloud</h1>
+                        <p className="text-text-muted text-sm">Sign in to continue</p>
+                    </div>
+
+                    {/* Form */}
+                    <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
+                        <Input
+                            label="Username"
                             type="text"
                             autoComplete="username"
                             value={username}
                             onChange={(event) => setUsername(event.target.value)}
+                            placeholder="Enter your username"
                             required
                         />
-                    </label>
 
-                    <label className="stack">
-                        <span>Password</span>
-                        <input
+                        <Input
+                            label="Password"
                             type="password"
                             autoComplete="current-password"
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
+                            placeholder="Enter your password"
                             required
                         />
-                    </label>
 
-                    {error ? <p style={{ color: "#af1b2d", margin: 0 }}>{error}</p> : null}
+                        {error ? (
+                            <div className="border-danger/30 bg-danger-glow text-danger animate-[slide-up_150ms_ease-out] rounded-lg border px-3 py-2.5 text-sm">
+                                {error}
+                            </div>
+                        ) : null}
 
-                    <div className="row">
-                        <button type="submit" disabled={pending}>
+                        <Button type="submit" loading={pending} className="w-full" size="lg">
                             {pending ? "Signing in..." : "Sign In"}
-                        </button>
-                    </div>
-                </form>
-            </section>
-        </main>
+                        </Button>
+                    </form>
+                </div>
+            </div>
+        </div>
     );
 }

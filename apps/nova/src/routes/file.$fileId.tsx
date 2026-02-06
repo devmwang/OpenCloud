@@ -1,8 +1,11 @@
+import { DocumentIcon, ExclamationTriangleIcon, LockClosedIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
     buildFileContentUrl,
     deleteFile,
@@ -103,13 +106,13 @@ function FilePage() {
     const router = useRouter();
     const data = Route.useLoaderData();
 
-    const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+    const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
 
     const deleteMutation = useMutation({
         mutationFn: () => deleteFile(data.normalizedFileId),
         onSuccess: async () => {
             if (data.kind === "ok") {
-                setDeleteMessage("File deleted.");
                 await router.navigate({
                     to: "/folder/$folderId",
                     params: { folderId: data.file.parentId },
@@ -117,54 +120,86 @@ function FilePage() {
             }
         },
         onError: (error) => {
-            setDeleteMessage(getErrorMessage(error));
+            setDeleteErrorMessage(getErrorMessage(error));
         },
     });
 
     if (data.kind === "unauthorized") {
         return (
-            <main>
-                <section className="card stack">
-                    <h1>File</h1>
-                    <p className="muted">{data.message}</p>
-                </section>
+            <main className="bg-root flex min-h-screen items-center justify-center p-4">
+                <div className="border-border bg-surface w-full max-w-md rounded-xl border p-8 text-center shadow-2xl shadow-black/40">
+                    <div className="bg-danger-glow border-danger/20 mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border">
+                        <LockClosedIcon className="text-danger h-7 w-7" />
+                    </div>
+                    <h1 className="text-text mb-2 text-lg font-semibold">Access Denied</h1>
+                    <p className="text-text-muted text-sm">{data.message}</p>
+                </div>
             </main>
         );
     }
 
     const handleDelete = async () => {
-        setDeleteMessage(null);
+        setDeleteErrorMessage(null);
         await deleteMutation.mutateAsync();
     };
 
     return (
-        <main className="stack">
-            <section className="card stack">
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                    <div className="stack" style={{ gap: "0.25rem" }}>
-                        <h1 style={{ margin: 0 }}>{data.file.name}</h1>
-                        <span className="muted">{data.file.fileType}</span>
+        <main className="bg-root flex min-h-screen flex-col">
+            {/* Top bar */}
+            <div className="border-border bg-surface/80 sticky top-0 z-10 border-b backdrop-blur-sm">
+                <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="bg-surface-raised border-border flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border">
+                            <DocumentIcon className="text-accent h-4.5 w-4.5" />
+                        </div>
+                        <div className="min-w-0">
+                            <h1 className="text-text truncate text-sm font-semibold">{data.file.name}</h1>
+                            <span className="text-text-dim text-xs">{data.file.fileType}</span>
+                        </div>
                     </div>
 
-                    <div className="row">
-                        <button type="button" className="danger" onClick={() => void handleDelete()}>
-                            Delete File
-                        </button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="danger" size="sm" onClick={() => setConfirmDeleteOpen(true)}>
+                            <TrashIcon className="h-3.5 w-3.5" />
+                            Delete
+                        </Button>
                     </div>
                 </div>
+            </div>
 
-                {deleteMessage ? <p className="muted">{deleteMessage}</p> : null}
-            </section>
-
-            <section className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <div style={{ height: "72vh" }}>
-                    <PreviewPane
-                        fileRouteId={data.fileRouteId}
-                        fileType={data.file.fileType}
-                        readToken={data.readToken}
-                    />
+            {/* Delete error */}
+            {deleteErrorMessage ? (
+                <div className="mx-auto w-full max-w-6xl px-6 pt-4">
+                    <div className="border-danger/20 bg-danger-glow flex items-center gap-2 rounded-lg border px-4 py-2.5">
+                        <ExclamationTriangleIcon className="text-danger h-4 w-4 shrink-0" />
+                        <p className="text-danger text-sm">{deleteErrorMessage}</p>
+                    </div>
                 </div>
-            </section>
+            ) : null}
+
+            {/* Preview */}
+            <div className="flex min-h-0 flex-1 flex-col">
+                <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-4">
+                    <div className="border-border bg-surface h-[calc(100vh-8rem)] overflow-hidden rounded-xl border">
+                        <PreviewPane
+                            fileRouteId={data.fileRouteId}
+                            fileType={data.file.fileType}
+                            readToken={data.readToken}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Delete confirmation */}
+            <ConfirmDialog
+                open={confirmDeleteOpen}
+                onOpenChange={setConfirmDeleteOpen}
+                title="Delete File"
+                description={`Are you sure you want to delete "${data.file.name}"? This action cannot be undone.`}
+                confirmLabel="Delete"
+                variant="danger"
+                onConfirm={handleDelete}
+            />
         </main>
     );
 }

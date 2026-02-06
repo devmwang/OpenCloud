@@ -1,3 +1,5 @@
+import { DocumentIcon } from "@heroicons/react/24/outline";
+
 import { buildFileContentUrl } from "@/features/files/api";
 
 type PreviewPaneProps = {
@@ -63,8 +65,13 @@ export function PreviewPane({ fileRouteId, fileType, readToken }: PreviewPanePro
     }
 
     return (
-        <div className="preview-shell" style={{ display: "grid", placeItems: "center", padding: "1rem" }}>
-            <div>Rendering for this file type is not currently supported.</div>
+        <div className="preview-shell grid place-items-center p-8">
+            <div className="flex flex-col items-center gap-3">
+                <div className="border-border flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-dashed">
+                    <DocumentIcon className="text-text-dim h-7 w-7" />
+                </div>
+                <p className="text-text-muted text-sm">Preview is not available for this file type.</p>
+            </div>
         </div>
     );
 }

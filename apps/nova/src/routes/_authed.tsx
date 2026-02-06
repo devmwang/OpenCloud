@@ -1,6 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, redirect, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouter } from "@tanstack/react-router";
 
+import { AppShell, Sidebar } from "@/components/layout/app-shell";
+import { useToast } from "@/components/ui/toast";
 import { getSessionSafe, signOut } from "@/features/auth/api";
 import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
@@ -29,6 +31,7 @@ function AuthedLayout() {
 
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
 
     const handleSignOut = async () => {
         try {
@@ -36,37 +39,13 @@ function AuthedLayout() {
             await queryClient.invalidateQueries({ queryKey: queryKeys.session });
             router.history.push("/login");
         } catch (error) {
-            window.alert(getErrorMessage(error));
+            addToast(getErrorMessage(error), "error");
         }
     };
 
     return (
-        <>
-            <header style={{ borderBottom: "1px solid var(--line)", background: "var(--surface)" }}>
-                <main
-                    className="row"
-                    style={{ justifyContent: "space-between", paddingTop: "0.9rem", paddingBottom: "0.9rem" }}
-                >
-                    <div className="row">
-                        <strong>OpenCloud Nova</strong>
-                        <Link to="/folder/$folderId" params={{ folderId: session.user.rootFolderId }}>
-                            Files
-                        </Link>
-                        <Link to="/profile">Profile</Link>
-                        <Link to="/admin">Admin</Link>
-                        <Link to="/tools">Tools</Link>
-                    </div>
-
-                    <div className="row">
-                        <span className="muted">{session.user.username}</span>
-                        <button type="button" className="secondary" onClick={() => void handleSignOut()}>
-                            Sign Out
-                        </button>
-                    </div>
-                </main>
-            </header>
-
+        <AppShell sidebar={<Sidebar session={session} onSignOut={() => void handleSignOut()} />}>
             <Outlet />
-        </>
+        </AppShell>
     );
 }

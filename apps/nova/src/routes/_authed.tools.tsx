@@ -1,7 +1,14 @@
+import { ArrowUpTrayIcon, ClockIcon, KeyIcon, PlusIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 
+import { PageHeader } from "@/components/layout/page-header";
+import { ErrorCard } from "@/components/shared/error-card";
+import { LoadingState } from "@/components/shared/loading-state";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/input";
 import { createReadToken, createUploadToken, getOwnedUploadTokens } from "@/features/auth/api";
 import { uploadFileWithToken } from "@/features/upload/api";
 import { getErrorMessage } from "@/lib/errors";
@@ -125,132 +132,176 @@ function ToolsPage() {
     };
 
     return (
-        <main className="stack">
-            <section className="card stack">
-                <h1>Tools</h1>
-                <p className="muted">Utility actions for upload/read tokens and token-based uploads.</p>
-            </section>
+        <div>
+            <PageHeader
+                title="Tools"
+                description="Upload/read tokens and token-based uploads"
+                icon={<WrenchScrewdriverIcon />}
+            />
 
-            <section className="two grid">
-                <form className="card stack" onSubmit={(event) => void handleCreateUploadToken(event)}>
-                    <h2>Create Upload Token</h2>
-                    <label className="stack">
-                        <span>Folder ID</span>
-                        <input name="folderId" required />
-                    </label>
-                    <label className="stack">
-                        <span>File Access</span>
-                        <select name="fileAccess" defaultValue="PROTECTED">
-                            <option value="PRIVATE">PRIVATE</option>
-                            <option value="PROTECTED">PROTECTED</option>
-                            <option value="PUBLIC">PUBLIC</option>
-                        </select>
-                    </label>
-                    <label className="stack">
-                        <span>Description (optional)</span>
-                        <input name="description" />
-                    </label>
-                    <label className="stack">
-                        <span>Access Rule IDs (comma-separated, optional)</span>
-                        <input name="accessControlRuleIds" />
-                    </label>
-                    <label className="stack">
-                        <span>Expires At (optional)</span>
-                        <input name="expiresAt" type="datetime-local" />
-                    </label>
-
-                    {uploadTokenResult ? (
-                        <pre className="muted" style={{ margin: 0 }}>
-                            {uploadTokenResult}
-                        </pre>
-                    ) : null}
-                    <button type="submit" disabled={uploadTokenPending}>
-                        {uploadTokenPending ? "Creating..." : "Create Upload Token"}
-                    </button>
-                </form>
-
-                <form className="card stack" onSubmit={(event) => void handleCreateReadToken(event)}>
-                    <h2>Create Read Token</h2>
-                    <label className="stack">
-                        <span>File ID</span>
-                        <input name="fileId" required />
-                    </label>
-                    <label className="stack">
-                        <span>Description (optional)</span>
-                        <input name="description" />
-                    </label>
-                    <label className="stack">
-                        <span>Expires At (optional)</span>
-                        <input name="expiresAt" type="datetime-local" />
-                    </label>
-
-                    {readTokenResult ? (
-                        <pre className="muted" style={{ margin: 0 }}>
-                            {readTokenResult}
-                        </pre>
-                    ) : null}
-                    <button type="submit" disabled={readTokenPending}>
-                        {readTokenPending ? "Creating..." : "Create Read Token"}
-                    </button>
-                </form>
-            </section>
-
-            <section className="card stack">
-                <h2>Your Upload Tokens</h2>
-                <p className="muted">Tokens owned by the currently signed-in user.</p>
-
-                {uploadTokensQuery.isPending ? <p className="muted">Loading upload tokens...</p> : null}
-                {uploadTokensQuery.error ? (
-                    <p style={{ color: "#af1b2d" }}>{getErrorMessage(uploadTokensQuery.error)}</p>
-                ) : null}
-                {uploadTokensQuery.data && uploadTokensQuery.data.length === 0 ? (
-                    <p className="muted">No upload tokens found.</p>
-                ) : null}
-                {uploadTokensQuery.data && uploadTokensQuery.data.length > 0 ? (
-                    <ul className="list list-top">
-                        {uploadTokensQuery.data.map((token) => (
-                            <li className="stack list-item" key={token.id}>
-                                <div className="row" style={{ justifyContent: "space-between" }}>
-                                    <strong>{token.fileAccess}</strong>
-                                    <span className="muted">Folder: {token.folderId}</span>
-                                </div>
-                                <small className="muted">ID: {token.id}</small>
-                                <small className="muted">
-                                    Rules:{" "}
-                                    {token.accessControlRuleIds.length > 0
-                                        ? token.accessControlRuleIds.join(", ")
-                                        : "None"}
-                                </small>
-                                <small className="muted">
-                                    Expires: {token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}
-                                </small>
-                            </li>
-                        ))}
-                    </ul>
-                ) : null}
-            </section>
-
-            <section className="card stack">
-                <form className="stack" onSubmit={(event) => void handleTokenUpload(event)}>
-                    <h2>Token Upload Utility</h2>
-                    <label className="stack">
-                        <span>Upload Token</span>
-                        <input name="uploadToken" required />
-                    </label>
-                    <label className="stack">
-                        <span>File</span>
-                        <input name="file" type="file" required />
-                    </label>
-
-                    {tokenUploadResult ? <p className="muted">{tokenUploadResult}</p> : null}
-
-                    <div className="row">
-                        <button type="submit" disabled={tokenUploadPending}>
-                            {tokenUploadPending ? "Uploading..." : "Upload"}
-                        </button>
+            {/* Token creation forms */}
+            <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                {/* Create Upload Token */}
+                <form
+                    className="border-border bg-surface space-y-4 rounded-xl border p-5"
+                    onSubmit={(event) => void handleCreateUploadToken(event)}
+                >
+                    <div className="flex items-center gap-2">
+                        <KeyIcon className="text-accent h-5 w-5" />
+                        <h2 className="text-text text-base font-semibold">Create Upload Token</h2>
                     </div>
+
+                    <Input name="folderId" label="Folder ID" required placeholder="Target folder ID" />
+                    <Select name="fileAccess" label="File Access" defaultValue="PROTECTED">
+                        <option value="PRIVATE">PRIVATE</option>
+                        <option value="PROTECTED">PROTECTED</option>
+                        <option value="PUBLIC">PUBLIC</option>
+                    </Select>
+                    <Input name="description" label="Description (optional)" placeholder="Token description" />
+                    <Input
+                        name="accessControlRuleIds"
+                        label="Access Rule IDs (comma-separated, optional)"
+                        placeholder="rule-id-1, rule-id-2"
+                    />
+                    <Input name="expiresAt" label="Expires At (optional)" type="datetime-local" />
+
+                    {uploadTokenResult ? <ResultBlock value={uploadTokenResult} /> : null}
+
+                    <Button type="submit" loading={uploadTokenPending} className="w-full">
+                        <PlusIcon className="h-4 w-4" />
+                        Create Upload Token
+                    </Button>
                 </form>
-            </section>
-        </main>
+
+                {/* Create Read Token */}
+                <form
+                    className="border-border bg-surface space-y-4 rounded-xl border p-5"
+                    onSubmit={(event) => void handleCreateReadToken(event)}
+                >
+                    <div className="flex items-center gap-2">
+                        <KeyIcon className="text-accent h-5 w-5" />
+                        <h2 className="text-text text-base font-semibold">Create Read Token</h2>
+                    </div>
+
+                    <Input name="fileId" label="File ID" required placeholder="Target file ID" />
+                    <Input name="description" label="Description (optional)" placeholder="Token description" />
+                    <Input name="expiresAt" label="Expires At (optional)" type="datetime-local" />
+
+                    {readTokenResult ? <ResultBlock value={readTokenResult} /> : null}
+
+                    <Button type="submit" loading={readTokenPending} className="w-full">
+                        <PlusIcon className="h-4 w-4" />
+                        Create Read Token
+                    </Button>
+                </form>
+            </div>
+
+            {/* Upload Tokens List */}
+            <div className="border-border bg-surface mb-6 rounded-xl border p-5">
+                <div className="mb-4 flex items-center gap-2">
+                    <KeyIcon className="text-text-muted h-5 w-5" />
+                    <h2 className="text-text text-base font-semibold">Your Upload Tokens</h2>
+                </div>
+                <p className="text-text-muted mb-4 text-sm">Tokens owned by the currently signed-in user.</p>
+
+                {uploadTokensQuery.isPending ? <LoadingState message="Loading upload tokens..." /> : null}
+                {uploadTokensQuery.error ? (
+                    <ErrorCard
+                        message={getErrorMessage(uploadTokensQuery.error)}
+                        onRetry={() => void uploadTokensQuery.refetch()}
+                    />
+                ) : null}
+
+                {uploadTokensQuery.data && uploadTokensQuery.data.length === 0 ? (
+                    <p className="text-text-dim py-6 text-center text-sm">No upload tokens found.</p>
+                ) : null}
+
+                {uploadTokensQuery.data && uploadTokensQuery.data.length > 0 ? (
+                    <div className="divide-border divide-y">
+                        {uploadTokensQuery.data.map((token) => (
+                            <div key={token.id} className="space-y-1.5 py-3">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <Badge
+                                            variant={
+                                                token.fileAccess === "PUBLIC"
+                                                    ? "success"
+                                                    : token.fileAccess === "PRIVATE"
+                                                      ? "danger"
+                                                      : "accent"
+                                            }
+                                        >
+                                            {token.fileAccess}
+                                        </Badge>
+                                        {token.description ? (
+                                            <span className="text-text text-sm">{token.description}</span>
+                                        ) : null}
+                                    </div>
+                                    <span className="text-text-dim shrink-0 text-xs">Folder: {token.folderId}</span>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs">
+                                    <span className="text-text-dim">ID: {token.id}</span>
+                                    <span className="text-text-dim">
+                                        Rules:{" "}
+                                        {token.accessControlRuleIds.length > 0
+                                            ? token.accessControlRuleIds.join(", ")
+                                            : "None"}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs">
+                                    <ClockIcon className="text-text-dim h-3 w-3" />
+                                    <span className="text-text-dim">
+                                        Expires:{" "}
+                                        {token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+            </div>
+
+            {/* Token Upload Utility */}
+            <div className="border-border bg-surface rounded-xl border p-5">
+                <form className="space-y-4" onSubmit={(event) => void handleTokenUpload(event)}>
+                    <div className="flex items-center gap-2">
+                        <ArrowUpTrayIcon className="text-accent h-5 w-5" />
+                        <h2 className="text-text text-base font-semibold">Token Upload Utility</h2>
+                    </div>
+                    <p className="text-text-muted text-sm">Upload a file using a previously created upload token.</p>
+
+                    <Input name="uploadToken" label="Upload Token" required placeholder="Paste upload token" />
+
+                    <div className="grid gap-1.5">
+                        <label className="text-text-muted text-xs font-medium">File</label>
+                        <input
+                            name="file"
+                            type="file"
+                            required
+                            className="border-border bg-surface text-text file:bg-surface-raised file:text-text-muted file:border-border hover:file:bg-surface-raised/80 w-full rounded-lg border px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border file:px-2 file:py-1 file:text-xs file:font-medium file:transition-colors"
+                        />
+                    </div>
+
+                    {tokenUploadResult ? (
+                        <div className="bg-surface-raised rounded-lg px-3 py-2">
+                            <p className="text-text-muted text-sm">{tokenUploadResult}</p>
+                        </div>
+                    ) : null}
+
+                    <Button type="submit" loading={tokenUploadPending}>
+                        <ArrowUpTrayIcon className="h-4 w-4" />
+                        Upload
+                    </Button>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+function ResultBlock({ value }: { value: string }) {
+    return (
+        <pre className="bg-surface-raised text-text-muted overflow-x-auto rounded-lg px-3 py-2 font-mono text-xs">
+            {value}
+        </pre>
     );
 }

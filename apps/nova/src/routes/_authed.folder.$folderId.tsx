@@ -1,12 +1,26 @@
+import { FolderIcon } from "@heroicons/react/24/outline";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { useCallback, useState } from "react";
 
+import { PageHeader } from "@/components/layout/page-header";
+import { Breadcrumb } from "@/components/shared/breadcrumb";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorCard } from "@/components/shared/error-card";
+import { SkeletonCard } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 import { deleteFile } from "@/features/files/api";
 import { createFolder, deleteFolder, getFolderContents, getFolderDetails } from "@/features/folder/api";
+import { BackgroundContextMenu } from "@/features/folder/components/background-context-menu";
+import { CreateFolderDialog } from "@/features/folder/components/create-folder-dialog";
+import { FileCard } from "@/features/folder/components/file-card";
+import { FileContextMenu } from "@/features/folder/components/file-context-menu";
+import { FolderCard } from "@/features/folder/components/folder-card";
+import { FolderContextMenu } from "@/features/folder/components/folder-context-menu";
+import { FolderToolbar } from "@/features/folder/components/folder-toolbar";
+import { UploadDialog } from "@/features/folder/components/upload-dialog";
 import { uploadSingleFile } from "@/features/upload/api";
 import { getErrorMessage } from "@/lib/errors";
-import { toFileRouteId } from "@/lib/file-id";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_authed/folder/$folderId")({
@@ -16,16 +30,10 @@ export const Route = createFileRoute("/_authed/folder/$folderId")({
 function FolderPage() {
     const { folderId } = Route.useParams();
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
 
-    const [createFolderResult, setCreateFolderResult] = useState<string | null>(null);
-    const [uploadResult, setUploadResult] = useState<string | null>(null);
-    const [folderActionResult, setFolderActionResult] = useState<string | null>(null);
-    const [fileActionResult, setFileActionResult] = useState<string | null>(null);
-
-    const [createFolderPending, setCreateFolderPending] = useState(false);
-    const [uploadPending, setUploadPending] = useState(false);
-    const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
-    const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+    const [createFolderOpen, setCreateFolderOpen] = useState(false);
+    const [uploadOpen, setUploadOpen] = useState(false);
 
     const detailsQuery = useQuery({
         queryKey: queryKeys.folderDetails(folderId),
@@ -37,106 +45,39 @@ function FolderPage() {
         queryFn: () => getFolderContents(folderId),
     });
 
-    const handleCreateFolder = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setCreateFolderResult(null);
-        setCreateFolderPending(true);
-
-        const formData = new FormData(event.currentTarget);
-
-        try {
-            const result = await createFolder({
-                folderName: String(formData.get("folderName") ?? ""),
-                parentFolderId: folderId,
-            });
-
-            setCreateFolderResult(`Created folder ${result.id}`);
-            event.currentTarget.reset();
-
-            await refreshContents();
-        } catch (error) {
-            setCreateFolderResult(getErrorMessage(error));
-        } finally {
-            setCreateFolderPending(false);
-        }
-    };
-
-    const handleUploadFile = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setUploadResult(null);
-        setUploadPending(true);
-
-        const formData = new FormData(event.currentTarget);
-        const fileValue = formData.get("file");
-
-        if (!(fileValue instanceof File)) {
-            setUploadResult("Select a file before uploading.");
-            setUploadPending(false);
-            return;
-        }
-
-        try {
-            const result = await uploadSingleFile({
-                parentFolderId: folderId,
-                file: fileValue,
-            });
-
-            setUploadResult(`Uploaded ${result.id}${result.fileExtension}`);
-            event.currentTarget.reset();
-
-            await refreshContents();
-        } catch (error) {
-            setUploadResult(getErrorMessage(error));
-        } finally {
-            setUploadPending(false);
-        }
-    };
-
-    const refreshContents = async () => {
+    const refreshContents = useCallback(async () => {
         await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+    }, [queryClient, folderId]);
+
+    const handleCreateFolder = async (folderName: string) => {
+        await createFolder({ folderName, parentFolderId: folderId });
+        addToast(`Folder "${folderName}" created`, "success");
+        await refreshContents();
     };
 
-    const handleDeleteFolder = async (targetFolderId: string, targetFolderName: string) => {
-        if (typeof window !== "undefined") {
-            const confirmed = window.confirm(`Delete folder "${targetFolderName}"? This only works for empty folders.`);
-            if (!confirmed) {
-                return;
-            }
-        }
+    const handleUpload = async (file: File) => {
+        await uploadSingleFile({ parentFolderId: folderId, file });
+        addToast(`"${file.name}" uploaded successfully`, "success");
+        await refreshContents();
+    };
 
-        setFolderActionResult(null);
-        setDeletingFolderId(targetFolderId);
-
+    const handleDeleteFolder = async (targetFolderId: string) => {
         try {
-            const result = await deleteFolder(targetFolderId);
-            setFolderActionResult(result.message);
+            await deleteFolder(targetFolderId);
+            addToast("Folder deleted", "success");
             await refreshContents();
         } catch (error) {
-            setFolderActionResult(getErrorMessage(error));
-        } finally {
-            setDeletingFolderId(null);
+            addToast(getErrorMessage(error), "error");
         }
     };
 
-    const handleDeleteFile = async (targetFileId: string, targetFileName: string) => {
-        if (typeof window !== "undefined") {
-            const confirmed = window.confirm(`Delete file "${targetFileName}"?`);
-            if (!confirmed) {
-                return;
-            }
-        }
-
-        setFileActionResult(null);
-        setDeletingFileId(targetFileId);
-
+    const handleDeleteFile = async (targetFileId: string) => {
         try {
-            const result = await deleteFile(targetFileId);
-            setFileActionResult(result.message);
+            await deleteFile(targetFileId);
+            addToast("File deleted", "success");
             await refreshContents();
         } catch (error) {
-            setFileActionResult(getErrorMessage(error));
-        } finally {
-            setDeletingFileId(null);
+            addToast(getErrorMessage(error), "error");
         }
     };
 
@@ -145,141 +86,112 @@ function FolderPage() {
 
     if (isLoading) {
         return (
-            <main>
-                <section className="card">
-                    <p className="muted">Loading folder...</p>
-                </section>
-            </main>
+            <div className="space-y-6">
+                <div className="space-y-3 pb-6">
+                    <div className="skeleton h-4 w-48 rounded" />
+                    <div className="skeleton h-7 w-64 rounded" />
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <SkeletonCard key={i} />
+                    ))}
+                </div>
+            </div>
         );
     }
 
     if (error || !detailsQuery.data || !contentsQuery.data) {
-        return (
-            <main>
-                <section className="card">
-                    <p style={{ color: "#af1b2d" }}>{getErrorMessage(error)}</p>
-                </section>
-            </main>
-        );
+        return <ErrorCard message={getErrorMessage(error)} onRetry={() => void refreshContents()} />;
     }
 
     const folderDetails = detailsQuery.data;
     const folderContents = contentsQuery.data;
     const breadcrumbTrail = [...folderDetails.hierarchy].reverse();
+    const isEmpty = folderContents.folders.length === 0 && folderContents.files.length === 0;
 
     return (
         <>
-            <main className="stack">
-                <section className="card stack">
-                    <h1>Folder: {folderDetails.name}</h1>
+            <PageHeader
+                title={folderDetails.name}
+                icon={<FolderIcon />}
+                breadcrumb={<Breadcrumb trail={breadcrumbTrail} currentName={folderDetails.name} />}
+                actions={
+                    <FolderToolbar
+                        onCreateFolder={() => setCreateFolderOpen(true)}
+                        onUpload={() => setUploadOpen(true)}
+                    />
+                }
+            />
 
-                    <nav className="row" aria-label="Breadcrumb">
-                        {breadcrumbTrail.map((entry) => (
-                            <Link key={entry.id} to="/folder/$folderId" params={{ folderId: entry.id }}>
-                                {entry.name}
-                            </Link>
-                        ))}
-                        <span>{folderDetails.name}</span>
-                    </nav>
-                </section>
-
-                <section className="two grid">
-                    <form className="card stack" onSubmit={(event) => void handleCreateFolder(event)}>
-                        <h2>Create Folder</h2>
-                        <label className="stack">
-                            <span>Folder Name</span>
-                            <input name="folderName" required />
-                        </label>
-                        {createFolderResult ? <p className="muted">{createFolderResult}</p> : null}
-                        <button type="submit" disabled={createFolderPending}>
-                            {createFolderPending ? "Creating..." : "Create Folder"}
-                        </button>
-                    </form>
-
-                    <form className="card stack" onSubmit={(event) => void handleUploadFile(event)}>
-                        <h2>Upload File</h2>
-                        <label className="stack">
-                            <span>File</span>
-                            <input name="file" type="file" required />
-                        </label>
-                        {uploadResult ? <p className="muted">{uploadResult}</p> : null}
-                        <button type="submit" disabled={uploadPending}>
-                            {uploadPending ? "Uploading..." : "Upload"}
-                        </button>
-                    </form>
-                </section>
-
-                <section className="two content-columns grid">
-                    <article className="card stack content-column">
-                        <h2>Folders</h2>
-                        <p className="muted">Open folders or delete empty ones.</p>
-                        {folderActionResult ? <p className="muted">{folderActionResult}</p> : null}
-                        <div className="column-scroll">
-                            <ul className="list list-top">
-                                {folderContents.folders.map((entry) => (
-                                    <li key={entry.id} className="stack list-item">
-                                        <Link to="/folder/$folderId" params={{ folderId: entry.id }}>
-                                            {entry.folderName}
-                                        </Link>
-                                        <div className="row">
-                                            <button
-                                                type="button"
-                                                className="danger"
-                                                disabled={deletingFolderId === entry.id}
-                                                onClick={() => void handleDeleteFolder(entry.id, entry.folderName)}
+            <BackgroundContextMenu
+                onCreateFolder={() => setCreateFolderOpen(true)}
+                onUpload={() => setUploadOpen(true)}
+                onRefresh={() => void refreshContents()}
+            >
+                <div className="min-h-[60vh]">
+                    {isEmpty ? (
+                        <EmptyState
+                            title="This folder is empty"
+                            description="Drop files here or use the upload button to get started."
+                            action={{ label: "Upload File", onClick: () => setUploadOpen(true) }}
+                        />
+                    ) : (
+                        <div className="space-y-6">
+                            {/* Folders */}
+                            {folderContents.folders.length > 0 ? (
+                                <section className="space-y-3">
+                                    <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
+                                        Folders ({folderContents.folders.length})
+                                    </h2>
+                                    <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                                        {folderContents.folders.map((entry) => (
+                                            <FolderContextMenu
+                                                key={entry.id}
+                                                folderId={entry.id}
+                                                folderName={entry.folderName}
+                                                onDelete={handleDeleteFolder}
+                                                onRefresh={() => void refreshContents()}
                                             >
-                                                {deletingFolderId === entry.id ? "Deleting..." : "Delete"}
-                                            </button>
-                                        </div>
-                                    </li>
-                                ))}
-                                {folderContents.folders.length === 0 ? <li className="muted">No folders</li> : null}
-                            </ul>
+                                                <FolderCard id={entry.id} name={entry.folderName} />
+                                            </FolderContextMenu>
+                                        ))}
+                                    </div>
+                                </section>
+                            ) : null}
+
+                            {/* Files */}
+                            {folderContents.files.length > 0 ? (
+                                <section className="space-y-3">
+                                    <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
+                                        Files ({folderContents.files.length})
+                                    </h2>
+                                    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+                                        {folderContents.files.map((entry) => (
+                                            <FileContextMenu
+                                                key={entry.id}
+                                                fileId={entry.id}
+                                                fileName={entry.fileName}
+                                                folderId={folderId}
+                                                onDelete={handleDeleteFile}
+                                            >
+                                                <FileCard id={entry.id} fileName={entry.fileName} folderId={folderId} />
+                                            </FileContextMenu>
+                                        ))}
+                                    </div>
+                                </section>
+                            ) : null}
                         </div>
-                    </article>
+                    )}
+                </div>
+            </BackgroundContextMenu>
 
-                    <article className="card stack content-column">
-                        <h2>Files</h2>
-                        <p className="muted">Open files, preview in a modal, or delete.</p>
-                        {fileActionResult ? <p className="muted">{fileActionResult}</p> : null}
-                        <div className="column-scroll">
-                            <ul className="list list-top">
-                                {folderContents.files.map((entry) => {
-                                    const fileRouteId = toFileRouteId(entry.id, entry.fileName);
-
-                                    return (
-                                        <li key={entry.id} className="stack list-item">
-                                            <Link
-                                                to="/folder/$folderId/file/$fileId/modal"
-                                                params={{ folderId, fileId: fileRouteId }}
-                                                mask={{
-                                                    to: "/file/$fileId",
-                                                    params: { fileId: fileRouteId },
-                                                    unmaskOnReload: true,
-                                                }}
-                                            >
-                                                {entry.fileName}
-                                            </Link>
-                                            <Link to="/file/$fileId" params={{ fileId: fileRouteId }}>
-                                                Open full page view
-                                            </Link>
-                                            <button
-                                                type="button"
-                                                className="danger"
-                                                disabled={deletingFileId === entry.id}
-                                                onClick={() => void handleDeleteFile(entry.id, entry.fileName)}
-                                            >
-                                                {deletingFileId === entry.id ? "Deleting..." : "Delete"}
-                                            </button>
-                                        </li>
-                                    );
-                                })}
-                                {folderContents.files.length === 0 ? <li className="muted">No files</li> : null}
-                            </ul>
-                        </div>
-                    </article>
-                </section>
-            </main>
+            {/* Dialogs */}
+            <CreateFolderDialog
+                open={createFolderOpen}
+                onOpenChange={setCreateFolderOpen}
+                onSubmit={handleCreateFolder}
+            />
+            <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onUpload={handleUpload} />
 
             {/* Intercepted modal file route renders here over the folder page. */}
             <Outlet />
