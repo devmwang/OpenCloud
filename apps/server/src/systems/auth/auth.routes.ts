@@ -1,7 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
-import { createAccessRuleHandler, createUploadTokenHandler, createUserHandler, infoHandler } from "./auth.handlers";
+import {
+    createAccessRuleHandler,
+    createReadTokenHandler,
+    createUploadTokenHandler,
+    createUserHandler,
+    csrfTokenHandler,
+    infoHandler,
+} from "./auth.handlers";
 import { $ref } from "./auth.schemas";
 
 async function authRouter(server: FastifyInstance) {
@@ -9,6 +16,7 @@ async function authRouter(server: FastifyInstance) {
         method: "POST",
         url: "/create",
         onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             body: $ref("createUserSchema"),
             response: { 201: $ref("userInfoResponseSchema") },
@@ -27,9 +35,22 @@ async function authRouter(server: FastifyInstance) {
     });
 
     server.route({
+        method: "GET",
+        url: "/csrf",
+        onRequest: [server.authenticate],
+        schema: {
+            response: {
+                200: $ref("csrfTokenResponseSchema"),
+            },
+        },
+        handler: csrfTokenHandler,
+    });
+
+    server.route({
         method: "POST",
         url: "/create-access-rule",
         onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             body: $ref("createAccessRuleSchema"),
         },
@@ -40,11 +61,24 @@ async function authRouter(server: FastifyInstance) {
         method: "POST",
         url: "/create-upload-token",
         onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             body: $ref("createUploadTokenSchema"),
             response: { 200: $ref("createUploadTokenResponseSchema") },
         },
         handler: createUploadTokenHandler,
+    });
+
+    server.route({
+        method: "POST",
+        url: "/create-read-token",
+        onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("createReadTokenSchema"),
+            response: { 200: $ref("createReadTokenResponseSchema") },
+        },
+        handler: createReadTokenHandler,
     });
 }
 

@@ -29,6 +29,13 @@
       "when": 1770174487355,
       "tag": "0003_access_rules_owner_upload_expiry_filesize",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770189015593,
+      "tag": "0004_file_read_tokens_soft_delete",
+      "breakpoints": true
     }
   ]
 }

@@ -20,11 +20,11 @@ declare module "@fastify/jwt" {
     interface FastifyJWT {
         payload: {
             id: string;
-            type: "UploadToken";
+            type: "UploadToken" | "ReadToken";
         };
         decoded: {
             id: string;
-            type: "UploadToken";
+            type: "UploadToken" | "ReadToken";
             iat: number;
             exp: number;
         };

@@ -1,3 +1,4 @@
+import ipaddr from "ipaddr.js";
 import { z } from "zod/v3";
 
 import { buildJsonSchemas } from "@/utils/zod-schema";
@@ -37,10 +38,14 @@ const createAccessRuleSchema = z.object({
     }),
     type: z.enum(["ALLOW", "DISALLOW"]),
     method: z.enum(["IP_ADDRESS"]),
-    match: z.string({
-        required_error: "String to match is required",
-        invalid_type_error: "String to match must be a string",
-    }),
+    match: z
+        .string({
+            required_error: "String to match is required",
+            invalid_type_error: "String to match must be a string",
+        })
+        .refine((value) => ipaddr.isValid(value) || ipaddr.isValidCIDR(value), {
+            message: "Match must be a valid IP address or CIDR range",
+        }),
 });
 
 const createUploadTokenSchema = z.object({
@@ -59,9 +64,28 @@ const createUploadTokenResponseSchema = z.object({
     expiresAt: z.string().datetime(),
 });
 
+const createReadTokenSchema = z.object({
+    fileId: z.string({
+        required_error: "File ID is required",
+        invalid_type_error: "File ID must be a string",
+    }),
+    description: z.string().optional(),
+    expiresAt: z.string().datetime().optional(),
+});
+
+const createReadTokenResponseSchema = z.object({
+    readToken: z.string(),
+    expiresAt: z.string().datetime(),
+});
+
+const csrfTokenResponseSchema = z.object({
+    csrfToken: z.string(),
+});
+
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenSchema>;
+export type CreateReadTokenInput = z.infer<typeof createReadTokenSchema>;
 
 export const { schemas: authSchemas, $ref } = buildJsonSchemas(
     {
@@ -70,6 +94,9 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         createAccessRuleSchema,
         createUploadTokenSchema,
         createUploadTokenResponseSchema,
+        createReadTokenSchema,
+        createReadTokenResponseSchema,
+        csrfTokenResponseSchema,
     },
     { $id: "Auth" },
 );

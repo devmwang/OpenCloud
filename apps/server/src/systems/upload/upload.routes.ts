@@ -9,6 +9,7 @@ async function uploadRouter(server: FastifyInstance) {
         method: "POST",
         url: "/single",
         onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             querystring: $ref("uploadFileQuerySchema"),
             response: { 201: $ref("uploadFileResponseSchema") },

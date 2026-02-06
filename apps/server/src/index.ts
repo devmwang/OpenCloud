@@ -3,6 +3,7 @@ import path from "path";
 
 import FastifyCookie from "@fastify/cookie";
 import FastifyCORS from "@fastify/cors";
+import FastifyHelmet from "@fastify/helmet";
 import FastifyMultipart from "@fastify/multipart";
 import FastifyRateLimit from "@fastify/rate-limit";
 import FastifyStatic from "@fastify/static";
@@ -20,10 +21,11 @@ import { uploadSchemas } from "@/systems/upload/upload.schemas";
 import accessControlPlugin from "@/utils/access-control";
 import authenticationPlugin from "@/utils/authentication";
 import betterAuthPlugin from "@/utils/better-auth";
+import csrfPlugin from "@/utils/csrf";
 import dbPlugin from "@/utils/db";
 
-export const SERVER_HOST = "0.0.0.0";
-export const SERVER_PORT = 8080;
+export const SERVER_HOST = env.SERVER_HOST;
+export const SERVER_PORT = env.SERVER_PORT;
 
 // Fastify Types
 declare module "fastify" {
@@ -35,6 +37,7 @@ declare module "fastify" {
 // Initialize Fastify Instance
 const server = Fastify({
     logger: true,
+    trustProxy: env.TRUST_PROXY_HOPS,
 });
 
 // Register Utility Plugins
@@ -51,6 +54,11 @@ void server.register(FastifyCookie, {
     secret: env.AUTH_SECRET,
     parseOptions: {},
 });
+
+void server.register(FastifyHelmet, {
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+});
+void server.register(csrfPlugin);
 
 void server.register(FastifyRateLimit, {
     max: 1000,

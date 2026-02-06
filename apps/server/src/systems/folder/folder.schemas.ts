@@ -27,6 +27,8 @@ const getContentsQuerySchema = z.object({
         required_error: "Folder ID is required",
         invalid_type_error: "Folder ID must be a string",
     }),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
 });
 
 const getContentsResponseSchema = z.object({
@@ -43,6 +45,8 @@ const getContentsResponseSchema = z.object({
             fileName: z.string(),
         })
         .array(),
+    limit: z.number().int().optional(),
+    offset: z.number().int().optional(),
 });
 
 const createFolderSchema = z.object({

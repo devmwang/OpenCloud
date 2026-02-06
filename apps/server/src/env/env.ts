@@ -41,6 +41,10 @@ export const env = createEnv({
         AUTH_SECRET: z.string(),
         DATABASE_URL: z.string().url(),
         FILE_STORE_PATH: z.string(),
+        SERVER_HOST: z.string().default("0.0.0.0"),
+        SERVER_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+        TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+        FILE_PURGE_RETENTION_DAYS: z.coerce.number().int().min(1).default(7),
     },
 
     /**

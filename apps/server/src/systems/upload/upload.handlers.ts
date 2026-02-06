@@ -48,18 +48,25 @@ export async function uploadHandler(
         return reply.code(400).send({ status: "fail", error: "No file provided" });
     }
 
-    const newFileId = await createFileDetails(
-        this.db,
-        fileData.filename,
-        fileData.mimetype,
-        userId,
-        parentFolderId,
-        "PROTECTED",
-    );
+    try {
+        const newFileId = await createFileDetails(
+            this.db,
+            fileData.filename,
+            fileData.mimetype,
+            userId,
+            parentFolderId,
+            "PROTECTED",
+        );
 
-    await coreUploadHandler(this.db, userId, newFileId, fileData.file);
+        await coreUploadHandler(this.db, userId, newFileId, fileData.file);
 
-    return reply.code(201).send({ status: "success", id: newFileId, fileExtension: path.extname(fileData.filename) });
+        return reply
+            .code(201)
+            .send({ status: "success", id: newFileId, fileExtension: path.extname(fileData.filename) });
+    } catch (error) {
+        request.log.error({ err: error }, "Upload failed");
+        return reply.code(500).send({ status: "fail", error: "Upload failed" });
+    }
 }
 
 export async function tokenUploadHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
@@ -119,18 +126,25 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
         }
     }
 
-    const newFileId = await createFileDetails(
-        this.db,
-        fileData.filename,
-        fileData.mimetype,
-        uploadToken.userId,
-        uploadToken.folderId,
-        uploadToken.fileAccess,
-    );
+    try {
+        const newFileId = await createFileDetails(
+            this.db,
+            fileData.filename,
+            fileData.mimetype,
+            uploadToken.userId,
+            uploadToken.folderId,
+            uploadToken.fileAccess,
+        );
 
-    await coreUploadHandler(this.db, uploadToken.userId, newFileId, fileData.file);
+        await coreUploadHandler(this.db, uploadToken.userId, newFileId, fileData.file);
 
-    return reply.code(201).send({ status: "success", id: newFileId, fileExtension: path.extname(fileData.filename) });
+        return reply
+            .code(201)
+            .send({ status: "success", id: newFileId, fileExtension: path.extname(fileData.filename) });
+    } catch (error) {
+        request.log.error({ err: error }, "Token upload failed");
+        return reply.code(500).send({ status: "fail", error: "Upload failed" });
+    }
 }
 
 async function createFileDetails(
@@ -163,16 +177,23 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
     const filePath = path.join(folderPath, fileId);
 
-    // Verify correct folder structure exists, otherwise create it
-    if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath, { recursive: true });
+    try {
+        // Verify correct folder structure exists, otherwise create it
+        await fs.promises.mkdir(folderPath, { recursive: true });
+
+        // Save file to appropriate FileStore
+        await pump(file, fs.createWriteStream(filePath));
+
+        // Save file size to db
+        const sizeInBytes = (await fs.promises.stat(filePath)).size;
+
+        await db.update(files).set({ fileSize: sizeInBytes }).where(eq(files.id, fileId));
+    } catch (error) {
+        try {
+            await fs.promises.unlink(filePath);
+        } catch {}
+
+        await db.delete(files).where(eq(files.id, fileId));
+        throw error;
     }
-
-    // Save file to appropriate FileStore
-    await pump(file, fs.createWriteStream(filePath));
-
-    // Save file size to db
-    const sizeInBytes = fs.statSync(filePath).size;
-
-    await db.update(files).set({ fileSize: sizeInBytes }).where(eq(files.id, fileId));
 }
