@@ -56,7 +56,9 @@ void server.register(FastifyCookie, {
     parseOptions: {},
 });
 
-void server.register(FastifyHelmet);
+void server.register(FastifyHelmet, {
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+});
 void server.register(csrfPlugin);
 
 if (env.RATE_LIMIT_REDIS_URL) {

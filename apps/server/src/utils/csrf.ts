@@ -11,7 +11,7 @@ declare module "fastify" {
 }
 
 const csrfPlugin: FastifyPluginAsync = fp(async (server) => {
-    const isSecureCookie = env.COOKIE_URL.startsWith("https://");
+    const isSecureCookie = new URL(env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL).protocol === "https:";
     const cookieKey = isSecureCookie ? "__Host-opencloud-csrf" : "opencloud-csrf";
 
     await server.register(FastifyCsrfProtection, {
