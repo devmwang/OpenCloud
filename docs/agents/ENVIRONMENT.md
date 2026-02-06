@@ -23,6 +23,7 @@ Server:
 - `TRUST_PROXY_HOPS`: number of trusted proxy hops (default `0`)
 - `FILE_PURGE_RETENTION_DAYS`: soft-delete retention window for purge (default `7`)
 
-WebUI:
+Web frontends (WebUI + Nova):
 
-- `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by Next.js runtime + `next.config.mjs`, and by the Server for Better Auth `baseURL`)
+- `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by both frontends and by the Server for Better Auth `baseURL`)
+- `OPENCLOUD_WEBUI_URL`: canonical public frontend origin used by the Server (CORS/trusted origin) and Nova canonical URL fallback

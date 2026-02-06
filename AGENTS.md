@@ -1,6 +1,6 @@
 # OpenCloud (Agent Guide)
 
-OpenCloud is a Turborepo monorepo for a self-hosted cloud file server (Fastify API + Next.js WebUI).
+OpenCloud is a Turborepo monorepo for a self-hosted cloud file server (Fastify API + two frontends: Next.js WebUI and TanStack Start Nova).
 
 ## Tooling (repo-wide)
 
@@ -30,6 +30,7 @@ OpenCloud is a Turborepo monorepo for a self-hosted cloud file server (Fastify A
 
 - Server app: [apps/server/AGENTS.md](apps/server/AGENTS.md)
 - WebUI app: [apps/webui/AGENTS.md](apps/webui/AGENTS.md)
+- Nova app: [apps/nova/AGENTS.md](apps/nova/AGENTS.md)
 - Shared TS configs: [common/tsconfig/AGENTS.md](common/tsconfig/AGENTS.md)
 - Shared ESLint config: [common/eslint-config-custom/AGENTS.md](common/eslint-config-custom/AGENTS.md)
 - Shared agent docs: [docs/agents/README.md](docs/agents/README.md)

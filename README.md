@@ -24,6 +24,10 @@ Fork the repository and create a new project on [Vercel](https://vercel.com). Co
 
 Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Then, run WebUI using `pnpm run start --filter webui`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run WebUI in the background (with `pm2 start "pnpm run start --filter webui"`). WebUI will be available at `127.0.0.1:3000` (or `localhost:3000`).
 
+### Nova Client (TanStack Start) (Preview)
+
+Nova is the new-generation OpenCloud frontend under `apps/nova`. For local development, run `pnpm run dev -- --filter=nova` (Vite default `localhost:5173`). For production preview, run `pnpm run build -- --filter=nova` then `pnpm run start -- --filter=nova`.
+
 ## OpenCloud System Architecture
 
 ### Server
@@ -32,7 +36,8 @@ The [backend server](https://github.com/devmwang/OpenCloud/tree/main/apps/server
 
 ### Client
 
-The [web client (WebUI)](https://github.com/devmwang/OpenCloud/tree/main/apps/webui) is built using [TypeScript](https://www.typescriptlang.org/docs/), [Next.js](https://nextjs.org), [React](https://reactjs.org/), [Tailwind](https://tailwindcss.com/), [Zod](https://zod.dev/), [Framer Motion](https://www.framer.com/motion/), and [shadcn/ui](https://ui.shadcn.com/docs).
+- The [web client (WebUI)](https://github.com/devmwang/OpenCloud/tree/main/apps/webui) is built using [TypeScript](https://www.typescriptlang.org/docs/), [Next.js](https://nextjs.org), [React](https://reactjs.org/), [Tailwind](https://tailwindcss.com/), [Zod](https://zod.dev/), [Framer Motion](https://www.framer.com/motion/), and [shadcn/ui](https://ui.shadcn.com/docs).
+- The [Nova client](https://github.com/devmwang/OpenCloud/tree/main/apps/nova) is built using [TypeScript](https://www.typescriptlang.org/docs/), [TanStack Start](https://tanstack.com/start), [TanStack Router](https://tanstack.com/router), [TanStack Query](https://tanstack.com/query), and [React](https://reactjs.org/).
 
 ### Server-Client Communication
 

@@ -8,6 +8,8 @@ import {
     createUserHandler,
     csrfTokenHandler,
     infoHandler,
+    listAccessRulesHandler,
+    listUploadTokensHandler,
 } from "./auth.handlers";
 import { $ref } from "./auth.schemas";
 
@@ -44,6 +46,26 @@ async function authRouter(server: FastifyInstance) {
             },
         },
         handler: csrfTokenHandler,
+    });
+
+    server.route({
+        method: "GET",
+        url: "/access-rules",
+        onRequest: [server.authenticate],
+        schema: {
+            response: { 200: $ref("listAccessRulesResponseSchema") },
+        },
+        handler: listAccessRulesHandler,
+    });
+
+    server.route({
+        method: "GET",
+        url: "/upload-tokens",
+        onRequest: [server.authenticate],
+        schema: {
+            response: { 200: $ref("listUploadTokensResponseSchema") },
+        },
+        handler: listUploadTokensHandler,
     });
 
     server.route({

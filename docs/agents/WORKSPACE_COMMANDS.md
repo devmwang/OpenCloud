@@ -14,6 +14,7 @@ Filter a single package with Turbo (args are forwarded to `turbo`):
 
 - `pnpm run dev -- --filter=server`
 - `pnpm run dev -- --filter=webui`
+- `pnpm run dev -- --filter=nova`
 
 ## Run a single package script (pnpm filter)
 
@@ -21,6 +22,7 @@ Use this for package-specific scripts (example: DB tooling):
 
 - `pnpm --filter server db:migrate`
 - `pnpm --filter webui lint`
+- `pnpm --filter nova lint`
 
 If the script requires `.env*` variables, wrap with dotenvx:
 

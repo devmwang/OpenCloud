@@ -78,6 +78,35 @@ const createReadTokenResponseSchema = z.object({
     expiresAt: z.string().datetime(),
 });
 
+const accessRuleListItemSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(["ALLOW", "DISALLOW"]),
+    method: z.enum(["IP_ADDRESS"]),
+    match: z.string(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+});
+
+const listAccessRulesResponseSchema = z.object({
+    accessRules: z.array(accessRuleListItemSchema),
+});
+
+const uploadTokenListItemSchema = z.object({
+    id: z.string(),
+    description: z.string().nullable(),
+    folderId: z.string(),
+    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    accessControlRuleIds: z.array(z.string()),
+    expiresAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+});
+
+const listUploadTokensResponseSchema = z.object({
+    uploadTokens: z.array(uploadTokenListItemSchema),
+});
+
 const csrfTokenResponseSchema = z.object({
     csrfToken: z.string(),
 });
@@ -96,6 +125,8 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         createUploadTokenResponseSchema,
         createReadTokenSchema,
         createReadTokenResponseSchema,
+        listAccessRulesResponseSchema,
+        listUploadTokensResponseSchema,
         csrfTokenResponseSchema,
     },
     { $id: "Auth" },

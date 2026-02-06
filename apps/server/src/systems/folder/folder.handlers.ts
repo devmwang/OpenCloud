@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { files, folders } from "@/db/schema/storage";
@@ -73,7 +73,7 @@ export async function getContentsHandler(
     }
 
     const [folder] = await this.db
-        .select({ id: folders.id, ownerId: folders.ownerId })
+        .select({ id: folders.id, ownerId: folders.ownerId, type: folders.type })
         .from(folders)
         .where(eq(folders.id, folderId))
         .limit(1);
@@ -92,12 +92,29 @@ export async function getContentsHandler(
         .where(and(eq(folders.parentFolderId, folderId), eq(folders.ownerId, userId)))
         .orderBy(asc(folders.folderName), asc(folders.id));
 
-    const childFolders =
+    let childFolders =
         limit !== undefined
             ? await childFolderQuery.limit(limit).offset(offset)
             : hasOffset
               ? await childFolderQuery.offset(offset)
               : await childFolderQuery;
+
+    // Backward-compatibility path: older data can store top-level folders with NULL parent.
+    // If root has no direct children, surface these as root children.
+    if (folder.type === "ROOT" && childFolders.length === 0) {
+        const legacyRootFolderQuery = this.db
+            .select({ id: folders.id, folderName: folders.folderName })
+            .from(folders)
+            .where(and(isNull(folders.parentFolderId), eq(folders.ownerId, userId), ne(folders.type, "ROOT")))
+            .orderBy(asc(folders.folderName), asc(folders.id));
+
+        childFolders =
+            limit !== undefined
+                ? await legacyRootFolderQuery.limit(limit).offset(offset)
+                : hasOffset
+                  ? await legacyRootFolderQuery.offset(offset)
+                  : await legacyRootFolderQuery;
+    }
 
     const childFileQuery = this.db
         .select({ id: files.id, fileName: files.fileName })

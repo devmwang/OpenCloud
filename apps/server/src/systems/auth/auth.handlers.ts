@@ -1,5 +1,5 @@
 import * as argon2 from "argon2";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { accessRules } from "@/db/schema/access-rules";
@@ -91,6 +91,74 @@ export async function infoHandler(this: FastifyInstance, request: FastifyRequest
         lastName: user.lastName,
         role: user.role,
         rootFolderId: user.rootFolderId,
+    });
+}
+
+export async function listAccessRulesHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const rules = await this.db
+        .select({
+            id: accessRules.id,
+            name: accessRules.name,
+            type: accessRules.type,
+            method: accessRules.method,
+            match: accessRules.match,
+            createdAt: accessRules.createdAt,
+            updatedAt: accessRules.updatedAt,
+        })
+        .from(accessRules)
+        .where(eq(accessRules.ownerId, userId))
+        .orderBy(desc(accessRules.createdAt));
+
+    return reply.code(200).send({
+        accessRules: rules.map((rule) => ({
+            id: rule.id,
+            name: rule.name,
+            type: rule.type,
+            method: rule.method,
+            match: rule.match,
+            createdAt: rule.createdAt.toISOString(),
+            updatedAt: rule.updatedAt.toISOString(),
+        })),
+    });
+}
+
+export async function listUploadTokensHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const tokens = await this.db
+        .select({
+            id: uploadTokens.id,
+            description: uploadTokens.description,
+            folderId: uploadTokens.folderId,
+            fileAccess: uploadTokens.fileAccess,
+            accessControlRuleIds: uploadTokens.accessControlRuleIds,
+            expiresAt: uploadTokens.expiresAt,
+            createdAt: uploadTokens.createdAt,
+            updatedAt: uploadTokens.updatedAt,
+        })
+        .from(uploadTokens)
+        .where(eq(uploadTokens.userId, userId))
+        .orderBy(desc(uploadTokens.createdAt));
+
+    return reply.code(200).send({
+        uploadTokens: tokens.map((token) => ({
+            id: token.id,
+            description: token.description,
+            folderId: token.folderId,
+            fileAccess: token.fileAccess,
+            accessControlRuleIds: token.accessControlRuleIds ?? [],
+            expiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
+            createdAt: token.createdAt.toISOString(),
+            updatedAt: token.updatedAt.toISOString(),
+        })),
     });
 }
 
