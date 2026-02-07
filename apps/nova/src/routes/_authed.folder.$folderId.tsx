@@ -436,7 +436,6 @@ function FolderPageContent({
                                                 <FolderContextMenu
                                                     key={entry.id}
                                                     folderId={entry.id}
-                                                    folderName={entry.folderName}
                                                     onDelete={onDeleteFolder}
                                                     onRefresh={onRefresh}
                                                 >
@@ -455,7 +454,6 @@ function FolderPageContent({
                                                 <FolderContextMenu
                                                     key={entry.id}
                                                     folderId={entry.id}
-                                                    folderName={entry.folderName}
                                                     onDelete={onDeleteFolder}
                                                     onRefresh={onRefresh}
                                                 >

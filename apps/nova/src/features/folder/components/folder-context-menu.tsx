@@ -8,25 +8,21 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "@tanstack/react-router";
-import { useState } from "react";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
 
 type FolderContextMenuProps = {
     folderId: string;
-    folderName: string;
     onDelete: (folderId: string) => Promise<void>;
     onRefresh: () => void;
     children: React.ReactNode;
 };
 
-export function FolderContextMenu({ folderId, folderName, onDelete, onRefresh, children }: FolderContextMenuProps) {
+export function FolderContextMenu({ folderId, onDelete, onRefresh, children }: FolderContextMenuProps) {
     const router = useRouter();
     const { addToast } = useToast();
-    const [confirmOpen, setConfirmOpen] = useState(false);
 
     const handleOpen = () => {
         void router.navigate({ to: "/folder/$folderId", params: { folderId } });
@@ -51,8 +47,8 @@ export function FolderContextMenu({ folderId, folderName, onDelete, onRefresh, c
                     Open in New Tab
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => setConfirmOpen(true)}>
-                    Move to Recycle Bin
+                <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => void onDelete(folderId)}>
+                    Delete
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={<ClipboardIcon />} onClick={() => void handleCopyId()}>
@@ -73,16 +69,6 @@ export function FolderContextMenu({ folderId, folderName, onDelete, onRefresh, c
                     </ContextMenuItem>
                 </Tooltip>
             </ContextMenu>
-
-            <ConfirmDialog
-                open={confirmOpen}
-                onOpenChange={setConfirmOpen}
-                title="Move Folder to Recycle Bin"
-                description={`Move "${folderName}" to Recycle Bin? Contents are moved with it and can be restored later.`}
-                confirmLabel="Move"
-                variant="danger"
-                onConfirm={() => onDelete(folderId)}
-            />
         </>
     );
 }

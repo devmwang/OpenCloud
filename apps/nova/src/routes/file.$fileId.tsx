@@ -5,7 +5,6 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { buildFileContentUrl, getFileDetails, normalizeFileId, type FileDetails } from "@/features/files/api";
 import { PreviewPane } from "@/features/files/components/preview-pane";
 import { moveToRecycleBin } from "@/features/recycle-bin/api";
@@ -101,7 +100,6 @@ function FilePage() {
     const router = useRouter();
     const data = Route.useLoaderData();
 
-    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
 
     const deleteMutation = useMutation({
@@ -154,9 +152,14 @@ function FilePage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <Button variant="danger" size="sm" onClick={() => setConfirmDeleteOpen(true)}>
+                        <Button
+                            variant="danger"
+                            size="sm"
+                            loading={deleteMutation.isPending}
+                            onClick={() => void handleDelete()}
+                        >
                             <TrashIcon className="h-4.5 w-4.5" />
-                            Move to Recycle Bin
+                            Delete
                         </Button>
                     </div>
                 </div>
@@ -184,17 +187,6 @@ function FilePage() {
                     </div>
                 </div>
             </div>
-
-            {/* Delete confirmation */}
-            <ConfirmDialog
-                open={confirmDeleteOpen}
-                onOpenChange={setConfirmDeleteOpen}
-                title="Move File to Recycle Bin"
-                description={`Move "${data.file.name}" to Recycle Bin? You can restore it before it is permanently purged.`}
-                confirmLabel="Move"
-                variant="danger"
-                onConfirm={handleDelete}
-            />
         </main>
     );
 }

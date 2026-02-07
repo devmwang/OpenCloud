@@ -9,9 +9,7 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "@tanstack/react-router";
-import { useState } from "react";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -28,7 +26,6 @@ type FileContextMenuProps = {
 export function FileContextMenu({ fileId, fileName, folderId, onDelete, children }: FileContextMenuProps) {
     const router = useRouter();
     const { addToast } = useToast();
-    const [confirmOpen, setConfirmOpen] = useState(false);
 
     const fileRouteId = toFileRouteId(fileId, fileName);
 
@@ -76,8 +73,8 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
                     Open in New Tab
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => setConfirmOpen(true)}>
-                    Move to Recycle Bin
+                <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => void onDelete(fileId)}>
+                    Delete
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={<ClipboardIcon />} onClick={() => void handleCopyId()}>
@@ -98,16 +95,6 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
                     </ContextMenuItem>
                 </Tooltip>
             </ContextMenu>
-
-            <ConfirmDialog
-                open={confirmOpen}
-                onOpenChange={setConfirmOpen}
-                title="Move File to Recycle Bin"
-                description={`Move "${fileName}" to Recycle Bin? You can restore it before it is permanently purged.`}
-                confirmLabel="Move"
-                variant="danger"
-                onConfirm={() => onDelete(fileId)}
-            />
         </>
     );
 }
