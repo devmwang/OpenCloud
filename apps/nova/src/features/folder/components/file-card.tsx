@@ -75,7 +75,7 @@ export function FileCard({ id, fileName, folderId, selected, onClick }: FileCard
         <div
             onClick={onClick}
             onDoubleClick={handleDoubleClick}
-            className={`group border-border bg-surface hover:border-border-bright hover:bg-surface-raised/60 focus-ring relative block cursor-pointer overflow-hidden rounded-xl border no-underline transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${
+            className={`group border-border bg-surface hover:border-border-bright hover:bg-surface-raised/60 focus-ring relative block cursor-pointer overflow-hidden rounded-xl border no-underline transition-all duration-150 select-none hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${
                 selected ? "ring-accent/60 border-accent/30 bg-accent/5 ring-2" : ""
             }`}
         >

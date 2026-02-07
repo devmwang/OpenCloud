@@ -19,7 +19,7 @@ export function FolderRow({ id, name, selected, onClick }: FolderRowProps) {
         <div
             onClick={onClick}
             onDoubleClick={handleDoubleClick}
-            className={`group border-border hover:border-border-bright hover:bg-surface-raised/60 focus-ring flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-1.5 no-underline transition-all duration-150 ${
+            className={`group border-border hover:border-border-bright hover:bg-surface-raised/60 focus-ring flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-1.5 no-underline transition-all duration-150 select-none ${
                 selected ? "ring-accent/60 border-accent/30 bg-accent/5 ring-2" : ""
             }`}
         >
