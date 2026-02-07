@@ -65,7 +65,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
 
     return (
         <div
-            className="fixed right-4 bottom-4 z-[200] flex max-w-sm flex-col gap-2"
+            className="fixed right-5 bottom-5 z-[200] flex max-w-sm flex-col gap-2.5"
             role="region"
             aria-label="Notifications"
             aria-live="polite"
@@ -73,7 +73,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
             {toasts.map((toast) => (
                 <div
                     key={toast.id}
-                    className={`flex animate-[slide-up_150ms_ease-out] items-center gap-3 rounded-lg border px-4 py-3 shadow-lg shadow-black/30 backdrop-blur-sm ${typeStyles[toast.type]}`}
+                    className={`flex animate-[slide-up_150ms_ease-out] items-center gap-2.5 rounded-lg border px-3.5 py-2 shadow-lg shadow-black/30 backdrop-blur-sm ${typeStyles[toast.type]}`}
                 >
                     <span className={`shrink-0 text-sm font-medium ${typeIcons[toast.type]}`}>
                         {toast.type === "success" ? "\u2713" : toast.type === "error" ? "\u2717" : "\u2139"}
@@ -85,13 +85,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
                         className="text-text-dim hover:text-text shrink-0 cursor-pointer transition-colors"
                         aria-label="Dismiss"
                     >
-                        <svg
-                            className="h-3.5 w-3.5"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                        >
+                        <svg className="h-4 w-4" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M1 1l12 12M13 1L1 13" />
                         </svg>
                     </button>

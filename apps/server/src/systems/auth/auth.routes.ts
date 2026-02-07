@@ -10,6 +10,7 @@ import {
     infoHandler,
     listAccessRulesHandler,
     listUploadTokensHandler,
+    updateAccessRuleHandler,
 } from "./auth.handlers";
 import { $ref } from "./auth.schemas";
 
@@ -77,6 +78,17 @@ async function authRouter(server: FastifyInstance) {
             body: $ref("createAccessRuleSchema"),
         },
         handler: createAccessRuleHandler,
+    });
+
+    server.route({
+        method: "POST",
+        url: "/update-access-rule",
+        onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("updateAccessRuleSchema"),
+        },
+        handler: updateAccessRuleHandler,
     });
 
     server.route({

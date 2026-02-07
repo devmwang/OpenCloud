@@ -18,9 +18,9 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-    sm: "px-2.5 py-1 text-xs rounded-md gap-1",
-    md: "px-3.5 py-2 text-sm rounded-lg gap-1.5",
-    lg: "px-5 py-2.5 text-sm rounded-lg gap-2",
+    sm: "px-2.5 py-1 text-sm rounded-md gap-1.5",
+    md: "px-3 py-1.5 text-sm rounded-lg gap-2",
+    lg: "px-4 py-2 text-sm rounded-lg gap-2",
 };
 
 export function Button({
@@ -39,7 +39,7 @@ export function Button({
             {...props}
         >
             {loading ? (
-                <svg className="-ml-0.5 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <svg className="-ml-0.5 h-4.5 w-4.5 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path
                         className="opacity-75"

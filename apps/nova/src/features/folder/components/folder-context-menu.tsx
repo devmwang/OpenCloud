@@ -52,7 +52,7 @@ export function FolderContextMenu({ folderId, folderName, onDelete, onRefresh, c
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => setConfirmOpen(true)}>
-                    Delete
+                    Move to Recycle Bin
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={<ClipboardIcon />} onClick={() => void handleCopyId()}>
@@ -77,9 +77,9 @@ export function FolderContextMenu({ folderId, folderName, onDelete, onRefresh, c
             <ConfirmDialog
                 open={confirmOpen}
                 onOpenChange={setConfirmOpen}
-                title="Delete Folder"
-                description={`Are you sure you want to delete "${folderName}"? This only works for empty folders.`}
-                confirmLabel="Delete"
+                title="Move Folder to Recycle Bin"
+                description={`Move "${folderName}" to Recycle Bin? Contents are moved with it and can be restored later.`}
+                confirmLabel="Move"
                 variant="danger"
                 onConfirm={() => onDelete(folderId)}
             />

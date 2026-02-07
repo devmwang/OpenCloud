@@ -5,7 +5,7 @@ import util from "util";
 
 import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { Database } from "@/db";
@@ -33,7 +33,7 @@ export async function uploadHandler(
     const [parentFolder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId })
         .from(folders)
-        .where(eq(folders.id, parentFolderId))
+        .where(and(eq(folders.id, parentFolderId), isNull(folders.deletedAt)))
         .limit(1);
     if (!parentFolder) {
         return reply.code(404).send({ status: "fail", error: "Parent folder not found" });
@@ -108,7 +108,7 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
     const [tokenFolder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId })
         .from(folders)
-        .where(eq(folders.id, uploadToken.folderId))
+        .where(and(eq(folders.id, uploadToken.folderId), isNull(folders.deletedAt)))
         .limit(1);
     if (!tokenFolder) {
         return reply.code(404).send({ status: "fail", error: "Parent folder not found" });

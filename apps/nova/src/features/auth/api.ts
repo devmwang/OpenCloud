@@ -42,6 +42,14 @@ const createAccessRuleInputSchema = z.object({
     match: z.string().min(1),
 });
 
+const updateAccessRuleInputSchema = z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    type: z.enum(["ALLOW", "DISALLOW"]),
+    method: z.literal("IP_ADDRESS"),
+    match: z.string().min(1),
+});
+
 const statusMessageSchema = z.object({
     status: z.string(),
     message: z.string(),
@@ -104,6 +112,7 @@ export type AuthSession = z.infer<typeof authSessionSchema>;
 export type AuthInfo = z.infer<typeof authInfoSchema>;
 export type CreateUserInput = z.infer<typeof createUserInputSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleInputSchema>;
+export type UpdateAccessRuleInput = z.infer<typeof updateAccessRuleInputSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenInputSchema>;
 export type CreateReadTokenInput = z.infer<typeof createReadTokenInputSchema>;
 export type AccessRuleSummary = z.infer<typeof accessRuleSummarySchema>;
@@ -195,6 +204,15 @@ export const createAccessRule = async (input: CreateAccessRuleInput) => {
     const body = createAccessRuleInputSchema.parse(input);
 
     return postJson("/v1/auth/create-access-rule", statusMessageSchema, {
+        body,
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const updateAccessRule = async (input: UpdateAccessRuleInput) => {
+    const body = updateAccessRuleInputSchema.parse(input);
+
+    return postJson("/v1/auth/update-access-rule", statusMessageSchema, {
         body,
         headers: await createCsrfHeaders(),
     });

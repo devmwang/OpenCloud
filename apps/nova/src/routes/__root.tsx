@@ -45,11 +45,11 @@ function RootError(props: { error: unknown; reset: () => void }) {
 
     return (
         <RootDocument>
-            <div className="flex min-h-screen items-center justify-center p-4">
-                <div className="border-border bg-surface w-full max-w-md space-y-4 rounded-xl border p-8 text-center">
-                    <div className="border-warning/20 mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border bg-[rgba(245,158,11,0.15)]">
+            <div className="flex min-h-screen items-center justify-center p-6">
+                <div className="border-border bg-surface w-full max-w-lg space-y-4 rounded-xl border p-7 text-center">
+                    <div className="border-warning/20 mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border bg-[rgba(245,158,11,0.15)]">
                         <svg
-                            className="text-warning h-7 w-7"
+                            className="text-warning h-8 w-8"
                             fill="none"
                             viewBox="0 0 24 24"
                             strokeWidth="1.5"
@@ -64,7 +64,7 @@ function RootError(props: { error: unknown; reset: () => void }) {
                     </div>
                     <div>
                         <h1 className="text-text text-lg font-semibold">Something went wrong</h1>
-                        <p className="text-text-muted mt-1 text-sm">{message}</p>
+                        <p className="text-text-muted mt-1.5 text-sm">{message}</p>
                     </div>
                     <Button variant="secondary" onClick={props.reset}>
                         Try Again
@@ -77,12 +77,12 @@ function RootError(props: { error: unknown; reset: () => void }) {
 
 function RootNotFound() {
     return (
-        <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="border-border bg-surface w-full max-w-md space-y-4 rounded-xl border p-8 text-center">
-                <p className="text-text-dim text-5xl font-bold">404</p>
+        <div className="flex min-h-screen items-center justify-center p-6">
+            <div className="border-border bg-surface w-full max-w-lg space-y-4 rounded-xl border p-7 text-center">
+                <p className="text-text-dim text-6xl font-bold">404</p>
                 <div>
                     <h1 className="text-text text-lg font-semibold">Page not found</h1>
-                    <p className="text-text-muted mt-1 text-sm">The resource you requested does not exist.</p>
+                    <p className="text-text-muted mt-1.5 text-sm">The resource you requested does not exist.</p>
                 </div>
                 <Button variant="primary" onClick={() => (window.location.href = "/")}>
                     Go to Files

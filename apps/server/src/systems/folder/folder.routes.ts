@@ -1,7 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
-import { createFolderHandler, deleteFolderHandler, getContentsHandler, getDetailsHandler } from "./folder.handlers";
+import {
+    createFolderHandler,
+    getContentsHandler,
+    getDetailsHandler,
+    getDisplayOrderHandler,
+    moveFolderHandler,
+    setDisplayOrderHandler,
+} from "./folder.handlers";
 import { $ref } from "./folder.schemas";
 
 async function folderRouter(server: FastifyInstance) {
@@ -40,15 +47,38 @@ async function folderRouter(server: FastifyInstance) {
     });
 
     server.route({
-        method: "DELETE",
-        url: "/delete-folder",
+        method: "POST",
+        url: "/move-folder",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            querystring: $ref("deleteFolderQuerySchema"),
-            response: { 200: $ref("deleteFolderResponseSchema") },
+            body: $ref("moveFolderBodySchema"),
+            response: { 200: $ref("moveFolderResponseSchema") },
         },
-        handler: deleteFolderHandler,
+        handler: moveFolderHandler,
+    });
+
+    server.route({
+        method: "GET",
+        url: "/get-display-order",
+        onRequest: [server.authenticate],
+        schema: {
+            querystring: $ref("getDisplayOrderQuerySchema"),
+            response: { 200: $ref("displayOrderResponseSchema") },
+        },
+        handler: getDisplayOrderHandler,
+    });
+
+    server.route({
+        method: "POST",
+        url: "/set-display-order",
+        onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("setDisplayOrderSchema"),
+            response: { 200: $ref("displayOrderResponseSchema") },
+        },
+        handler: setDisplayOrderHandler,
     });
 }
 

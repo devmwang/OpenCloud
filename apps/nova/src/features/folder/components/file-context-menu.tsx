@@ -77,7 +77,7 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => setConfirmOpen(true)}>
-                    Delete
+                    Move to Recycle Bin
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={<ClipboardIcon />} onClick={() => void handleCopyId()}>
@@ -102,9 +102,9 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
             <ConfirmDialog
                 open={confirmOpen}
                 onOpenChange={setConfirmOpen}
-                title="Delete File"
-                description={`Are you sure you want to delete "${fileName}"? This action cannot be undone.`}
-                confirmLabel="Delete"
+                title="Move File to Recycle Bin"
+                description={`Move "${fileName}" to Recycle Bin? You can restore it before it is permanently purged.`}
+                confirmLabel="Move"
                 variant="danger"
                 onConfirm={() => onDelete(fileId)}
             />

@@ -36,6 +36,20 @@
       "when": 1770189015593,
       "tag": "0004_file_read_tokens_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770432988168,
+      "tag": "0005_add_folder_access_to_folders",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770456977745,
+      "tag": "0006_recycle_bin_folders_deleted_at_duplicate_names",
+      "breakpoints": true
     }
   ]
 }

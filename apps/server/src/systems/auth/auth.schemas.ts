@@ -48,6 +48,27 @@ const createAccessRuleSchema = z.object({
         }),
 });
 
+const updateAccessRuleSchema = z.object({
+    id: z.string({
+        required_error: "Access rule ID is required",
+        invalid_type_error: "Access rule ID must be a string",
+    }),
+    name: z.string({
+        required_error: "Name is required",
+        invalid_type_error: "Name must be a string",
+    }),
+    type: z.enum(["ALLOW", "DISALLOW"]),
+    method: z.enum(["IP_ADDRESS"]),
+    match: z
+        .string({
+            required_error: "String to match is required",
+            invalid_type_error: "String to match must be a string",
+        })
+        .refine((value) => ipaddr.isValid(value) || ipaddr.isValidCIDR(value), {
+            message: "Match must be a valid IP address or CIDR range",
+        }),
+});
+
 const createUploadTokenSchema = z.object({
     description: z.string().optional(),
     folderId: z.string({
@@ -113,6 +134,7 @@ const csrfTokenResponseSchema = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleSchema>;
+export type UpdateAccessRuleInput = z.infer<typeof updateAccessRuleSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenSchema>;
 export type CreateReadTokenInput = z.infer<typeof createReadTokenSchema>;
 
@@ -121,6 +143,7 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         createUserSchema,
         userInfoResponseSchema,
         createAccessRuleSchema,
+        updateAccessRuleSchema,
         createUploadTokenSchema,
         createUploadTokenResponseSchema,
         createReadTokenSchema,

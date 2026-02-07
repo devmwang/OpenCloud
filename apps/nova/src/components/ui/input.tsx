@@ -21,7 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             <input
                 ref={ref}
                 id={inputId}
-                className={`border-border bg-surface text-text placeholder:text-text-dim focus:border-accent w-full rounded-lg border px-3 py-2 text-sm transition-all duration-150 focus:shadow-[0_0_0_3px_var(--color-accent-glow)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${error ? "border-danger focus:border-danger focus:shadow-[0_0_0_3px_var(--color-danger-glow)]" : ""} ${className ?? ""}`}
+                className={`border-border bg-surface text-text placeholder:text-text-dim focus:border-accent w-full rounded-lg border px-3 py-1.5 text-sm transition-all duration-150 focus:shadow-[0_0_0_3px_var(--color-accent-glow)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${error ? "border-danger focus:border-danger focus:shadow-[0_0_0_3px_var(--color-danger-glow)]" : ""} ${className ?? ""}`}
                 {...props}
             />
             {error ? <p className="text-danger text-xs">{error}</p> : null}
@@ -49,7 +49,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
             <select
                 ref={ref}
                 id={selectId}
-                className={`border-border bg-surface text-text focus:border-accent w-full rounded-lg border px-3 py-2 text-sm transition-all duration-150 focus:shadow-[0_0_0_3px_var(--color-accent-glow)] focus:outline-none disabled:opacity-50 ${className ?? ""}`}
+                className={`border-border bg-surface text-text focus:border-accent w-full rounded-lg border px-3 py-1.5 text-sm transition-all duration-150 focus:shadow-[0_0_0_3px_var(--color-accent-glow)] focus:outline-none disabled:opacity-50 ${className ?? ""}`}
                 {...props}
             >
                 {children}

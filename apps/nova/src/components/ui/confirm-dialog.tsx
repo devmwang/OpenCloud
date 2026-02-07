@@ -37,7 +37,7 @@ export function ConfirmDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent title={title} description={description}>
-                <div className="flex items-center justify-end gap-2 pt-2">
+                <div className="flex items-center justify-end gap-2.5 pt-2">
                     <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
                         Cancel
                     </Button>

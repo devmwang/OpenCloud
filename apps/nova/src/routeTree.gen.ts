@@ -14,6 +14,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FileFileIdRouteImport } from './routes/file.$fileId'
 import { Route as AuthedToolsRouteImport } from './routes/_authed.tools'
+import { Route as AuthedRecycleBinRouteImport } from './routes/_authed.recycle-bin'
 import { Route as AuthedProfileRouteImport } from './routes/_authed.profile'
 import { Route as AuthedAdminRouteImport } from './routes/_authed.admin'
 import { Route as AuthedFolderFolderIdRouteImport } from './routes/_authed.folder.$folderId'
@@ -43,6 +44,11 @@ const AuthedToolsRoute = AuthedToolsRouteImport.update({
   path: '/tools',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedRecycleBinRoute = AuthedRecycleBinRouteImport.update({
+  id: '/recycle-bin',
+  path: '/recycle-bin',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedProfileRoute = AuthedProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AuthedAdminRoute
   '/profile': typeof AuthedProfileRoute
+  '/recycle-bin': typeof AuthedRecycleBinRoute
   '/tools': typeof AuthedToolsRoute
   '/file/$fileId': typeof FileFileIdRoute
   '/folder/$folderId': typeof AuthedFolderFolderIdRouteWithChildren
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin': typeof AuthedAdminRoute
   '/profile': typeof AuthedProfileRoute
+  '/recycle-bin': typeof AuthedRecycleBinRoute
   '/tools': typeof AuthedToolsRoute
   '/file/$fileId': typeof FileFileIdRoute
   '/folder/$folderId': typeof AuthedFolderFolderIdRouteWithChildren
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authed/admin': typeof AuthedAdminRoute
   '/_authed/profile': typeof AuthedProfileRoute
+  '/_authed/recycle-bin': typeof AuthedRecycleBinRoute
   '/_authed/tools': typeof AuthedToolsRoute
   '/file/$fileId': typeof FileFileIdRoute
   '/_authed/folder/$folderId': typeof AuthedFolderFolderIdRouteWithChildren
@@ -104,6 +113,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/profile'
+    | '/recycle-bin'
     | '/tools'
     | '/file/$fileId'
     | '/folder/$folderId'
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/profile'
+    | '/recycle-bin'
     | '/tools'
     | '/file/$fileId'
     | '/folder/$folderId'
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authed/admin'
     | '/_authed/profile'
+    | '/_authed/recycle-bin'
     | '/_authed/tools'
     | '/file/$fileId'
     | '/_authed/folder/$folderId'
@@ -175,6 +187,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedToolsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/recycle-bin': {
+      id: '/_authed/recycle-bin'
+      path: '/recycle-bin'
+      fullPath: '/recycle-bin'
+      preLoaderRoute: typeof AuthedRecycleBinRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/profile': {
       id: '/_authed/profile'
       path: '/profile'
@@ -221,6 +240,7 @@ const AuthedFolderFolderIdRouteWithChildren =
 interface AuthedRouteChildren {
   AuthedAdminRoute: typeof AuthedAdminRoute
   AuthedProfileRoute: typeof AuthedProfileRoute
+  AuthedRecycleBinRoute: typeof AuthedRecycleBinRoute
   AuthedToolsRoute: typeof AuthedToolsRoute
   AuthedFolderFolderIdRoute: typeof AuthedFolderFolderIdRouteWithChildren
 }
@@ -228,6 +248,7 @@ interface AuthedRouteChildren {
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRoute: AuthedAdminRoute,
   AuthedProfileRoute: AuthedProfileRoute,
+  AuthedRecycleBinRoute: AuthedRecycleBinRoute,
   AuthedToolsRoute: AuthedToolsRoute,
   AuthedFolderFolderIdRoute: AuthedFolderFolderIdRouteWithChildren,
 }

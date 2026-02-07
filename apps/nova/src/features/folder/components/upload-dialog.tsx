@@ -59,7 +59,7 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
                 <div className="space-y-4">
                     {/* Drop zone */}
                     <div
-                        className={`relative cursor-pointer rounded-xl border-2 border-dashed transition-all duration-150 ${
+                        className={`relative cursor-pointer rounded-lg border-2 border-dashed transition-all duration-150 ${
                             dragOver
                                 ? "border-accent bg-accent-glow"
                                 : "border-border hover:border-border-bright hover:bg-surface-raised/30"
@@ -78,7 +78,7 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
                         tabIndex={0}
                         aria-label="Upload file"
                     >
-                        <div className="flex flex-col items-center justify-center px-4 py-10">
+                        <div className="flex flex-col items-center justify-center px-4 py-7">
                             {pending ? (
                                 <>
                                     <div className="relative mb-3 h-10 w-10">
@@ -101,12 +101,12 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
                     </div>
 
                     {error ? (
-                        <div className="border-danger/30 bg-danger-glow text-danger rounded-lg border px-3 py-2 text-sm">
+                        <div className="border-danger/30 bg-danger-glow text-danger rounded-md border px-3 py-2 text-sm">
                             {error}
                         </div>
                     ) : null}
 
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2.5">
                         <DialogClose>
                             <Button type="button" variant="ghost" disabled={pending}>
                                 Cancel

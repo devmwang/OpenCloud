@@ -9,12 +9,12 @@ type ErrorCardProps = {
 
 export function ErrorCard({ message, onRetry }: ErrorCardProps) {
     return (
-        <div className="flex flex-col items-center justify-center px-4 py-16">
-            <div className="bg-danger-glow border-danger/20 mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border">
+        <div className="flex flex-col items-center justify-center px-4 py-14">
+            <div className="bg-danger-glow border-danger/20 mb-4 flex h-14 w-14 items-center justify-center rounded-xl border">
                 <ExclamationTriangleIcon className="text-danger h-7 w-7" />
             </div>
             <h3 className="text-text mb-1 text-base font-medium">Something went wrong</h3>
-            <p className="text-text-muted mb-4 max-w-sm text-center text-sm">{message}</p>
+            <p className="text-text-muted mb-4 max-w-md text-center text-sm">{message}</p>
             {onRetry ? (
                 <Button variant="secondary" size="sm" onClick={onRetry}>
                     Try Again

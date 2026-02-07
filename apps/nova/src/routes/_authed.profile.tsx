@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authed/profile")({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
     return (
-        <div className="flex items-center justify-between gap-4 py-2.5">
+        <div className="flex items-center justify-between gap-5 py-3">
             <span className="text-text-muted shrink-0 text-sm">{label}</span>
             <span className="text-text truncate text-right text-sm font-medium">{value}</span>
         </div>
@@ -47,7 +47,7 @@ function ProfilePage() {
                     {/* Identity card */}
                     <div className="border-border bg-surface rounded-xl border p-5">
                         <div className="mb-4 flex items-center gap-3">
-                            <div className="bg-accent-glow border-accent/20 flex h-12 w-12 items-center justify-center rounded-full border">
+                            <div className="bg-accent-glow border-accent/20 flex h-14 w-14 items-center justify-center rounded-full border">
                                 <span className="text-accent text-lg font-bold">
                                     {authInfoQuery.data.username.charAt(0).toUpperCase()}
                                 </span>
@@ -55,7 +55,7 @@ function ProfilePage() {
                             <div>
                                 <h3 className="text-text text-sm font-semibold">{authInfoQuery.data.username}</h3>
                                 <Badge variant={authInfoQuery.data.role === "ADMIN" ? "accent" : "default"}>
-                                    <ShieldCheckIcon className="mr-1 h-3 w-3" />
+                                    <ShieldCheckIcon className="mr-1 h-3.5 w-3.5" />
                                     {authInfoQuery.data.role}
                                 </Badge>
                             </div>
@@ -72,8 +72,8 @@ function ProfilePage() {
                     {/* Storage card */}
                     <div className="border-border bg-surface rounded-xl border p-5">
                         <div className="mb-4 flex items-center gap-3">
-                            <div className="bg-surface-raised border-border flex h-10 w-10 items-center justify-center rounded-xl border">
-                                <FolderIcon className="text-accent h-5 w-5" />
+                            <div className="bg-surface-raised border-border flex h-12 w-12 items-center justify-center rounded-xl border">
+                                <FolderIcon className="text-accent h-6 w-6" />
                             </div>
                             <h3 className="text-text text-sm font-semibold">Storage</h3>
                         </div>

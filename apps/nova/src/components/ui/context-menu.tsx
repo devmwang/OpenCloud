@@ -1,3 +1,4 @@
+import { ContextMenu as BaseContextMenu } from "@base-ui/react/context-menu";
 import { Menu } from "@base-ui/react/menu";
 import type { ReactNode } from "react";
 
@@ -8,18 +9,16 @@ type ContextMenuProps = {
 
 export function ContextMenu({ children, trigger }: ContextMenuProps) {
     return (
-        <Menu.Root>
-            <Menu.Trigger className="contents" render={<div />}>
-                {trigger}
-            </Menu.Trigger>
+        <BaseContextMenu.Root>
+            <BaseContextMenu.Trigger className="contents">{trigger}</BaseContextMenu.Trigger>
             <Menu.Portal>
-                <Menu.Positioner className="z-[100]" sideOffset={4}>
-                    <Menu.Popup className="border-border-bright bg-surface/95 min-w-[200px] origin-[var(--transform-origin)] rounded-xl border p-1.5 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-100 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0">
+                <Menu.Positioner className="z-[100]" sideOffset={6}>
+                    <Menu.Popup className="border-border-bright bg-surface/95 min-w-[200px] origin-[var(--transform-origin)] rounded-lg border p-1 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-100 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0">
                         {children}
                     </Menu.Popup>
                 </Menu.Positioner>
             </Menu.Portal>
-        </Menu.Root>
+        </BaseContextMenu.Root>
     );
 }
 
@@ -47,11 +46,11 @@ export function ContextMenuItem({
 
     return (
         <Menu.Item
-            className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors duration-75 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 ${variantClasses} ${className ?? ""}`}
+            className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-75 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40 ${variantClasses} ${className ?? ""}`}
             onClick={onClick}
             disabled={disabled}
         >
-            {icon ? <span className="h-4 w-4 shrink-0 [&>svg]:h-4 [&>svg]:w-4">{icon}</span> : null}
+            {icon ? <span className="h-5 w-5 shrink-0 [&>svg]:h-5 [&>svg]:w-5">{icon}</span> : null}
             {children}
         </Menu.Item>
     );
@@ -68,7 +67,7 @@ type ContextMenuLabelProps = {
 export function ContextMenuLabel({ children }: ContextMenuLabelProps) {
     return (
         <Menu.Group>
-            <Menu.GroupLabel className="text-text-dim px-2.5 py-1 text-xs font-medium">{children}</Menu.GroupLabel>
+            <Menu.GroupLabel className="text-text-dim px-3 py-1 text-xs font-medium">{children}</Menu.GroupLabel>
         </Menu.Group>
     );
 }

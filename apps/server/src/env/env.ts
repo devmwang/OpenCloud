@@ -44,7 +44,7 @@ export const env = createEnv({
         SERVER_HOST: z.string().default("0.0.0.0"),
         SERVER_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
         TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
-        FILE_PURGE_RETENTION_DAYS: z.coerce.number().int().min(1).default(7),
+        FILE_PURGE_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
     },
 
     /**

@@ -1,35 +1,27 @@
 import { z } from "zod";
 
-import { createCsrfHeaders } from "@/lib/csrf";
 import { stripFileRouteExtension } from "@/lib/file-id";
-import { buildApiUrl, deleteJson, getJson, postJson } from "@/lib/http";
+import { buildApiUrl, getJson } from "@/lib/http";
 
 const fileDetailsSchema = z.object({
     id: z.string(),
     name: z.string(),
     ownerId: z.string(),
+    ownerUsername: z.string().optional(),
     parentId: z.string(),
     fileType: z.string(),
+    type: z.string().optional(),
+    fileSize: z.number().int().nullable().optional(),
+    size: z.number().int().nullable().optional(),
+    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
+    fileAccessPermission: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
     createdAt: z.string().datetime(),
+    uploadedAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime(),
-});
-
-const deleteFileResponseSchema = z.object({
-    status: z.string(),
-    message: z.string(),
-});
-
-const purgeDeletedInputSchema = z.object({
-    olderThanDays: z.number().int().min(1).optional(),
-});
-
-const purgeDeletedResponseSchema = z.object({
-    status: z.string(),
-    purged: z.number().int(),
+    editedAt: z.string().datetime().optional(),
 });
 
 export type FileDetails = z.infer<typeof fileDetailsSchema>;
-export type PurgeDeletedInput = z.infer<typeof purgeDeletedInputSchema>;
 
 export const normalizeFileId = (fileRouteId: string) => {
     return stripFileRouteExtension(fileRouteId);
@@ -43,22 +35,6 @@ export const getFileDetails = async (
     return getJson("/v1/files/get-details", fileDetailsSchema, {
         query: { fileId, readToken },
         forwardServerCookies: options?.forwardServerCookies,
-    });
-};
-
-export const deleteFile = async (fileId: string) => {
-    return deleteJson("/v1/files/delete", deleteFileResponseSchema, {
-        query: { fileId },
-        headers: await createCsrfHeaders(),
-    });
-};
-
-export const purgeDeletedFiles = async (input?: PurgeDeletedInput) => {
-    const body = purgeDeletedInputSchema.parse(input ?? {});
-
-    return postJson("/v1/files/purge-deleted", purgeDeletedResponseSchema, {
-        body,
-        headers: await createCsrfHeaders(),
     });
 };
 

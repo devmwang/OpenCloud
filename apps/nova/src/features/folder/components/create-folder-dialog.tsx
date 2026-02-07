@@ -37,7 +37,7 @@ export function CreateFolderDialog({ open, onOpenChange, onSubmit }: CreateFolde
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent title="Create New Folder" description="Enter a name for the new folder.">
-                <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
+                <form onSubmit={(event) => void handleSubmit(event)} className="space-y-5">
                     <Input
                         ref={inputRef}
                         label="Folder Name"
@@ -46,7 +46,7 @@ export function CreateFolderDialog({ open, onOpenChange, onSubmit }: CreateFolde
                         autoFocus
                         error={error ?? undefined}
                     />
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2.5">
                         <DialogClose>
                             <Button type="button" variant="ghost" disabled={pending}>
                                 Cancel

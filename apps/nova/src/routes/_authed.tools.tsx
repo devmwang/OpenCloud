@@ -140,14 +140,14 @@ function ToolsPage() {
             />
 
             {/* Token creation forms */}
-            <div className="mb-6 grid gap-4 sm:grid-cols-2">
+            <div className="mb-5 grid gap-4 sm:grid-cols-2">
                 {/* Create Upload Token */}
                 <form
                     className="border-border bg-surface space-y-4 rounded-xl border p-5"
                     onSubmit={(event) => void handleCreateUploadToken(event)}
                 >
-                    <div className="flex items-center gap-2">
-                        <KeyIcon className="text-accent h-5 w-5" />
+                    <div className="flex items-center gap-2.5">
+                        <KeyIcon className="text-accent h-6 w-6" />
                         <h2 className="text-text text-base font-semibold">Create Upload Token</h2>
                     </div>
 
@@ -168,7 +168,7 @@ function ToolsPage() {
                     {uploadTokenResult ? <ResultBlock value={uploadTokenResult} /> : null}
 
                     <Button type="submit" loading={uploadTokenPending} className="w-full">
-                        <PlusIcon className="h-4 w-4" />
+                        <PlusIcon className="h-5 w-5" />
                         Create Upload Token
                     </Button>
                 </form>
@@ -178,8 +178,8 @@ function ToolsPage() {
                     className="border-border bg-surface space-y-4 rounded-xl border p-5"
                     onSubmit={(event) => void handleCreateReadToken(event)}
                 >
-                    <div className="flex items-center gap-2">
-                        <KeyIcon className="text-accent h-5 w-5" />
+                    <div className="flex items-center gap-2.5">
+                        <KeyIcon className="text-accent h-6 w-6" />
                         <h2 className="text-text text-base font-semibold">Create Read Token</h2>
                     </div>
 
@@ -190,16 +190,16 @@ function ToolsPage() {
                     {readTokenResult ? <ResultBlock value={readTokenResult} /> : null}
 
                     <Button type="submit" loading={readTokenPending} className="w-full">
-                        <PlusIcon className="h-4 w-4" />
+                        <PlusIcon className="h-5 w-5" />
                         Create Read Token
                     </Button>
                 </form>
             </div>
 
             {/* Upload Tokens List */}
-            <div className="border-border bg-surface mb-6 rounded-xl border p-5">
-                <div className="mb-4 flex items-center gap-2">
-                    <KeyIcon className="text-text-muted h-5 w-5" />
+            <div className="border-border bg-surface mb-5 rounded-xl border p-5">
+                <div className="mb-4 flex items-center gap-2.5">
+                    <KeyIcon className="text-text-muted h-6 w-6" />
                     <h2 className="text-text text-base font-semibold">Your Upload Tokens</h2>
                 </div>
                 <p className="text-text-muted mb-4 text-sm">Tokens owned by the currently signed-in user.</p>
@@ -213,15 +213,15 @@ function ToolsPage() {
                 ) : null}
 
                 {uploadTokensQuery.data && uploadTokensQuery.data.length === 0 ? (
-                    <p className="text-text-dim py-6 text-center text-sm">No upload tokens found.</p>
+                    <p className="text-text-dim py-7 text-center text-sm">No upload tokens found.</p>
                 ) : null}
 
                 {uploadTokensQuery.data && uploadTokensQuery.data.length > 0 ? (
                     <div className="divide-border divide-y">
                         {uploadTokensQuery.data.map((token) => (
-                            <div key={token.id} className="space-y-1.5 py-3">
-                                <div className="flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-2">
+                            <div key={token.id} className="space-y-1.5 py-4">
+                                <div className="flex items-center justify-between gap-5">
+                                    <div className="flex items-center gap-2.5">
                                         <Badge
                                             variant={
                                                 token.fileAccess === "PUBLIC"
@@ -237,9 +237,9 @@ function ToolsPage() {
                                             <span className="text-text text-sm">{token.description}</span>
                                         ) : null}
                                     </div>
-                                    <span className="text-text-dim shrink-0 text-xs">Folder: {token.folderId}</span>
+                                    <span className="text-text-dim shrink-0 text-sm">Folder: {token.folderId}</span>
                                 </div>
-                                <div className="flex items-center gap-4 text-xs">
+                                <div className="flex items-center gap-5 text-sm">
                                     <span className="text-text-dim">ID: {token.id}</span>
                                     <span className="text-text-dim">
                                         Rules:{" "}
@@ -248,8 +248,8 @@ function ToolsPage() {
                                             : "None"}
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-1 text-xs">
-                                    <ClockIcon className="text-text-dim h-3 w-3" />
+                                <div className="flex items-center gap-1 text-sm">
+                                    <ClockIcon className="text-text-dim h-3.5 w-3.5" />
                                     <span className="text-text-dim">
                                         Expires:{" "}
                                         {token.expiresAt ? new Date(token.expiresAt).toLocaleString() : "Never"}
@@ -264,32 +264,32 @@ function ToolsPage() {
             {/* Token Upload Utility */}
             <div className="border-border bg-surface rounded-xl border p-5">
                 <form className="space-y-4" onSubmit={(event) => void handleTokenUpload(event)}>
-                    <div className="flex items-center gap-2">
-                        <ArrowUpTrayIcon className="text-accent h-5 w-5" />
+                    <div className="flex items-center gap-2.5">
+                        <ArrowUpTrayIcon className="text-accent h-6 w-6" />
                         <h2 className="text-text text-base font-semibold">Token Upload Utility</h2>
                     </div>
                     <p className="text-text-muted text-sm">Upload a file using a previously created upload token.</p>
 
                     <Input name="uploadToken" label="Upload Token" required placeholder="Paste upload token" />
 
-                    <div className="grid gap-1.5">
-                        <label className="text-text-muted text-xs font-medium">File</label>
+                    <div className="grid gap-2">
+                        <label className="text-text-muted text-sm font-medium">File</label>
                         <input
                             name="file"
                             type="file"
                             required
-                            className="border-border bg-surface text-text file:bg-surface-raised file:text-text-muted file:border-border hover:file:bg-surface-raised/80 w-full rounded-lg border px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border file:px-2 file:py-1 file:text-xs file:font-medium file:transition-colors"
+                            className="border-border bg-surface text-text file:bg-surface-raised file:text-text-muted file:border-border hover:file:bg-surface-raised/80 w-full rounded-lg border px-3 py-1.5 text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border file:px-2.5 file:py-1 file:text-sm file:font-medium file:transition-colors"
                         />
                     </div>
 
                     {tokenUploadResult ? (
-                        <div className="bg-surface-raised rounded-lg px-3 py-2">
+                        <div className="bg-surface-raised rounded-lg px-4 py-2.5">
                             <p className="text-text-muted text-sm">{tokenUploadResult}</p>
                         </div>
                     ) : null}
 
                     <Button type="submit" loading={tokenUploadPending}>
-                        <ArrowUpTrayIcon className="h-4 w-4" />
+                        <ArrowUpTrayIcon className="h-5 w-5" />
                         Upload
                     </Button>
                 </form>
@@ -300,7 +300,7 @@ function ToolsPage() {
 
 function ResultBlock({ value }: { value: string }) {
     return (
-        <pre className="bg-surface-raised text-text-muted overflow-x-auto rounded-lg px-3 py-2 font-mono text-xs">
+        <pre className="bg-surface-raised text-text-muted overflow-x-auto rounded-lg px-4 py-2.5 font-mono text-xs">
             {value}
         </pre>
     );

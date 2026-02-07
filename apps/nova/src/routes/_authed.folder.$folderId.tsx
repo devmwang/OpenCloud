@@ -1,7 +1,7 @@
 import { FolderIcon } from "@heroicons/react/24/outline";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
@@ -9,16 +9,33 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorCard } from "@/components/shared/error-card";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { deleteFile } from "@/features/files/api";
-import { createFolder, deleteFolder, getFolderContents, getFolderDetails } from "@/features/folder/api";
+import {
+    createFolder,
+    getDisplayOrder,
+    getFolderContents,
+    getFolderDetails,
+    setDisplayOrder,
+    type DisplayOrderResponse,
+    type DisplayType,
+    type SortOrder,
+    type SortType,
+} from "@/features/folder/api";
 import { BackgroundContextMenu } from "@/features/folder/components/background-context-menu";
 import { CreateFolderDialog } from "@/features/folder/components/create-folder-dialog";
+import { DisplayPreferences } from "@/features/folder/components/display-preferences";
 import { FileCard } from "@/features/folder/components/file-card";
 import { FileContextMenu } from "@/features/folder/components/file-context-menu";
+import { FileRow } from "@/features/folder/components/file-row";
 import { FolderCard } from "@/features/folder/components/folder-card";
 import { FolderContextMenu } from "@/features/folder/components/folder-context-menu";
+import { FolderRow } from "@/features/folder/components/folder-row";
 import { FolderToolbar } from "@/features/folder/components/folder-toolbar";
+import { ItemInfoDialog } from "@/features/folder/components/item-info-dialog";
+import { SelectionProvider } from "@/features/folder/components/selection-provider";
+import { SelectionToolbar } from "@/features/folder/components/selection-toolbar";
 import { UploadDialog } from "@/features/folder/components/upload-dialog";
+import { useSelection, type SelectionItem } from "@/features/folder/hooks/use-selection";
+import { moveToRecycleBin } from "@/features/recycle-bin/api";
 import { uploadSingleFile } from "@/features/upload/api";
 import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
@@ -45,6 +62,73 @@ function FolderPage() {
         queryFn: () => getFolderContents(folderId),
     });
 
+    const displayOrderQuery = useQuery({
+        queryKey: queryKeys.folderDisplayOrder(folderId),
+        queryFn: () => getDisplayOrder(folderId),
+    });
+
+    const displayOrderMutation = useMutation({
+        mutationFn: setDisplayOrder,
+        onMutate: async (newPrefs) => {
+            await queryClient.cancelQueries({ queryKey: queryKeys.folderDisplayOrder(folderId) });
+            const previous = queryClient.getQueryData<DisplayOrderResponse>(queryKeys.folderDisplayOrder(folderId));
+            const sortChanged =
+                previous !== undefined &&
+                (previous.sortType !== newPrefs.sortType || previous.sortOrder !== newPrefs.sortOrder);
+            queryClient.setQueryData(queryKeys.folderDisplayOrder(folderId), newPrefs);
+            return { previous, sortChanged };
+        },
+        onSuccess: async (_savedPrefs, newPrefs, context) => {
+            if (!context?.sortChanged) {
+                return;
+            }
+
+            await queryClient.cancelQueries({ queryKey: queryKeys.folderContents(folderId) });
+            await queryClient.fetchQuery({
+                queryKey: queryKeys.folderContents(folderId),
+                queryFn: () =>
+                    getFolderContents(folderId, {
+                        sortType: newPrefs.sortType,
+                        sortOrder: newPrefs.sortOrder,
+                    }),
+            });
+        },
+        onError: (_err, _newPrefs, context) => {
+            if (context?.previous) {
+                queryClient.setQueryData(queryKeys.folderDisplayOrder(folderId), context.previous);
+            }
+            addToast("Failed to save display preferences", "error");
+        },
+        onSettled: () => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.folderDisplayOrder(folderId) });
+        },
+    });
+
+    const displayType: DisplayType = displayOrderQuery.data?.displayType ?? "GRID";
+    const sortOrder: SortOrder = displayOrderQuery.data?.sortOrder ?? "ASC";
+    const sortType: SortType = displayOrderQuery.data?.sortType ?? "NAME";
+
+    const handleDisplayTypeChange = useCallback(
+        (newDisplayType: DisplayType) => {
+            displayOrderMutation.mutate({ folderId, displayType: newDisplayType, sortOrder, sortType });
+        },
+        [folderId, sortOrder, sortType, displayOrderMutation],
+    );
+
+    const handleSortOrderChange = useCallback(
+        (newSortOrder: SortOrder) => {
+            displayOrderMutation.mutate({ folderId, displayType, sortOrder: newSortOrder, sortType });
+        },
+        [folderId, displayType, sortType, displayOrderMutation],
+    );
+
+    const handleSortTypeChange = useCallback(
+        (newSortType: SortType) => {
+            displayOrderMutation.mutate({ folderId, displayType, sortOrder, sortType: newSortType });
+        },
+        [folderId, displayType, sortOrder, displayOrderMutation],
+    );
+
     const refreshContents = useCallback(async () => {
         await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
     }, [queryClient, folderId]);
@@ -63,8 +147,8 @@ function FolderPage() {
 
     const handleDeleteFolder = async (targetFolderId: string) => {
         try {
-            await deleteFolder(targetFolderId);
-            addToast("Folder deleted", "success");
+            await moveToRecycleBin({ itemType: "FOLDER", itemId: targetFolderId });
+            addToast("Folder moved to Recycle Bin", "success");
             await refreshContents();
         } catch (error) {
             addToast(getErrorMessage(error), "error");
@@ -73,8 +157,8 @@ function FolderPage() {
 
     const handleDeleteFile = async (targetFileId: string) => {
         try {
-            await deleteFile(targetFileId);
-            addToast("File deleted", "success");
+            await moveToRecycleBin({ itemType: "FILE", itemId: targetFileId });
+            addToast("File moved to Recycle Bin", "success");
             await refreshContents();
         } catch (error) {
             addToast(getErrorMessage(error), "error");
@@ -84,14 +168,37 @@ function FolderPage() {
     const isLoading = detailsQuery.isPending || contentsQuery.isPending;
     const error = detailsQuery.error ?? contentsQuery.error;
 
+    // ── Selection data ────────────────────────────────────────────
+    const folderContents = contentsQuery.data;
+
+    const { orderedIds, itemsById } = useMemo(() => {
+        if (!folderContents) {
+            return { orderedIds: [] as string[], itemsById: new Map<string, SelectionItem>() };
+        }
+
+        const ids: string[] = [];
+        const lookup = new Map<string, SelectionItem>();
+
+        for (const f of folderContents.folders) {
+            ids.push(f.id);
+            lookup.set(f.id, { id: f.id, kind: "folder", name: f.folderName });
+        }
+        for (const f of folderContents.files) {
+            ids.push(f.id);
+            lookup.set(f.id, { id: f.id, kind: "file", name: f.fileName });
+        }
+
+        return { orderedIds: ids, itemsById: lookup };
+    }, [folderContents]);
+
     if (isLoading) {
         return (
-            <div className="space-y-6">
-                <div className="space-y-3 pb-6">
-                    <div className="skeleton h-4 w-48 rounded" />
-                    <div className="skeleton h-7 w-64 rounded" />
+            <div className="space-y-5">
+                <div className="space-y-2 pb-5">
+                    <div className="skeleton h-5 w-60 rounded" />
+                    <div className="skeleton h-8 w-80 rounded" />
                 </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
                     {Array.from({ length: 8 }).map((_, i) => (
                         <SkeletonCard key={i} />
                     ))}
@@ -100,90 +207,35 @@ function FolderPage() {
         );
     }
 
-    if (error || !detailsQuery.data || !contentsQuery.data) {
+    if (error || !detailsQuery.data || !folderContents) {
         return <ErrorCard message={getErrorMessage(error)} onRetry={() => void refreshContents()} />;
     }
 
     const folderDetails = detailsQuery.data;
-    const folderContents = contentsQuery.data;
     const breadcrumbTrail = [...folderDetails.hierarchy].reverse();
     const isEmpty = folderContents.folders.length === 0 && folderContents.files.length === 0;
 
     return (
-        <>
-            <PageHeader
-                title={folderDetails.name}
-                icon={<FolderIcon />}
-                breadcrumb={<Breadcrumb trail={breadcrumbTrail} currentName={folderDetails.name} />}
-                actions={
-                    <FolderToolbar
-                        onCreateFolder={() => setCreateFolderOpen(true)}
-                        onUpload={() => setUploadOpen(true)}
-                    />
-                }
-            />
-
-            <BackgroundContextMenu
+        <SelectionProvider orderedIds={orderedIds} itemsById={itemsById}>
+            <FolderPageContent
+                folderId={folderId}
+                folderDetails={folderDetails}
+                folderContents={folderContents}
+                breadcrumbTrail={breadcrumbTrail}
+                isEmpty={isEmpty}
+                displayType={displayType}
+                sortOrder={sortOrder}
+                sortType={sortType}
+                displayOrderPending={displayOrderQuery.isPending || displayOrderMutation.isPending}
+                onDisplayTypeChange={handleDisplayTypeChange}
+                onSortOrderChange={handleSortOrderChange}
+                onSortTypeChange={handleSortTypeChange}
                 onCreateFolder={() => setCreateFolderOpen(true)}
                 onUpload={() => setUploadOpen(true)}
                 onRefresh={() => void refreshContents()}
-            >
-                <div className="min-h-[60vh]">
-                    {isEmpty ? (
-                        <EmptyState
-                            title="This folder is empty"
-                            description="Drop files here or use the upload button to get started."
-                            action={{ label: "Upload File", onClick: () => setUploadOpen(true) }}
-                        />
-                    ) : (
-                        <div className="space-y-6">
-                            {/* Folders */}
-                            {folderContents.folders.length > 0 ? (
-                                <section className="space-y-3">
-                                    <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
-                                        Folders ({folderContents.folders.length})
-                                    </h2>
-                                    <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-                                        {folderContents.folders.map((entry) => (
-                                            <FolderContextMenu
-                                                key={entry.id}
-                                                folderId={entry.id}
-                                                folderName={entry.folderName}
-                                                onDelete={handleDeleteFolder}
-                                                onRefresh={() => void refreshContents()}
-                                            >
-                                                <FolderCard id={entry.id} name={entry.folderName} />
-                                            </FolderContextMenu>
-                                        ))}
-                                    </div>
-                                </section>
-                            ) : null}
-
-                            {/* Files */}
-                            {folderContents.files.length > 0 ? (
-                                <section className="space-y-3">
-                                    <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
-                                        Files ({folderContents.files.length})
-                                    </h2>
-                                    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
-                                        {folderContents.files.map((entry) => (
-                                            <FileContextMenu
-                                                key={entry.id}
-                                                fileId={entry.id}
-                                                fileName={entry.fileName}
-                                                folderId={folderId}
-                                                onDelete={handleDeleteFile}
-                                            >
-                                                <FileCard id={entry.id} fileName={entry.fileName} folderId={folderId} />
-                                            </FileContextMenu>
-                                        ))}
-                                    </div>
-                                </section>
-                            ) : null}
-                        </div>
-                    )}
-                </div>
-            </BackgroundContextMenu>
+                onDeleteFolder={handleDeleteFolder}
+                onDeleteFile={handleDeleteFile}
+            />
 
             {/* Dialogs */}
             <CreateFolderDialog
@@ -195,6 +247,287 @@ function FolderPage() {
 
             {/* Intercepted modal file route renders here over the folder page. */}
             <Outlet />
+        </SelectionProvider>
+    );
+}
+
+// ── Inner component that has access to SelectionContext ────────
+
+type FolderPageContentProps = {
+    folderId: string;
+    folderDetails: { name: string; hierarchy: { id: string; name: string; type: string }[] };
+    folderContents: {
+        folders: { id: string; folderName: string }[];
+        files: { id: string; fileName: string }[];
+    };
+    breadcrumbTrail: { id: string; name: string; type: string }[];
+    isEmpty: boolean;
+    displayType: DisplayType;
+    sortOrder: SortOrder;
+    sortType: SortType;
+    displayOrderPending: boolean;
+    onDisplayTypeChange: (value: DisplayType) => void;
+    onSortOrderChange: (value: SortOrder) => void;
+    onSortTypeChange: (value: SortType) => void;
+    onCreateFolder: () => void;
+    onUpload: () => void;
+    onRefresh: () => void;
+    onDeleteFolder: (folderId: string) => Promise<void>;
+    onDeleteFile: (fileId: string) => Promise<void>;
+};
+
+function FolderPageContent({
+    folderId,
+    folderDetails,
+    folderContents,
+    breadcrumbTrail,
+    isEmpty,
+    displayType,
+    sortOrder,
+    sortType,
+    displayOrderPending,
+    onDisplayTypeChange,
+    onSortOrderChange,
+    onSortTypeChange,
+    onCreateFolder,
+    onUpload,
+    onRefresh,
+    onDeleteFolder,
+    onDeleteFile,
+}: FolderPageContentProps) {
+    const { addToast } = useToast();
+    const { selectionCount, isSelected, handleItemClick, clearSelection } = useSelection();
+
+    const [infoItem, setInfoItem] = useState<SelectionItem | null>(null);
+    const [infoOpen, setInfoOpen] = useState(false);
+
+    const handleShowInfo = useCallback((item: SelectionItem) => {
+        setInfoItem(item);
+        setInfoOpen(true);
+    }, []);
+
+    // ── Batch delete handlers ─────────────────────────────────
+    const handleBatchDeleteFiles = useCallback(
+        async (fileIds: string[]) => {
+            let succeeded = 0;
+            let failed = 0;
+            for (const id of fileIds) {
+                try {
+                    await onDeleteFile(id);
+                    succeeded++;
+                } catch {
+                    failed++;
+                }
+            }
+            if (failed > 0) {
+                addToast(`Deleted ${succeeded} file(s), ${failed} failed`, "error");
+            }
+        },
+        [onDeleteFile, addToast],
+    );
+
+    const handleBatchDeleteFolders = useCallback(
+        async (folderIds: string[]) => {
+            let succeeded = 0;
+            let failed = 0;
+            for (const id of folderIds) {
+                try {
+                    await onDeleteFolder(id);
+                    succeeded++;
+                } catch {
+                    failed++;
+                }
+            }
+            if (failed > 0) {
+                addToast(`Deleted ${succeeded} folder(s), ${failed} failed`, "error");
+            }
+        },
+        [onDeleteFolder, addToast],
+    );
+
+    // ── Background click to clear selection ───────────────────
+    const handleBackgroundClick = useCallback(
+        (e: React.MouseEvent<HTMLDivElement>) => {
+            if (e.target === e.currentTarget && selectionCount > 0) {
+                clearSelection();
+            }
+        },
+        [selectionCount, clearSelection],
+    );
+
+    // ── Escape key to clear selection ─────────────────────────
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape" && selectionCount > 0) {
+                clearSelection();
+            }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [selectionCount, clearSelection]);
+
+    // ── Item click handlers ───────────────────────────────────
+    const makeFolderClickHandler = useCallback(
+        (entry: { id: string; folderName: string }) => (event: React.MouseEvent) => {
+            handleItemClick({ id: entry.id, kind: "folder", name: entry.folderName }, event);
+        },
+        [handleItemClick],
+    );
+
+    const makeFileClickHandler = useCallback(
+        (entry: { id: string; fileName: string }) => (event: React.MouseEvent) => {
+            handleItemClick({ id: entry.id, kind: "file", name: entry.fileName }, event);
+        },
+        [handleItemClick],
+    );
+
+    const hasSelection = selectionCount > 0;
+
+    return (
+        <>
+            <PageHeader
+                title={folderDetails.name}
+                icon={<FolderIcon />}
+                breadcrumb={<Breadcrumb trail={breadcrumbTrail} currentName={folderDetails.name} />}
+                actions={
+                    hasSelection ? (
+                        <SelectionToolbar
+                            onDeleteFiles={handleBatchDeleteFiles}
+                            onDeleteFolders={handleBatchDeleteFolders}
+                            onShowInfo={handleShowInfo}
+                        />
+                    ) : (
+                        <div className="flex items-center gap-3">
+                            <DisplayPreferences
+                                displayType={displayType}
+                                sortOrder={sortOrder}
+                                sortType={sortType}
+                                onDisplayTypeChange={onDisplayTypeChange}
+                                onSortOrderChange={onSortOrderChange}
+                                onSortTypeChange={onSortTypeChange}
+                                disabled={displayOrderPending}
+                            />
+                            <div className="bg-border mx-0.5 h-7 w-px" />
+                            <FolderToolbar onCreateFolder={onCreateFolder} onUpload={onUpload} />
+                        </div>
+                    )
+                }
+            />
+
+            <BackgroundContextMenu onCreateFolder={onCreateFolder} onUpload={onUpload} onRefresh={onRefresh}>
+                <div className="min-h-[60vh]" onClick={handleBackgroundClick}>
+                    {isEmpty ? (
+                        <EmptyState
+                            title="This folder is empty"
+                            description="Drop files here or use the upload button to get started."
+                            action={{ label: "Upload File", onClick: onUpload }}
+                        />
+                    ) : (
+                        <div className="space-y-5">
+                            {/* Folders */}
+                            {folderContents.folders.length > 0 ? (
+                                <section className="space-y-3">
+                                    <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
+                                        Folders ({folderContents.folders.length})
+                                    </h2>
+                                    {displayType === "GRID" ? (
+                                        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+                                            {folderContents.folders.map((entry) => (
+                                                <FolderContextMenu
+                                                    key={entry.id}
+                                                    folderId={entry.id}
+                                                    folderName={entry.folderName}
+                                                    onDelete={onDeleteFolder}
+                                                    onRefresh={onRefresh}
+                                                >
+                                                    <FolderCard
+                                                        id={entry.id}
+                                                        name={entry.folderName}
+                                                        selected={isSelected(entry.id)}
+                                                        onClick={makeFolderClickHandler(entry)}
+                                                    />
+                                                </FolderContextMenu>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-0.5">
+                                            {folderContents.folders.map((entry) => (
+                                                <FolderContextMenu
+                                                    key={entry.id}
+                                                    folderId={entry.id}
+                                                    folderName={entry.folderName}
+                                                    onDelete={onDeleteFolder}
+                                                    onRefresh={onRefresh}
+                                                >
+                                                    <FolderRow
+                                                        id={entry.id}
+                                                        name={entry.folderName}
+                                                        selected={isSelected(entry.id)}
+                                                        onClick={makeFolderClickHandler(entry)}
+                                                    />
+                                                </FolderContextMenu>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+                            ) : null}
+
+                            {/* Files */}
+                            {folderContents.files.length > 0 ? (
+                                <section className="space-y-3">
+                                    <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
+                                        Files ({folderContents.files.length})
+                                    </h2>
+                                    {displayType === "GRID" ? (
+                                        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+                                            {folderContents.files.map((entry) => (
+                                                <FileContextMenu
+                                                    key={entry.id}
+                                                    fileId={entry.id}
+                                                    fileName={entry.fileName}
+                                                    folderId={folderId}
+                                                    onDelete={onDeleteFile}
+                                                >
+                                                    <FileCard
+                                                        id={entry.id}
+                                                        fileName={entry.fileName}
+                                                        folderId={folderId}
+                                                        selected={isSelected(entry.id)}
+                                                        onClick={makeFileClickHandler(entry)}
+                                                    />
+                                                </FileContextMenu>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-0.5">
+                                            {folderContents.files.map((entry) => (
+                                                <FileContextMenu
+                                                    key={entry.id}
+                                                    fileId={entry.id}
+                                                    fileName={entry.fileName}
+                                                    folderId={folderId}
+                                                    onDelete={onDeleteFile}
+                                                >
+                                                    <FileRow
+                                                        id={entry.id}
+                                                        fileName={entry.fileName}
+                                                        folderId={folderId}
+                                                        selected={isSelected(entry.id)}
+                                                        onClick={makeFileClickHandler(entry)}
+                                                    />
+                                                </FileContextMenu>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+                            ) : null}
+                        </div>
+                    )}
+                </div>
+            </BackgroundContextMenu>
+
+            {/* Item info dialog */}
+            <ItemInfoDialog open={infoOpen} onOpenChange={setInfoOpen} item={infoItem} />
         </>
     );
 }

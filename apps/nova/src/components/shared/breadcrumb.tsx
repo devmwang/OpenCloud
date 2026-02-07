@@ -13,7 +13,7 @@ type BreadcrumbProps = {
 
 export function Breadcrumb({ trail, currentName }: BreadcrumbProps) {
     return (
-        <nav className="flex items-center gap-1 text-sm" aria-label="Breadcrumb">
+        <nav className="flex items-center gap-1 text-base" aria-label="Breadcrumb">
             {trail.map((entry) => (
                 <span key={entry.id} className="flex items-center gap-1">
                     <Link
@@ -23,7 +23,7 @@ export function Breadcrumb({ trail, currentName }: BreadcrumbProps) {
                     >
                         {entry.name}
                     </Link>
-                    <ChevronRightIcon className="text-text-dim h-3.5 w-3.5 shrink-0" />
+                    <ChevronRightIcon className="text-text-dim h-4 w-4 shrink-0" />
                 </span>
             ))}
             <span className="text-text truncate font-medium">{currentName}</span>

@@ -1,0 +1,1 @@
+ALTER TABLE "Folders" ADD COLUMN "folderAccess" "FileAccess" DEFAULT 'PRIVATE' NOT NULL;

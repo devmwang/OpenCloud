@@ -12,6 +12,7 @@ import type {
     CreateReadTokenInput,
     CreateUploadTokenInput,
     CreateUserInput,
+    UpdateAccessRuleInput,
 } from "./auth.schemas";
 import { createUserWithRootFolder } from "./auth.utils";
 
@@ -184,6 +185,41 @@ export async function createAccessRuleHandler(
     return reply.code(200).send({ status: "success", message: "Access Rule created" });
 }
 
+export async function updateAccessRuleHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Body: UpdateAccessRuleInput }>,
+    reply: FastifyReply,
+) {
+    const { id, name, type, method, match } = request.body;
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const [existing] = await this.db
+        .select({ id: accessRules.id })
+        .from(accessRules)
+        .where(and(eq(accessRules.id, id), eq(accessRules.ownerId, userId)))
+        .limit(1);
+
+    if (!existing) {
+        return reply.code(404).send({ message: "Access rule not found" });
+    }
+
+    await this.db
+        .update(accessRules)
+        .set({
+            name,
+            type,
+            method,
+            match,
+            updatedAt: new Date(),
+        })
+        .where(eq(accessRules.id, id));
+
+    return reply.code(200).send({ status: "success", message: "Access Rule updated" });
+}
+
 export async function createUploadTokenHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Body: CreateUploadTokenInput }>,
@@ -199,7 +235,7 @@ export async function createUploadTokenHandler(
     const [folder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId })
         .from(folders)
-        .where(eq(folders.id, request.body.folderId))
+        .where(and(eq(folders.id, request.body.folderId), isNull(folders.deletedAt)))
         .limit(1);
 
     if (!user || !folder) {

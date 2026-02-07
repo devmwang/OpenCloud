@@ -89,19 +89,19 @@ function LoginPage() {
     };
 
     return (
-        <div className="relative flex min-h-screen items-center justify-center p-4">
+        <div className="relative flex min-h-screen items-center justify-center p-6">
             {/* Background glow */}
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div className="bg-accent/[0.06] absolute top-1/2 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[120px]" />
+                <div className="bg-accent/[0.06] absolute top-1/2 left-1/2 h-[750px] w-[750px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[150px]" />
             </div>
 
-            <div className="relative w-full max-w-[420px]">
+            <div className="relative w-full max-w-[520px]">
                 {/* Card */}
-                <div className="border-border-bright bg-surface/80 space-y-6 rounded-2xl border p-8 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                <div className="border-border-bright bg-surface/80 space-y-5 rounded-2xl border p-7 shadow-2xl shadow-black/40 backdrop-blur-xl">
                     {/* Header */}
-                    <div className="space-y-2 text-center">
-                        <div className="bg-accent/20 mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-xl">
-                            <div className="bg-accent h-3 w-3 rounded-full shadow-[0_0_12px_var(--color-accent)]" />
+                    <div className="space-y-3 text-center">
+                        <div className="bg-accent/20 mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg">
+                            <div className="bg-accent h-4 w-4 rounded-full shadow-[0_0_12px_var(--color-accent)]" />
                         </div>
                         <h1 className="text-text text-2xl font-semibold tracking-tight">OpenCloud</h1>
                         <p className="text-text-muted text-sm">Sign in to continue</p>
@@ -130,7 +130,7 @@ function LoginPage() {
                         />
 
                         {error ? (
-                            <div className="border-danger/30 bg-danger-glow text-danger animate-[slide-up_150ms_ease-out] rounded-lg border px-3 py-2.5 text-sm">
+                            <div className="border-danger/30 bg-danger-glow text-danger animate-[slide-up_150ms_ease-out] rounded-lg border px-4 py-3 text-sm">
                                 {error}
                             </div>
                         ) : null}

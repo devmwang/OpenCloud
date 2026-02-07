@@ -15,8 +15,8 @@ export function Tooltip({ children, content, side = "top" }: TooltipProps) {
                     {children}
                 </BaseTooltip.Trigger>
                 <BaseTooltip.Portal>
-                    <BaseTooltip.Positioner side={side} sideOffset={6}>
-                        <BaseTooltip.Popup className="bg-surface-raised border-border-bright text-text rounded-lg border px-2.5 py-1.5 text-xs shadow-lg shadow-black/30 transition-opacity duration-100 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
+                    <BaseTooltip.Positioner side={side} sideOffset={8}>
+                        <BaseTooltip.Popup className="bg-surface-raised border-border-bright text-text rounded-lg border px-3 py-2 text-xs shadow-lg shadow-black/30 transition-opacity duration-100 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
                             {content}
                         </BaseTooltip.Popup>
                     </BaseTooltip.Positioner>

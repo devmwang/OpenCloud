@@ -27,9 +27,9 @@ export function DialogContent({ children, className, title, description }: Dialo
         <BaseDialog.Portal>
             <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
             <BaseDialog.Popup
-                className={`border-border bg-surface fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border shadow-2xl shadow-black/40 transition-all duration-150 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 ${className ?? ""}`}
+                className={`border-border bg-surface fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border shadow-2xl shadow-black/40 transition-all duration-150 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 ${className ?? ""}`}
             >
-                <div className="space-y-4 p-6">
+                <div className="space-y-4 p-5">
                     <div className="space-y-1.5">
                         <BaseDialog.Title className="text-text text-lg font-semibold">{title}</BaseDialog.Title>
                         {description ? (

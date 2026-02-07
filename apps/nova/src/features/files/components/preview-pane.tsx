@@ -2,6 +2,9 @@ import { DocumentIcon } from "@heroicons/react/24/outline";
 
 import { buildFileContentUrl } from "@/features/files/api";
 
+import { ImageViewer } from "./image-viewer";
+import { ViewToolbar } from "./view-toolbar";
+
 type PreviewPaneProps = {
     fileRouteId: string;
     fileType: string;
@@ -65,10 +68,10 @@ export function PreviewPane({ fileRouteId, fileType, readToken }: PreviewPanePro
     }
 
     return (
-        <div className="preview-shell grid place-items-center p-8">
+        <div className="preview-shell grid place-items-center p-10">
             <div className="flex flex-col items-center gap-3">
-                <div className="border-border flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-dashed">
-                    <DocumentIcon className="text-text-dim h-7 w-7" />
+                <div className="border-border flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-dashed">
+                    <DocumentIcon className="text-text-dim h-8 w-8" />
                 </div>
                 <p className="text-text-muted text-sm">Preview is not available for this file type.</p>
             </div>
@@ -79,11 +82,7 @@ export function PreviewPane({ fileRouteId, fileType, readToken }: PreviewPanePro
 function ImagePreviewPane({ fileRouteId, readToken }: { fileRouteId: string; readToken?: string }) {
     const source = buildFileContentUrl(fileRouteId, readToken);
 
-    return (
-        <div className="preview-shell">
-            <img src={source} alt="File Preview" loading="lazy" />
-        </div>
-    );
+    return <ImageViewer src={source} fileName={fileRouteId} />;
 }
 
 function VideoPreviewPane({ fileRouteId, readToken }: { fileRouteId: string; readToken?: string }) {
@@ -95,6 +94,7 @@ function VideoPreviewPane({ fileRouteId, readToken }: { fileRouteId: string; rea
                 <track kind="captions" />
                 Your browser does not support video playback.
             </video>
+            <ViewToolbar downloadUrl={source} fileName={fileRouteId} />
         </div>
     );
 }
@@ -106,6 +106,7 @@ function OfficePreviewPane({ fileRouteId, readToken }: { fileRouteId: string; re
     return (
         <div className="preview-shell">
             <iframe src={officeSource} title="Office File Preview" />
+            <ViewToolbar downloadUrl={source} fileName={fileRouteId} />
         </div>
     );
 }
