@@ -5,20 +5,38 @@ type FolderCardProps = {
     id: string;
     name: string;
     selected?: boolean;
-    onClick?: (event: React.MouseEvent) => void;
+    onClick?: (event: React.MouseEvent | React.KeyboardEvent) => void;
 };
 
 export function FolderCard({ id, name, selected, onClick }: FolderCardProps) {
     const router = useRouter();
 
-    const handleDoubleClick = () => {
+    const openFolder = () => {
         void router.navigate({ to: "/folder/$folderId", params: { folderId: id } });
+    };
+
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            openFolder();
+            return;
+        }
+
+        if (event.key === " ") {
+            event.preventDefault();
+            onClick?.(event);
+        }
     };
 
     return (
         <div
             onClick={onClick}
-            onDoubleClick={handleDoubleClick}
+            onDoubleClick={openFolder}
+            onKeyDown={handleKeyDown}
+            role="button"
+            tabIndex={0}
+            aria-label={`Folder ${name}`}
+            aria-pressed={selected ?? false}
             className={`group border-border bg-surface hover:border-border-bright hover:bg-surface-raised/60 focus-ring relative block cursor-pointer rounded-xl border p-3 no-underline transition-all duration-150 select-none hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${
                 selected ? "ring-accent/60 border-accent/30 bg-accent/5 ring-2" : ""
             }`}

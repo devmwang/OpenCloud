@@ -377,14 +377,14 @@ function FolderPageContent({
 
     // ── Item click handlers ───────────────────────────────────
     const makeFolderClickHandler = useCallback(
-        (entry: { id: string; folderName: string }) => (event: React.MouseEvent) => {
+        (entry: { id: string; folderName: string }) => (event: React.MouseEvent | React.KeyboardEvent) => {
             handleItemClick({ id: entry.id, kind: "folder", name: entry.folderName }, event);
         },
         [handleItemClick],
     );
 
     const makeFileClickHandler = useCallback(
-        (entry: { id: string; fileName: string }) => (event: React.MouseEvent) => {
+        (entry: { id: string; fileName: string }) => (event: React.MouseEvent | React.KeyboardEvent) => {
             handleItemClick({ id: entry.id, kind: "file", name: entry.fileName }, event);
         },
         [handleItemClick],

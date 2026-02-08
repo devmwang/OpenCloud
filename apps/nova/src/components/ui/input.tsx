@@ -1,15 +1,24 @@
-import { forwardRef, type ComponentProps } from "react";
+import { forwardRef, useId, type ComponentProps } from "react";
 
 type InputProps = ComponentProps<"input"> & {
     label?: string;
     error?: string;
 };
 
+const toIdFragment = (value: string) =>
+    value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     { label, error, className, id, ...props },
     ref,
 ) {
-    const inputId = id ?? (label ? `input-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
+    const reactId = useId().replace(/:/g, "");
+    const labelFragment = label ? toIdFragment(label) : "field";
+    const inputId = id ?? `input-${labelFragment}-${reactId}`;
 
     return (
         <div className="grid gap-1.5">
@@ -37,7 +46,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     { label, className, id, children, ...props },
     ref,
 ) {
-    const selectId = id ?? (label ? `select-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
+    const reactId = useId().replace(/:/g, "");
+    const labelFragment = label ? toIdFragment(label) : "field";
+    const selectId = id ?? `select-${labelFragment}-${reactId}`;
 
     return (
         <div className="grid gap-1.5">

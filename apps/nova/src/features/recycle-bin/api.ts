@@ -166,7 +166,7 @@ export const permanentlyDeleteRecycleBinItem = async (input: z.infer<typeof perm
 };
 
 export const emptyRecycleBin = async (input?: EmptyRecycleBinInput) => {
-    const body = emptyRecycleBinInputSchema.parse(input);
+    const body = emptyRecycleBinInputSchema.parse(input ?? {});
 
     return postJson("/v1/recycle-bin/empty", emptyRecycleBinResponseSchema, {
         body,
@@ -175,7 +175,7 @@ export const emptyRecycleBin = async (input?: EmptyRecycleBinInput) => {
 };
 
 export const purgeExpiredRecycleBin = async (input?: PurgeExpiredRecycleBinInput) => {
-    const body = purgeExpiredInputSchema.parse(input);
+    const body = purgeExpiredInputSchema.parse(input ?? {});
 
     return postJson("/v1/recycle-bin/purge-expired", purgeExpiredResponseSchema, {
         body,

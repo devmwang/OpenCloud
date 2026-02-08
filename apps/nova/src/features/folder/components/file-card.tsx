@@ -19,7 +19,7 @@ type FileCardProps = {
     fileName: string;
     folderId: string;
     selected?: boolean;
-    onClick?: (event: React.MouseEvent) => void;
+    onClick?: (event: React.MouseEvent | React.KeyboardEvent) => void;
 };
 
 const getFileExtension = (name: string) => {
@@ -59,7 +59,7 @@ export function FileCard({ id, fileName, folderId, selected, onClick }: FileCard
     const isImage = isImageFile(fileName);
     const thumbnailUrl = isImage ? buildFileThumbnailUrl(fileRouteId) : null;
 
-    const handleDoubleClick = () => {
+    const openPreview = () => {
         void router.navigate({
             to: "/folder/$folderId/file/$fileId/modal",
             params: { folderId, fileId: fileRouteId },
@@ -71,10 +71,28 @@ export function FileCard({ id, fileName, folderId, selected, onClick }: FileCard
         });
     };
 
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            openPreview();
+            return;
+        }
+
+        if (event.key === " ") {
+            event.preventDefault();
+            onClick?.(event);
+        }
+    };
+
     return (
         <div
             onClick={onClick}
-            onDoubleClick={handleDoubleClick}
+            onDoubleClick={openPreview}
+            onKeyDown={handleKeyDown}
+            role="button"
+            tabIndex={0}
+            aria-label={`File ${fileName}`}
+            aria-pressed={selected ?? false}
             className={`group border-border bg-surface hover:border-border-bright hover:bg-surface-raised/60 focus-ring relative block cursor-pointer overflow-hidden rounded-xl border no-underline transition-all duration-150 select-none hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${
                 selected ? "ring-accent/60 border-accent/30 bg-accent/5 ring-2" : ""
             }`}

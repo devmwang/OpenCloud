@@ -18,7 +18,7 @@ type FileRowProps = {
     fileName: string;
     folderId: string;
     selected?: boolean;
-    onClick?: (event: React.MouseEvent) => void;
+    onClick?: (event: React.MouseEvent | React.KeyboardEvent) => void;
 };
 
 const getFileExtension = (name: string) => {
@@ -52,7 +52,7 @@ export function FileRow({ id, fileName, folderId, selected, onClick }: FileRowPr
     const fileRouteId = toFileRouteId(id, fileName);
     const ext = getFileExtension(fileName);
 
-    const handleDoubleClick = () => {
+    const openPreview = () => {
         void router.navigate({
             to: "/folder/$folderId/file/$fileId/modal",
             params: { folderId, fileId: fileRouteId },
@@ -64,10 +64,28 @@ export function FileRow({ id, fileName, folderId, selected, onClick }: FileRowPr
         });
     };
 
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            openPreview();
+            return;
+        }
+
+        if (event.key === " ") {
+            event.preventDefault();
+            onClick?.(event);
+        }
+    };
+
     return (
         <div
             onClick={onClick}
-            onDoubleClick={handleDoubleClick}
+            onDoubleClick={openPreview}
+            onKeyDown={handleKeyDown}
+            role="button"
+            tabIndex={0}
+            aria-label={`File ${fileName}`}
+            aria-pressed={selected ?? false}
             className={`group border-border hover:border-border-bright hover:bg-surface-raised/60 focus-ring flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-3 py-1.5 no-underline transition-all duration-150 select-none ${
                 selected ? "ring-accent/60 border-accent/30 bg-accent/5 ring-2" : ""
             }`}

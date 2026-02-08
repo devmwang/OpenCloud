@@ -6,11 +6,17 @@ export type SelectionItem = {
     name: string;
 };
 
+export type SelectionInputEvent = {
+    metaKey: boolean;
+    ctrlKey: boolean;
+    shiftKey: boolean;
+};
+
 type SelectionContextValue = {
     selected: Map<string, SelectionItem>;
     isSelected: (id: string) => boolean;
     selectionCount: number;
-    handleItemClick: (item: SelectionItem, event: React.MouseEvent) => void;
+    handleItemClick: (item: SelectionItem, event: SelectionInputEvent) => void;
     clearSelection: () => void;
     selectAll: (items: SelectionItem[]) => void;
     selectedFiles: SelectionItem[];
@@ -98,7 +104,7 @@ export function useSelectionState(orderedIds: string[], itemsById: Map<string, S
         lastClickedIdRef.current = null;
     }, []);
 
-    const handleItemClick = useCallback((item: SelectionItem, event: React.MouseEvent) => {
+    const handleItemClick = useCallback((item: SelectionItem, event: SelectionInputEvent) => {
         const isMeta = event.metaKey || event.ctrlKey;
         const isShift = event.shiftKey;
 
