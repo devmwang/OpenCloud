@@ -1,6 +1,8 @@
 import { DocumentIcon } from "@heroicons/react/24/outline";
+import { useQuery } from "@tanstack/react-query";
 
-import { buildFileContentUrl } from "@/features/files/api";
+import { createReadToken } from "@/features/auth/api";
+import { buildFileContentUrl, normalizeFileId } from "@/features/files/api";
 
 import { ImageViewer } from "./image-viewer";
 import { ViewToolbar } from "./view-toolbar";
@@ -8,12 +10,14 @@ import { ViewToolbar } from "./view-toolbar";
 type PreviewPaneProps = {
     fileRouteId: string;
     fileType: string;
+    fileAccess?: "PRIVATE" | "PROTECTED" | "PUBLIC";
     readToken?: string;
 };
 
 const officeExtensions = new Set([".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".xlsm", ".pptm", ".docm"]);
 
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v"]);
+const OFFICE_PREVIEW_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 const getLowercaseExtension = (fileRouteId: string) => {
     const lastDotIndex = fileRouteId.lastIndexOf(".");
@@ -52,7 +56,7 @@ const isVideoFile = (fileType: string, fileRouteId: string) => {
     return videoExtensions.has(getLowercaseExtension(fileRouteId));
 };
 
-export function PreviewPane({ fileRouteId, fileType, readToken }: PreviewPaneProps) {
+export function PreviewPane({ fileRouteId, fileType, fileAccess, readToken }: PreviewPaneProps) {
     const normalizedFileType = typeof fileType === "string" ? fileType.toLowerCase() : "";
 
     if (normalizedFileType.startsWith("image/")) {
@@ -64,7 +68,7 @@ export function PreviewPane({ fileRouteId, fileType, readToken }: PreviewPanePro
     }
 
     if (isOfficeFile(normalizedFileType, fileRouteId)) {
-        return <OfficePreviewPane fileRouteId={fileRouteId} readToken={readToken} />;
+        return <OfficePreviewPane fileRouteId={fileRouteId} readToken={readToken} fileAccess={fileAccess} />;
     }
 
     return (
@@ -99,8 +103,56 @@ function VideoPreviewPane({ fileRouteId, readToken }: { fileRouteId: string; rea
     );
 }
 
-function OfficePreviewPane({ fileRouteId, readToken }: { fileRouteId: string; readToken?: string }) {
-    const source = buildFileContentUrl(fileRouteId, readToken);
+function OfficePreviewPane({
+    fileRouteId,
+    readToken,
+    fileAccess,
+}: {
+    fileRouteId: string;
+    readToken?: string;
+    fileAccess?: "PRIVATE" | "PROTECTED" | "PUBLIC";
+}) {
+    const normalizedFileId = normalizeFileId(fileRouteId);
+    const requiresToken = !readToken && fileAccess === "PROTECTED";
+
+    const readTokenQuery = useQuery({
+        queryKey: ["file", "office-preview-read-token", normalizedFileId],
+        queryFn: async () =>
+            createReadToken({
+                fileId: normalizedFileId,
+                description: "Nova Office preview",
+                expiresAt: new Date(Date.now() + OFFICE_PREVIEW_TOKEN_TTL_MS).toISOString(),
+            }),
+        enabled: requiresToken && !import.meta.env.SSR,
+        retry: false,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    if (requiresToken && (import.meta.env.SSR || readTokenQuery.isPending)) {
+        return (
+            <div className="preview-shell grid place-items-center p-10">
+                <p className="text-text-muted text-sm">Preparing secure Office preview...</p>
+            </div>
+        );
+    }
+
+    const resolvedReadToken = readToken ?? readTokenQuery.data?.readToken;
+    const source = buildFileContentUrl(fileRouteId, resolvedReadToken);
+
+    if ((fileAccess === "PRIVATE" && !readToken) || (requiresToken && !resolvedReadToken)) {
+        return (
+            <div className="preview-shell grid place-items-center p-10">
+                <div className="flex max-w-md flex-col items-center gap-3 text-center">
+                    <p className="text-text text-sm font-medium">Office preview is unavailable for this file.</p>
+                    <p className="text-text-muted text-sm">
+                        This document needs a public or tokenized URL for Office Online rendering.
+                    </p>
+                    <ViewToolbar downloadUrl={source} fileName={fileRouteId} />
+                </div>
+            </div>
+        );
+    }
+
     const officeSource = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(source)}`;
 
     return (

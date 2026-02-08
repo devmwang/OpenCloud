@@ -192,6 +192,7 @@ function FilePage() {
                         <PreviewPane
                             fileRouteId={data.fileRouteId}
                             fileType={data.file.fileType}
+                            fileAccess={data.file.fileAccess}
                             readToken={data.readToken}
                         />
                     </div>

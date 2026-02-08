@@ -114,7 +114,11 @@ function FileModalRoute() {
 
                     {detailsQuery.data ? (
                         <div className="h-full">
-                            <PreviewPane fileRouteId={fileId} fileType={detailsQuery.data.fileType} />
+                            <PreviewPane
+                                fileRouteId={fileId}
+                                fileType={detailsQuery.data.fileType}
+                                fileAccess={detailsQuery.data.fileAccess}
+                            />
                         </div>
                     ) : null}
                 </div>
