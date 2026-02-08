@@ -38,6 +38,16 @@ type DeletedFileRow = {
     deletedAt: Date;
 };
 
+type RecycleBinListRow = {
+    itemType: RecycleItemType;
+    id: string;
+    name: string;
+    deletedAt: Date;
+    parentFolderId: string | null;
+    fileSize: number | null;
+    requiresDestination: boolean;
+};
+
 type PurgeSummary = {
     purgedFiles: number;
     purgedFolders: number;
@@ -71,6 +81,207 @@ const parsePgBoolean = (value: unknown) => {
     }
 
     return false;
+};
+
+const parsePgInteger = (value: unknown) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.trunc(value);
+    }
+
+    if (typeof value === "bigint") {
+        return Number(value);
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+            return Math.trunc(parsed);
+        }
+    }
+
+    return 0;
+};
+
+const parseNullablePgInteger = (value: unknown): number | null => {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.trunc(value);
+    }
+
+    if (typeof value === "bigint") {
+        return Number(value);
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+            return Math.trunc(parsed);
+        }
+    }
+
+    return null;
+};
+
+const parsePgTimestamp = (value: unknown) => {
+    if (value instanceof Date) {
+        return value;
+    }
+
+    if (typeof value === "string" || typeof value === "number") {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+        }
+    }
+
+    throw new Error("Unexpected timestamp value returned by recycle-bin query");
+};
+
+const topLevelDeletedFoldersSql = (ownerId: string) => sql`
+    select
+        'FOLDER'::text as "itemType",
+        folder_row."id" as "id",
+        folder_row."folderName" as "name",
+        folder_row."deletedAt" as "deletedAt",
+        folder_row."parentFolderId" as "parentFolderId",
+        null::bigint as "fileSize",
+        case
+            when folder_row."parentFolderId" is null then false
+            when parent_folder."id" is null then true
+            when parent_folder."deletedAt" is not null then true
+            else false
+        end as "requiresDestination"
+    from "Folders" as folder_row
+    left join "Folders" as parent_folder
+        on parent_folder."id" = folder_row."parentFolderId"
+        and parent_folder."ownerId" = folder_row."ownerId"
+    where
+        folder_row."ownerId" = ${ownerId}
+        and folder_row."deletedAt" is not null
+        and not exists (
+            select 1
+            from "Folders" as deleted_parent
+            where
+                deleted_parent."ownerId" = folder_row."ownerId"
+                and deleted_parent."id" = folder_row."parentFolderId"
+                and deleted_parent."deletedAt" is not null
+        )
+`;
+
+const topLevelDeletedFilesSql = (ownerId: string) => sql`
+    select
+        'FILE'::text as "itemType",
+        file_row."id" as "id",
+        file_row."fileName" as "name",
+        file_row."deletedAt" as "deletedAt",
+        file_row."parentId" as "parentFolderId",
+        file_row."fileSize" as "fileSize",
+        case
+            when parent_folder."id" is null then true
+            when parent_folder."deletedAt" is not null then true
+            else false
+        end as "requiresDestination"
+    from "Files" as file_row
+    left join "Folders" as parent_folder
+        on parent_folder."id" = file_row."parentId"
+        and parent_folder."ownerId" = file_row."ownerId"
+    where
+        file_row."ownerId" = ${ownerId}
+        and file_row."deletedAt" is not null
+        and not exists (
+            select 1
+            from "Folders" as deleted_parent
+            where
+                deleted_parent."ownerId" = file_row."ownerId"
+                and deleted_parent."id" = file_row."parentId"
+                and deleted_parent."deletedAt" is not null
+        )
+`;
+
+const buildTopLevelDeletedItemsSql = (ownerId: string, itemType?: RecycleItemType) => {
+    if (itemType === "FILE") {
+        return topLevelDeletedFilesSql(ownerId);
+    }
+
+    if (itemType === "FOLDER") {
+        return topLevelDeletedFoldersSql(ownerId);
+    }
+
+    return sql`${topLevelDeletedFoldersSql(ownerId)} union all ${topLevelDeletedFilesSql(ownerId)}`;
+};
+
+const listRecycleBinRowsPaged = async (
+    server: FastifyInstance,
+    ownerId: string,
+    limit: number,
+    offset: number,
+    itemType?: RecycleItemType,
+) => {
+    const topLevelItemsSql = buildTopLevelDeletedItemsSql(ownerId, itemType);
+
+    const totalResult = (await server.db.execute(sql`
+        with top_level_items as (${topLevelItemsSql})
+        select count(*)::int as "total"
+        from top_level_items
+    `)) as { rows?: Array<{ total?: unknown }> };
+
+    const total = parsePgInteger(totalResult.rows?.[0]?.total);
+
+    const pagedResult = (await server.db.execute(sql`
+        with top_level_items as (${topLevelItemsSql})
+        select
+            "itemType",
+            "id",
+            "name",
+            "deletedAt",
+            "parentFolderId",
+            "fileSize",
+            "requiresDestination"
+        from top_level_items
+        order by "deletedAt" desc, "id" desc
+        limit ${limit}
+        offset ${offset}
+    `)) as {
+        rows?: Array<{
+            itemType?: unknown;
+            id?: unknown;
+            name?: unknown;
+            deletedAt?: unknown;
+            parentFolderId?: unknown;
+            fileSize?: unknown;
+            requiresDestination?: unknown;
+        }>;
+    };
+
+    const items: RecycleBinListRow[] = [];
+
+    for (const row of pagedResult.rows ?? []) {
+        if (row.itemType !== "FILE" && row.itemType !== "FOLDER") {
+            throw new Error("Unexpected itemType returned by recycle-bin query");
+        }
+
+        if (typeof row.id !== "string" || typeof row.name !== "string") {
+            throw new Error("Unexpected row shape returned by recycle-bin query");
+        }
+
+        items.push({
+            itemType: row.itemType,
+            id: row.id,
+            name: row.name,
+            deletedAt: parsePgTimestamp(row.deletedAt),
+            parentFolderId: typeof row.parentFolderId === "string" ? row.parentFolderId : null,
+            fileSize: row.itemType === "FILE" ? parseNullablePgInteger(row.fileSize) : null,
+            requiresDestination: parsePgBoolean(row.requiresDestination),
+        });
+    }
+
+    return {
+        total,
+        items,
+    };
 };
 
 const withPurgeLock = async <T>(server: FastifyInstance, fn: () => Promise<T>) => {
@@ -533,74 +744,10 @@ export async function listRecycleBinHandler(
     const limit = request.query.limit ?? DEFAULT_LIST_LIMIT;
     const offset = request.query.offset ?? 0;
 
-    const { topLevelDeletedFiles, topLevelDeletedFolders } = await getTopLevelDeletedRowsForOwner(this, userId, {
-        itemType: request.query.itemType,
-    });
-
-    const parentFolderIds = new Set<string>();
-
-    for (const folder of topLevelDeletedFolders) {
-        if (folder.parentFolderId) {
-            parentFolderIds.add(folder.parentFolderId);
-        }
-    }
-
-    for (const file of topLevelDeletedFiles) {
-        parentFolderIds.add(file.parentId);
-    }
-
-    const parentFolderStatusRows =
-        parentFolderIds.size > 0
-            ? await this.db
-                  .select({ id: folders.id, deletedAt: folders.deletedAt })
-                  .from(folders)
-                  .where(and(eq(folders.ownerId, userId), inArray(folders.id, Array.from(parentFolderIds))))
-            : [];
-
-    const parentFolderStatusMap = new Map(parentFolderStatusRows.map((row) => [row.id, row.deletedAt]));
-
-    const entries = [
-        ...topLevelDeletedFolders.map((folder) => {
-            const parentDeletedAt = folder.parentFolderId ? parentFolderStatusMap.get(folder.parentFolderId) : null;
-
-            return {
-                itemType: "FOLDER" as const,
-                id: folder.id,
-                name: folder.folderName,
-                deletedAt: folder.deletedAt,
-                parentFolderId: folder.parentFolderId,
-                fileSize: null,
-                requiresDestination:
-                    folder.parentFolderId !== null && (parentDeletedAt === undefined || parentDeletedAt !== null),
-            };
-        }),
-        ...topLevelDeletedFiles.map((file) => {
-            const parentDeletedAt = parentFolderStatusMap.get(file.parentId);
-
-            return {
-                itemType: "FILE" as const,
-                id: file.id,
-                name: file.fileName,
-                deletedAt: file.deletedAt,
-                parentFolderId: file.parentId,
-                fileSize: file.fileSize,
-                requiresDestination: parentDeletedAt === undefined || parentDeletedAt !== null,
-            };
-        }),
-    ].sort((left, right) => {
-        const deletedAtDelta = right.deletedAt.getTime() - left.deletedAt.getTime();
-        if (deletedAtDelta !== 0) {
-            return deletedAtDelta;
-        }
-
-        return right.id.localeCompare(left.id);
-    });
-
-    const total = entries.length;
-    const pagedItems = entries.slice(offset, offset + limit);
+    const pagedResult = await listRecycleBinRowsPaged(this, userId, limit, offset, request.query.itemType);
 
     return reply.code(200).send({
-        items: pagedItems.map((item) => ({
+        items: pagedResult.items.map((item) => ({
             itemType: item.itemType,
             id: item.id,
             name: item.name,
@@ -610,7 +757,7 @@ export async function listRecycleBinHandler(
             fileSize: item.itemType === "FILE" ? item.fileSize : undefined,
             requiresDestination: item.requiresDestination,
         })),
-        total,
+        total: pagedResult.total,
         limit,
         offset,
     });
@@ -758,6 +905,7 @@ export async function restoreHandler(
     if (!folder || folder.deletedAt === null) {
         return reply.code(404).send({ message: "Deleted folder not found" });
     }
+    const folderDeletedAt = folder.deletedAt;
 
     if (folder.ownerId !== userId) {
         return reply.code(403).send({ message: "You do not have permission to restore this folder" });
@@ -797,7 +945,11 @@ export async function restoreHandler(
             .update(files)
             .set({ deletedAt: null })
             .where(
-                and(eq(files.ownerId, userId), inArray(files.parentId, subtreeFolderIds), isNotNull(files.deletedAt)),
+                and(
+                    eq(files.ownerId, userId),
+                    inArray(files.parentId, subtreeFolderIds),
+                    eq(files.deletedAt, folderDeletedAt),
+                ),
             )
             .returning({ id: files.id });
 
@@ -805,7 +957,11 @@ export async function restoreHandler(
             .update(folders)
             .set({ deletedAt: null })
             .where(
-                and(eq(folders.ownerId, userId), inArray(folders.id, subtreeFolderIds), isNotNull(folders.deletedAt)),
+                and(
+                    eq(folders.ownerId, userId),
+                    inArray(folders.id, subtreeFolderIds),
+                    eq(folders.deletedAt, folderDeletedAt),
+                ),
             )
             .returning({ id: folders.id });
 

@@ -8,7 +8,7 @@ export type NovaRequestContext = {
 };
 
 const BOT_USER_AGENT_PATTERN =
-    /(discordbot|discord|slackbot|twitterbot|facebookexternalhit|facebot|linkedinbot|whatsapp|telegrambot)/i;
+    /(discordbot|slackbot|twitterbot|facebookexternalhit|facebot|linkedinbot|whatsapp|telegrambot)/i;
 
 const getFileRouteIdFromPath = (pathname: string) => {
     const match = pathname.match(/^\/file\/([^/]+)$/);

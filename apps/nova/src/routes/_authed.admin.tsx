@@ -7,7 +7,7 @@ import {
     WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -30,6 +30,19 @@ import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_authed/admin")({
+    beforeLoad: async ({ context }) => {
+        const authInfo = await context.queryClient.ensureQueryData({
+            queryKey: queryKeys.authInfo,
+            queryFn: getAuthInfo,
+        });
+
+        if (authInfo.role !== "ADMIN") {
+            throw redirect({
+                to: "/folder/$folderId",
+                params: { folderId: authInfo.rootFolderId },
+            });
+        }
+    },
     component: AdminToolsPage,
 });
 
