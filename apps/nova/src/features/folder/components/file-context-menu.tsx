@@ -73,7 +73,13 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
                     Open in New Tab
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => void onDelete(fileId)}>
+                <ContextMenuItem
+                    icon={<TrashIcon />}
+                    variant="danger"
+                    onClick={() => {
+                        void onDelete(fileId).catch(() => {});
+                    }}
+                >
                     Delete
                 </ContextMenuItem>
                 <ContextMenuSeparator />

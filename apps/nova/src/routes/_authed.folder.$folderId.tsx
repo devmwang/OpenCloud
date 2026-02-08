@@ -159,6 +159,7 @@ function FolderPage() {
             await refreshContents();
         } catch (error) {
             addToast(getErrorMessage(error), "error");
+            throw error;
         }
     };
 
@@ -169,6 +170,7 @@ function FolderPage() {
             await refreshContents();
         } catch (error) {
             addToast(getErrorMessage(error), "error");
+            throw error;
         }
     };
 

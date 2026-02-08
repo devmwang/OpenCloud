@@ -364,6 +364,7 @@ function AdminToolsPage() {
 
                             <div className="flex items-center justify-end gap-2.5 pt-2">
                                 <Button
+                                    type="button"
                                     variant="ghost"
                                     onClick={() => {
                                         setEditingRule(null);
