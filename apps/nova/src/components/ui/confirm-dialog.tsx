@@ -29,6 +29,8 @@ export function ConfirmDialog({
         try {
             await onConfirm();
             onOpenChange(false);
+        } catch {
+            // Callers handle and surface their own mutation errors.
         } finally {
             setPending(false);
         }

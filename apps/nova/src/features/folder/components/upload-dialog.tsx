@@ -16,9 +16,15 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
     const [dragOver, setDragOver] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const uploadInFlightRef = useRef(false);
 
     const handleFile = useCallback(
         async (file: File) => {
+            if (uploadInFlightRef.current) {
+                return;
+            }
+
+            uploadInFlightRef.current = true;
             setPending(true);
             setError(null);
 
@@ -29,6 +35,7 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Upload failed");
             } finally {
+                uploadInFlightRef.current = false;
                 setPending(false);
             }
         },
@@ -37,6 +44,9 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
 
     const handleDrop = (event: DragEvent) => {
         event.preventDefault();
+        if (pending) {
+            return;
+        }
         setDragOver(false);
         const file = event.dataTransfer.files[0];
         if (file) {
@@ -46,6 +56,10 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
     };
 
     const handleFileSelect = () => {
+        if (pending) {
+            return;
+        }
+
         const file = inputRef.current?.files?.[0];
         if (file) {
             setSelectedFile(file);
@@ -63,20 +77,37 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
                             dragOver
                                 ? "border-accent bg-accent-glow"
                                 : "border-border hover:border-border-bright hover:bg-surface-raised/30"
-                        }`}
+                        } ${pending ? "cursor-not-allowed opacity-80" : ""}`}
                         onDragOver={(e) => {
+                            if (pending) {
+                                return;
+                            }
                             e.preventDefault();
                             setDragOver(true);
                         }}
-                        onDragLeave={() => setDragOver(false)}
+                        onDragLeave={() => {
+                            if (pending) {
+                                return;
+                            }
+                            setDragOver(false);
+                        }}
                         onDrop={handleDrop}
-                        onClick={() => inputRef.current?.click()}
+                        onClick={() => {
+                            if (pending) {
+                                return;
+                            }
+                            inputRef.current?.click();
+                        }}
                         onKeyDown={(e) => {
+                            if (pending) {
+                                return;
+                            }
                             if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
                         }}
                         role="button"
                         tabIndex={0}
                         aria-label="Upload file"
+                        aria-disabled={pending}
                     >
                         <div className="flex flex-col items-center justify-center px-4 py-7">
                             {pending ? (
@@ -97,7 +128,13 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
                                 </>
                             )}
                         </div>
-                        <input ref={inputRef} type="file" className="hidden" onChange={handleFileSelect} />
+                        <input
+                            ref={inputRef}
+                            type="file"
+                            className="hidden"
+                            onChange={handleFileSelect}
+                            disabled={pending}
+                        />
                     </div>
 
                     {error ? (

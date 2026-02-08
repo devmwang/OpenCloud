@@ -48,7 +48,7 @@ export function Sidebar({ session, onSignOut }: SidebarProps) {
     const displayInitials = initials || session.user.username.slice(0, 2).toUpperCase();
 
     return (
-        <aside className="bg-sidebar border-border fixed top-0 left-0 z-40 flex h-screen w-[300px] flex-col border-r">
+        <aside className="bg-sidebar border-border hidden h-screen w-[300px] flex-col border-r md:fixed md:top-0 md:left-0 md:z-40 md:flex">
             {/* Brand */}
             <div className="flex items-center gap-3 px-5 py-4">
                 <div className="bg-accent/20 flex h-9 w-9 items-center justify-center rounded-lg">
@@ -118,7 +118,7 @@ export function AppShell({ sidebar, children }: AppShellProps) {
     return (
         <div className="flex min-h-screen">
             {sidebar}
-            <main className="ml-[300px] flex-1 p-5">
+            <main className="ml-0 flex-1 p-4 md:ml-[300px] md:p-5">
                 <div className="mx-auto max-w-[1800px]">{children}</div>
             </main>
         </div>
