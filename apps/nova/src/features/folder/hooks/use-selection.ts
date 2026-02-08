@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 export type SelectionItem = {
     id: string;
@@ -44,6 +44,42 @@ export function useSelectionState(orderedIds: string[], itemsById: Map<string, S
     orderedIdsRef.current = orderedIds;
     const itemsByIdRef = useRef(itemsById);
     itemsByIdRef.current = itemsById;
+
+    useEffect(() => {
+        const availableIds = new Set(orderedIds);
+
+        setSelected((previous) => {
+            if (previous.size === 0) {
+                return previous;
+            }
+
+            let changed = false;
+            const next = new Map<string, SelectionItem>();
+
+            for (const [id, item] of previous) {
+                const resolved = availableIds.has(id) ? itemsById.get(id) : undefined;
+                if (!resolved) {
+                    changed = true;
+                    continue;
+                }
+
+                next.set(id, resolved);
+                if (resolved.kind !== item.kind || resolved.name !== item.name) {
+                    changed = true;
+                }
+            }
+
+            if (!changed && next.size === previous.size) {
+                return previous;
+            }
+
+            return next;
+        });
+
+        if (lastClickedIdRef.current && !availableIds.has(lastClickedIdRef.current)) {
+            lastClickedIdRef.current = null;
+        }
+    }, [orderedIds, itemsById]);
 
     const isSelected = useCallback((id: string) => selected.has(id), [selected]);
     const selectionCount = selected.size;

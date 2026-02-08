@@ -12,6 +12,15 @@ export const Route = createFileRoute("/_authed/folder/$folderId/file/$fileId/mod
     component: FileModalRoute,
 });
 
+const canNavigateBackInApp = () => {
+    if (typeof window === "undefined") {
+        return false;
+    }
+
+    const historyState = window.history.state as { __TSR_index?: unknown } | null;
+    return typeof historyState?.__TSR_index === "number" && historyState.__TSR_index > 0;
+};
+
 function FileModalRoute() {
     const { folderId, fileId } = Route.useParams();
     const router = useRouter();
@@ -24,7 +33,7 @@ function FileModalRoute() {
     });
 
     const closeModal = useCallback(async () => {
-        if (typeof window !== "undefined" && window.history.length > 1) {
+        if (canNavigateBackInApp()) {
             router.history.back();
             return;
         }

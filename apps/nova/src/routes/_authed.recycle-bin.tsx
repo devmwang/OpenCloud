@@ -189,8 +189,22 @@ function RecycleBinPage() {
 
     const total = recycleListQuery.data?.total ?? 0;
     const itemCount = recycleListQuery.data?.items.length ?? 0;
+    const hasAnyItems = total > 0;
     const canGoPrevious = offset > 0;
     const canGoNext = offset + itemCount < total;
+    const rangeStart = itemCount > 0 ? offset + 1 : 0;
+    const rangeEnd = offset + itemCount;
+
+    useEffect(() => {
+        if (!recycleListQuery.data || !hasAnyItems || itemCount > 0 || offset === 0) {
+            return;
+        }
+
+        const maxOffset = Math.max(0, Math.floor((total - 1) / PAGE_LIMIT) * PAGE_LIMIT);
+        if (offset > maxOffset) {
+            setOffset(maxOffset);
+        }
+    }, [recycleListQuery.data, hasAnyItems, itemCount, offset, total]);
 
     const headerActions = useMemo(
         () => (
@@ -254,7 +268,7 @@ function RecycleBinPage() {
                 />
             ) : null}
 
-            {recycleListQuery.data && recycleListQuery.data.items.length === 0 ? (
+            {recycleListQuery.data && total === 0 ? (
                 <div className="border-border bg-surface rounded-xl border">
                     <EmptyState
                         icon={<TrashIcon className="text-text-dim h-8 w-8" />}
@@ -264,7 +278,7 @@ function RecycleBinPage() {
                 </div>
             ) : null}
 
-            {recycleListQuery.data && recycleListQuery.data.items.length > 0 ? (
+            {recycleListQuery.data && hasAnyItems ? (
                 <div className="border-border bg-surface rounded-xl border">
                     <ul className="divide-border divide-y">
                         {recycleListQuery.data.items.map((item) => (
@@ -318,8 +332,7 @@ function RecycleBinPage() {
 
                     <div className="border-border flex items-center justify-between border-t px-4 py-3">
                         <span className="text-text-muted text-sm">
-                            Showing {offset + 1}-{offset + recycleListQuery.data.items.length} of{" "}
-                            {recycleListQuery.data.total}
+                            Showing {rangeStart}-{rangeEnd} of {total}
                         </span>
                         <div className="flex items-center gap-2">
                             <Button
