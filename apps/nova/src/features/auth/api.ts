@@ -1,5 +1,7 @@
+import { getGlobalStartContext } from "@tanstack/react-start";
 import { z } from "zod";
 
+import type { NovaRequestContext } from "@/global-middleware";
 import { createCsrfHeaders } from "@/lib/csrf";
 import { getJson, postJson } from "@/lib/http";
 
@@ -151,12 +153,31 @@ const parseSessionPayload = (payload: unknown) => {
     return parsed.data;
 };
 
+const getServerCookieHeader = () => {
+    if (!import.meta.env.SSR) {
+        return undefined;
+    }
+
+    const context = getGlobalStartContext() as NovaRequestContext | undefined;
+    return context?.requestCookieHeader;
+};
+
 export const getSession = async () => {
+    const cookieHeader = getServerCookieHeader();
+
     const payload = await authClient.getSession({
         query: {
             disableCookieCache: true,
         },
+        fetchOptions: cookieHeader
+            ? {
+                  headers: {
+                      cookie: cookieHeader,
+                  },
+              }
+            : undefined,
     });
+
     return parseSessionPayload(payload);
 };
 

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import { getSessionSafe } from "@/features/auth/api";
 import { buildFileContentUrl, getFileDetails, normalizeFileId, type FileDetails } from "@/features/files/api";
 import { PreviewPane } from "@/features/files/components/preview-pane";
 import { moveToRecycleBin } from "@/features/recycle-bin/api";
@@ -22,6 +23,7 @@ type FileLoaderData =
           file: FileDetails;
           fileRouteId: string;
           normalizedFileId: string;
+          canDelete: boolean;
           readToken?: string;
       }
     | {
@@ -42,12 +44,14 @@ export const Route = createFileRoute("/file/$fileId")({
             const file = await getFileDetails(normalizedFileId, deps.readToken, {
                 forwardServerCookies: true,
             });
+            const session = await getSessionSafe();
 
             return {
                 kind: "ok",
                 file,
                 fileRouteId: params.fileId,
                 normalizedFileId,
+                canDelete: session?.user.id === file.ownerId,
                 readToken: deps.readToken,
             } satisfies FileLoaderData;
         } catch (error) {
@@ -132,6 +136,10 @@ function FilePage() {
     }
 
     const handleDelete = async () => {
+        if (!data.canDelete) {
+            return;
+        }
+
         setDeleteErrorMessage(null);
         await deleteMutation.mutateAsync();
     };
@@ -151,17 +159,19 @@ function FilePage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <Button
-                            variant="danger"
-                            size="sm"
-                            loading={deleteMutation.isPending}
-                            onClick={() => void handleDelete()}
-                        >
-                            <TrashIcon className="h-4.5 w-4.5" />
-                            Delete
-                        </Button>
-                    </div>
+                    {data.canDelete ? (
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="danger"
+                                size="sm"
+                                loading={deleteMutation.isPending}
+                                onClick={() => void handleDelete()}
+                            >
+                                <TrashIcon className="h-4.5 w-4.5" />
+                                Delete
+                            </Button>
+                        </div>
+                    ) : null}
                 </div>
             </div>
 

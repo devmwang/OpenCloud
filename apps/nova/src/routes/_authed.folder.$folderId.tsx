@@ -133,6 +133,13 @@ function FolderPage() {
         await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
     }, [queryClient, folderId]);
 
+    const refreshFolderData = useCallback(async () => {
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey: queryKeys.folderDetails(folderId) }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
+        ]);
+    }, [queryClient, folderId]);
+
     const handleCreateFolder = async (folderName: string) => {
         await createFolder({ folderName, parentFolderId: folderId });
         addToast(`Folder "${folderName}" created`, "success");
@@ -208,7 +215,7 @@ function FolderPage() {
     }
 
     if (error || !detailsQuery.data || !folderContents) {
-        return <ErrorCard message={getErrorMessage(error)} onRetry={() => void refreshContents()} />;
+        return <ErrorCard message={getErrorMessage(error)} onRetry={() => void refreshFolderData()} />;
     }
 
     const folderDetails = detailsQuery.data;
