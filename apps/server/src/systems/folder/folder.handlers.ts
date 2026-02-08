@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { displayOrders, files, folders, users } from "@/db/schema";
@@ -222,44 +222,13 @@ export async function getContentsHandler(
         eq(folders.ownerId, userId),
         isNull(folders.deletedAt),
     );
-    const legacyRootFolderFilter = and(
-        isNull(folders.parentFolderId),
-        eq(folders.ownerId, userId),
-        ne(folders.type, "ROOT"),
-        isNull(folders.deletedAt),
-    );
     const fileFilter = and(eq(files.parentId, folderId), eq(files.ownerId, userId), isNull(files.deletedAt));
 
-    let folderFilter = directFolderFilter;
-    let folderCount = 0;
-
-    if (folder.type === "ROOT") {
-        const [directCountResult] = await this.db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(folders)
-            .where(directFolderFilter);
-        const directFolderCount = directCountResult?.count ?? 0;
-
-        if (directFolderCount > 0) {
-            folderCount = directFolderCount;
-        } else {
-            folderFilter = legacyRootFolderFilter;
-
-            const [legacyCountResult] = await this.db
-                .select({ count: sql<number>`count(*)::int` })
-                .from(folders)
-                .where(legacyRootFolderFilter);
-
-            folderCount = legacyCountResult?.count ?? 0;
-        }
-    } else {
-        const [folderCountResult] = await this.db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(folders)
-            .where(directFolderFilter);
-
-        folderCount = folderCountResult?.count ?? 0;
-    }
+    const [folderCountResult] = await this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(folders)
+        .where(directFolderFilter);
+    const folderCount = folderCountResult?.count ?? 0;
 
     const { folderOffset, folderLimit, fileOffset, fileLimit } = resolveCombinedPagination(folderCount, offset, limit);
 
@@ -268,7 +237,7 @@ export async function getContentsHandler(
         let childFolderQuery = this.db
             .select({ id: folders.id, folderName: folders.folderName, createdAt: folders.createdAt })
             .from(folders)
-            .where(folderFilter)
+            .where(directFolderFilter)
             .orderBy(...getFolderOrderBy(sortType, sortOrder))
             .$dynamic();
 

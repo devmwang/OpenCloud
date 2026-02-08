@@ -73,33 +73,26 @@ const parsePgBoolean = (value: unknown) => {
     return false;
 };
 
-const getDbExecutor = (server: FastifyInstance) => {
-    return server.db as unknown as {
-        execute: (query: unknown) => Promise<{ rows?: Array<{ locked?: unknown }> }>;
-    };
-};
-
 const withPurgeLock = async <T>(server: FastifyInstance, fn: () => Promise<T>) => {
-    const dbExecutor = getDbExecutor(server);
-    const lockResult = await dbExecutor.execute(sql`select pg_try_advisory_lock(${PURGE_LOCK_KEY}) as locked`);
-    const locked = parsePgBoolean(lockResult.rows?.[0]?.locked);
+    return server.db.transaction(async (tx) => {
+        const lockResult = (await tx.execute(sql`select pg_try_advisory_xact_lock(${PURGE_LOCK_KEY}) as locked`)) as {
+            rows?: Array<{ locked?: unknown }>;
+        };
+        const locked = parsePgBoolean(lockResult.rows?.[0]?.locked);
 
-    if (!locked) {
-        return {
-            locked: false,
-            result: null,
-        } as const;
-    }
+        if (!locked) {
+            return {
+                locked: false,
+                result: null,
+            } as const;
+        }
 
-    try {
         const result = await fn();
         return {
             locked: true,
             result,
         } as const;
-    } finally {
-        await dbExecutor.execute(sql`select pg_advisory_unlock(${PURGE_LOCK_KEY})`);
-    }
+    });
 };
 
 const collectFolderSubtreeIds = async (server: FastifyInstance, ownerId: string, rootFolderId: string) => {
