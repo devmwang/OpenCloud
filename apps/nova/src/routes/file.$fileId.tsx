@@ -114,7 +114,7 @@ function FilePage() {
             if (data.kind === "ok") {
                 await router.navigate({
                     to: "/folder/$folderId",
-                    params: { folderId: data.file.parentId },
+                    params: { folderId: data.file.folderId },
                 });
             }
         },
@@ -157,7 +157,7 @@ function FilePage() {
                         </div>
                         <div className="min-w-0">
                             <h1 className="text-text truncate text-sm font-semibold">{data.file.name}</h1>
-                            <span className="text-text-dim text-xs">{data.file.fileType}</span>
+                            <span className="text-text-dim text-xs">{data.file.mimeType}</span>
                         </div>
                     </div>
 
@@ -194,8 +194,8 @@ function FilePage() {
                         <PreviewPane
                             fileRouteId={data.fileRouteId}
                             fileName={data.file.name}
-                            fileType={data.file.fileType}
-                            fileAccess={data.file.fileAccess}
+                            fileType={data.file.mimeType}
+                            fileAccess={data.file.access}
                             readToken={data.readToken}
                         />
                     </div>

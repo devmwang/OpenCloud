@@ -1,16 +1,15 @@
+import { createId } from "@paralleldrive/cuid2";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { displayOrders, files, folders, users } from "@/db/schema";
 
 import type {
-    createFolderInput,
-    deleteFolderQuerystring,
-    getContentsQuerystring,
-    getDetailsQuerystring,
-    getDisplayOrderQuerystring,
-    moveFolderInput,
-    setDisplayOrderInput,
+    CreateFolderInput,
+    FolderParams,
+    GetFolderChildrenQuery,
+    PatchFolderInput,
+    PutDisplayPreferencesInput,
 } from "./folder.schemas";
 
 type ResolvedSortType = "NAME" | "DATE_CREATED" | "SIZE";
@@ -26,7 +25,6 @@ const getFolderOrderBy = (sortType: ResolvedSortType, sortOrder: ResolvedSortOrd
         return [direction(folders.createdAt), direction(folders.id)] as const;
     }
 
-    // SIZE is not applicable to folders; fallback to name.
     return [direction(folders.folderName), direction(folders.id)] as const;
 };
 
@@ -39,7 +37,6 @@ const getFileOrderBy = (sortType: ResolvedSortType, sortOrder: ResolvedSortOrder
 
     if (sortType === "SIZE") {
         const nullSizeRank = sql<number>`case when ${files.fileSize} is null then 1 else 0 end`;
-
         return [asc(nullSizeRank), direction(files.fileSize), direction(files.fileName), direction(files.id)] as const;
     }
 
@@ -71,12 +68,47 @@ const resolveCombinedPagination = (folderCount: number, offset: number, limit: n
     };
 };
 
+const splitFolderPathIds = (folderPath: string) => {
+    return folderPath.split("/").filter(Boolean);
+};
+
+const buildFolderPath = (parentPath: string, folderId: string) => {
+    const normalizedParent = parentPath.endsWith("/") ? parentPath.slice(0, -1) : parentPath;
+    return `${normalizedParent}/${folderId}`;
+};
+
+const collectFolderSubtreeIds = async (server: FastifyInstance, ownerId: string, rootFolderId: string) => {
+    const discovered = new Set<string>([rootFolderId]);
+    let frontier: string[] = [rootFolderId];
+
+    while (frontier.length > 0) {
+        const nextRows = await server.db
+            .select({ id: folders.id })
+            .from(folders)
+            .where(and(eq(folders.ownerId, ownerId), inArray(folders.parentFolderId, frontier)));
+
+        const nextFrontier: string[] = [];
+        for (const row of nextRows) {
+            if (discovered.has(row.id)) {
+                continue;
+            }
+
+            discovered.add(row.id);
+            nextFrontier.push(row.id);
+        }
+
+        frontier = nextFrontier;
+    }
+
+    return Array.from(discovered);
+};
+
 export async function getDetailsHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Querystring: getDetailsQuerystring }>,
+    request: FastifyRequest<{ Params: FolderParams }>,
     reply: FastifyReply,
 ) {
-    const folderId = request.query.folderId;
+    const folderId = request.params.folderId;
     const userId = request.user?.id;
     if (!userId) {
         return reply.code(401).send({ message: "Unauthorized" });
@@ -90,6 +122,7 @@ export async function getDetailsHandler(
             folderAccess: folders.folderAccess,
             type: folders.type,
             parentFolderId: folders.parentFolderId,
+            folderPath: folders.folderPath,
             createdAt: folders.createdAt,
             updatedAt: folders.updatedAt,
         })
@@ -101,77 +134,46 @@ export async function getDetailsHandler(
         return reply.code(404).send({ message: "Folder not found" });
     }
 
-    let currentFolder: {
-        id: string;
-        folderName: string;
-        type: "ROOT" | "STANDARD";
-        parentFolderId: string | null;
-    } = {
-        id: folder.id,
-        folderName: folder.folderName,
-        type: folder.type,
-        parentFolderId: folder.parentFolderId,
-    };
-    const hierarchy: { id: string; name: string; type: string }[] = [];
+    const pathIds = splitFolderPathIds(folder.folderPath);
+    const ancestorIds = pathIds.slice(0, -1);
 
-    while (currentFolder.type != "ROOT" && currentFolder.parentFolderId) {
-        const [parent] = await this.db
-            .select({
-                id: folders.id,
-                folderName: folders.folderName,
-                type: folders.type,
-                parentFolderId: folders.parentFolderId,
-            })
-            .from(folders)
-            .where(
-                and(
-                    eq(folders.id, currentFolder.parentFolderId),
-                    eq(folders.ownerId, userId),
-                    isNull(folders.deletedAt),
-                ),
-            )
-            .limit(1);
+    const ancestors =
+        ancestorIds.length === 0
+            ? []
+            : await this.db
+                  .select({ id: folders.id, folderName: folders.folderName, type: folders.type })
+                  .from(folders)
+                  .where(and(eq(folders.ownerId, userId), inArray(folders.id, ancestorIds), isNull(folders.deletedAt)));
 
-        if (!parent) {
-            return reply.code(404).send({ message: "Folder not found" });
-        }
-
-        hierarchy.push({ id: parent.id, name: parent.folderName, type: parent.type });
-
-        currentFolder = parent;
-    }
-
-    const [owner] = await this.db
-        .select({ username: users.username })
-        .from(users)
-        .where(eq(users.id, folder.ownerId))
-        .limit(1);
-
-    if (!owner) {
-        return reply.code(404).send({ message: "User not found" });
-    }
+    const ancestorMap = new Map(ancestors.map((ancestor) => [ancestor.id, ancestor]));
+    const orderedAncestors = ancestorIds
+        .map((ancestorId) => ancestorMap.get(ancestorId))
+        .filter((value): value is NonNullable<typeof value> => Boolean(value))
+        .map((ancestor) => ({
+            id: ancestor.id,
+            name: ancestor.folderName,
+            type: ancestor.type,
+        }));
 
     return reply.code(200).send({
-        id: folderId,
+        id: folder.id,
         name: folder.folderName,
-        type: folder.type,
         ownerId: folder.ownerId,
-        ownerUsername: owner.username,
-        createdAt: folder.createdAt,
-        updatedAt: folder.updatedAt,
-        editedAt: folder.updatedAt,
-        folderAccess: folder.folderAccess,
-        fileAccessPermission: folder.folderAccess,
-        hierarchy: hierarchy,
+        parentFolderId: folder.parentFolderId,
+        type: folder.type,
+        access: folder.folderAccess,
+        createdAt: folder.createdAt.toISOString(),
+        updatedAt: folder.updatedAt.toISOString(),
+        ancestors: orderedAncestors,
     });
 }
 
-export async function getContentsHandler(
+export async function listChildrenHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Querystring: getContentsQuerystring }>,
+    request: FastifyRequest<{ Params: FolderParams; Querystring: GetFolderChildrenQuery }>,
     reply: FastifyReply,
 ) {
-    const folderId = request.query.folderId;
+    const folderId = request.params.folderId;
     const limit = request.query.limit;
     const offset = request.query.offset ?? 0;
     const hasOffset = request.query.offset !== undefined;
@@ -183,7 +185,7 @@ export async function getContentsHandler(
     }
 
     const [folder] = await this.db
-        .select({ id: folders.id, ownerId: folders.ownerId, type: folders.type })
+        .select({ id: folders.id, ownerId: folders.ownerId })
         .from(folders)
         .where(and(eq(folders.id, folderId), isNull(folders.deletedAt)))
         .limit(1);
@@ -207,7 +209,6 @@ export async function getContentsHandler(
             })
             .from(displayOrders)
             .where(and(eq(displayOrders.userId, userId), eq(displayOrders.folderId, folderId)))
-            .orderBy(desc(displayOrders.updatedAt), desc(displayOrders.createdAt), desc(displayOrders.id))
             .limit(1);
 
         resolvedSortType = resolvedSortType ?? displayOrder?.sortType ?? DEFAULT_SORT_TYPE;
@@ -222,7 +223,12 @@ export async function getContentsHandler(
         eq(folders.ownerId, userId),
         isNull(folders.deletedAt),
     );
-    const fileFilter = and(eq(files.parentId, folderId), eq(files.ownerId, userId), isNull(files.deletedAt));
+    const fileFilter = and(
+        eq(files.parentId, folderId),
+        eq(files.ownerId, userId),
+        isNull(files.deletedAt),
+        eq(files.storageState, "READY"),
+    );
 
     const [folderCountResult] = await this.db
         .select({ count: sql<number>`count(*)::int` })
@@ -232,10 +238,10 @@ export async function getContentsHandler(
 
     const { folderOffset, folderLimit, fileOffset, fileLimit } = resolveCombinedPagination(folderCount, offset, limit);
 
-    let childFolders: { id: string; folderName: string; createdAt: Date }[] = [];
+    let childFolders: { id: string; name: string; createdAt: Date }[] = [];
     if (folderLimit !== 0) {
         let childFolderQuery = this.db
-            .select({ id: folders.id, folderName: folders.folderName, createdAt: folders.createdAt })
+            .select({ id: folders.id, name: folders.folderName, createdAt: folders.createdAt })
             .from(folders)
             .where(directFolderFilter)
             .orderBy(...getFolderOrderBy(sortType, sortOrder))
@@ -252,10 +258,28 @@ export async function getContentsHandler(
         childFolders = await childFolderQuery;
     }
 
-    let childFiles: { id: string; fileName: string; fileSize: number | null; createdAt: Date }[] = [];
+    let childFiles: {
+        id: string;
+        name: string;
+        sizeBytes: number | null;
+        mimeType: string;
+        access: "PRIVATE" | "PROTECTED" | "PUBLIC";
+        storageState: "PENDING" | "READY" | "FAILED";
+        createdAt: Date;
+        updatedAt: Date;
+    }[] = [];
     if (fileLimit !== 0) {
         let childFileQuery = this.db
-            .select({ id: files.id, fileName: files.fileName, fileSize: files.fileSize, createdAt: files.createdAt })
+            .select({
+                id: files.id,
+                name: files.fileName,
+                sizeBytes: files.fileSize,
+                mimeType: files.fileType,
+                access: files.fileAccess,
+                storageState: files.storageState,
+                createdAt: files.createdAt,
+                updatedAt: files.updatedAt,
+            })
             .from(files)
             .where(fileFilter)
             .orderBy(...getFileOrderBy(sortType, sortOrder))
@@ -274,8 +298,21 @@ export async function getContentsHandler(
 
     return reply.code(200).send({
         id: folderId,
-        folders: childFolders,
-        files: childFiles,
+        folders: childFolders.map((folderItem) => ({
+            id: folderItem.id,
+            name: folderItem.name,
+            createdAt: folderItem.createdAt.toISOString(),
+        })),
+        files: childFiles.map((fileItem) => ({
+            id: fileItem.id,
+            name: fileItem.name,
+            sizeBytes: fileItem.sizeBytes,
+            mimeType: fileItem.mimeType,
+            access: fileItem.access,
+            storageState: fileItem.storageState,
+            createdAt: fileItem.createdAt.toISOString(),
+            updatedAt: fileItem.updatedAt.toISOString(),
+        })),
         ...(limit !== undefined ? { limit } : {}),
         ...(hasOffset ? { offset } : {}),
     });
@@ -283,17 +320,18 @@ export async function getContentsHandler(
 
 export async function createFolderHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: createFolderInput }>,
+    request: FastifyRequest<{ Body: CreateFolderInput }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
     if (!userId) {
         return reply.code(401).send({ message: "Unauthorized" });
     }
-    const { folderName, parentFolderId } = request.body;
+
+    const { name, parentFolderId } = request.body;
 
     const [parentFolder] = await this.db
-        .select({ id: folders.id, ownerId: folders.ownerId })
+        .select({ id: folders.id, ownerId: folders.ownerId, folderPath: folders.folderPath })
         .from(folders)
         .where(and(eq(folders.id, parentFolderId), isNull(folders.deletedAt)))
         .limit(1);
@@ -304,12 +342,17 @@ export async function createFolderHandler(
         return reply.code(403).send({ message: "You do not have permission to access this folder" });
     }
 
+    const newFolderId = createId();
+    const folderPath = buildFolderPath(parentFolder.folderPath, newFolderId);
+
     const [folder] = await this.db
         .insert(folders)
         .values({
+            id: newFolderId,
             ownerId: userId,
-            folderName: folderName,
-            parentFolderId: parentFolderId,
+            folderName: name,
+            parentFolderId,
+            folderPath,
         })
         .returning({ id: folders.id });
     if (!folder) {
@@ -319,9 +362,9 @@ export async function createFolderHandler(
     return reply.code(201).send({ id: folder.id });
 }
 
-export async function deleteFolderHandler(
+export async function patchFolderHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Querystring: deleteFolderQuerystring }>,
+    request: FastifyRequest<{ Params: FolderParams; Body: PatchFolderInput }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
@@ -329,75 +372,16 @@ export async function deleteFolderHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const folderId = request.query.folderId;
-
-    const [folder] = await this.db
-        .select({
-            id: folders.id,
-            ownerId: folders.ownerId,
-            type: folders.type,
-        })
-        .from(folders)
-        .where(and(eq(folders.id, folderId), isNull(folders.deletedAt)))
-        .limit(1);
-
-    if (!folder) {
-        return reply.code(404).send({ message: "Folder not found" });
-    }
-
-    if (folder.ownerId !== userId) {
-        return reply.code(403).send({ message: "You do not have permission to delete this folder" });
-    }
-
-    if (folder.type === "ROOT") {
-        return reply.code(400).send({ message: "Root folder cannot be deleted" });
-    }
-
-    const [childFolder] = await this.db
-        .select({ id: folders.id })
-        .from(folders)
-        .where(and(eq(folders.parentFolderId, folderId), isNull(folders.deletedAt)))
-        .limit(1);
-    if (childFolder) {
-        return reply.code(400).send({ message: "Folder is not empty (contains subfolders)" });
-    }
-
-    const [childFile] = await this.db
-        .select({ id: files.id })
-        .from(files)
-        .where(and(eq(files.parentId, folderId), isNull(files.deletedAt)))
-        .limit(1);
-    if (childFile) {
-        return reply.code(400).send({ message: "Folder is not empty (contains files)" });
-    }
-
-    await this.db.delete(folders).where(eq(folders.id, folderId));
-
-    return reply.code(200).send({
-        status: "success",
-        message: "Folder deleted successfully",
-    });
-}
-
-export async function moveFolderHandler(
-    this: FastifyInstance,
-    request: FastifyRequest<{ Body: moveFolderInput }>,
-    reply: FastifyReply,
-) {
-    const userId = request.user?.id;
-    if (!userId) {
-        return reply.code(401).send({ message: "Unauthorized" });
-    }
-
-    const { folderId, destinationFolderId } = request.body;
+    const folderId = request.params.folderId;
+    const { destinationFolderId } = request.body;
 
     const [sourceFolder] = await this.db
         .select({
             id: folders.id,
             ownerId: folders.ownerId,
             type: folders.type,
-            folderName: folders.folderName,
             parentFolderId: folders.parentFolderId,
+            folderPath: folders.folderPath,
         })
         .from(folders)
         .where(and(eq(folders.id, folderId), isNull(folders.deletedAt)))
@@ -416,7 +400,7 @@ export async function moveFolderHandler(
     }
 
     const [destinationFolder] = await this.db
-        .select({ id: folders.id, ownerId: folders.ownerId })
+        .select({ id: folders.id, ownerId: folders.ownerId, folderPath: folders.folderPath })
         .from(folders)
         .where(and(eq(folders.id, destinationFolderId), isNull(folders.deletedAt)))
         .limit(1);
@@ -433,7 +417,7 @@ export async function moveFolderHandler(
         return reply.code(200).send({
             status: "success",
             message: "Folder already in destination folder",
-            folderId,
+            id: folderId,
             parentFolderId: destinationFolderId,
         });
     }
@@ -442,45 +426,36 @@ export async function moveFolderHandler(
         return reply.code(400).send({ message: "Folder cannot be moved into itself" });
     }
 
-    const visitedFolderIds = new Set<string>();
-    let currentFolderId: string | null = destinationFolderId;
-
-    while (currentFolderId) {
-        if (currentFolderId === folderId) {
-            return reply.code(400).send({ message: "Folder cannot be moved into its own descendant" });
-        }
-
-        if (visitedFolderIds.has(currentFolderId)) {
-            return reply.code(400).send({ message: "Folder hierarchy is invalid" });
-        }
-        visitedFolderIds.add(currentFolderId);
-
-        const [currentFolder] = await this.db
-            .select({ parentFolderId: folders.parentFolderId })
-            .from(folders)
-            .where(and(eq(folders.id, currentFolderId), eq(folders.ownerId, userId), isNull(folders.deletedAt)))
-            .limit(1);
-
-        if (!currentFolder) {
-            break;
-        }
-
-        currentFolderId = currentFolder.parentFolderId;
+    if (
+        destinationFolder.folderPath === sourceFolder.folderPath ||
+        destinationFolder.folderPath.startsWith(`${sourceFolder.folderPath}/`)
+    ) {
+        return reply.code(400).send({ message: "Folder cannot be moved into its own descendant" });
     }
 
-    await this.db.update(folders).set({ parentFolderId: destinationFolderId }).where(eq(folders.id, folderId));
+    const newSourcePath = buildFolderPath(destinationFolder.folderPath, sourceFolder.id);
+
+    await this.db.transaction(async (tx) => {
+        await tx.update(folders).set({ parentFolderId: destinationFolderId }).where(eq(folders.id, folderId));
+        await tx.execute(sql`
+            update "Folders"
+            set "folderPath" = ${newSourcePath} || substring("folderPath" from ${sourceFolder.folderPath.length + 1})
+            where "ownerId" = ${userId}
+              and ("folderPath" = ${sourceFolder.folderPath} or "folderPath" like ${`${sourceFolder.folderPath}/%`})
+        `);
+    });
 
     return reply.code(200).send({
         status: "success",
         message: "Folder moved successfully",
-        folderId,
+        id: folderId,
         parentFolderId: destinationFolderId,
     });
 }
 
-export async function getDisplayOrderHandler(
+export async function deleteFolderHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Querystring: getDisplayOrderQuerystring }>,
+    request: FastifyRequest<{ Params: FolderParams }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
@@ -488,7 +463,68 @@ export async function getDisplayOrderHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const folderId = request.query.folderId;
+    const folderId = request.params.folderId;
+
+    const [folder] = await this.db
+        .select({
+            id: folders.id,
+            ownerId: folders.ownerId,
+            type: folders.type,
+            parentFolderId: folders.parentFolderId,
+            deletedAt: folders.deletedAt,
+        })
+        .from(folders)
+        .where(eq(folders.id, folderId))
+        .limit(1);
+
+    if (!folder || folder.deletedAt !== null) {
+        return reply.code(404).send({ message: "Folder not found" });
+    }
+
+    if (folder.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to delete this folder" });
+    }
+
+    if (folder.type === "ROOT") {
+        return reply.code(400).send({ message: "Root folder cannot be deleted" });
+    }
+
+    const deletedAt = new Date();
+    const subtreeFolderIds = await collectFolderSubtreeIds(this, userId, folderId);
+
+    await this.db.transaction(async (tx) => {
+        await tx
+            .update(files)
+            .set({ deletedAt })
+            .where(and(eq(files.ownerId, userId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)));
+
+        await tx
+            .update(folders)
+            .set({ deletedAt })
+            .where(and(eq(folders.ownerId, userId), inArray(folders.id, subtreeFolderIds), isNull(folders.deletedAt)));
+
+        await tx.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
+    });
+
+    return reply.code(200).send({
+        status: "success",
+        message: "Folder moved to recycle bin",
+        id: folderId,
+        parentFolderId: folder.parentFolderId,
+    });
+}
+
+export async function getDisplayPreferencesHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Params: FolderParams }>,
+    reply: FastifyReply,
+) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const folderId = request.params.folderId;
 
     const [folder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId })
@@ -512,7 +548,6 @@ export async function getDisplayOrderHandler(
         })
         .from(displayOrders)
         .where(and(eq(displayOrders.userId, userId), eq(displayOrders.folderId, folderId)))
-        .orderBy(desc(displayOrders.updatedAt), desc(displayOrders.createdAt), desc(displayOrders.id))
         .limit(1);
 
     if (displayOrder) {
@@ -544,9 +579,9 @@ export async function getDisplayOrderHandler(
     });
 }
 
-export async function setDisplayOrderHandler(
+export async function putDisplayPreferencesHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: setDisplayOrderInput }>,
+    request: FastifyRequest<{ Params: FolderParams; Body: PutDisplayPreferencesInput }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
@@ -554,7 +589,8 @@ export async function setDisplayOrderHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const { folderId, displayType, sortOrder, sortType } = request.body;
+    const folderId = request.params.folderId;
+    const { displayType, sortOrder, sortType } = request.body;
 
     const [folder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId })
@@ -570,45 +606,24 @@ export async function setDisplayOrderHandler(
         return reply.code(403).send({ message: "You do not have permission to edit this folder" });
     }
 
-    const existingRows = await this.db
-        .select({ id: displayOrders.id })
-        .from(displayOrders)
-        .where(and(eq(displayOrders.userId, userId), eq(displayOrders.folderId, folderId)))
-        .orderBy(desc(displayOrders.updatedAt), desc(displayOrders.createdAt), desc(displayOrders.id));
-
-    if (existingRows.length === 0) {
-        await this.db.insert(displayOrders).values({
+    await this.db
+        .insert(displayOrders)
+        .values({
             userId,
             folderId,
             displayType,
             sortOrder,
             sortType,
-        });
-    } else {
-        const [primaryRow, ...duplicateRows] = existingRows;
-
-        if (!primaryRow) {
-            return reply.code(500).send({ message: "Failed to persist display order" });
-        }
-
-        await this.db
-            .update(displayOrders)
-            .set({
+        })
+        .onConflictDoUpdate({
+            target: [displayOrders.userId, displayOrders.folderId],
+            set: {
                 displayType,
                 sortOrder,
                 sortType,
-            })
-            .where(eq(displayOrders.id, primaryRow.id));
-
-        if (duplicateRows.length > 0) {
-            await this.db.delete(displayOrders).where(
-                inArray(
-                    displayOrders.id,
-                    duplicateRows.map((row) => row.id),
-                ),
-            );
-        }
-    }
+                updatedAt: new Date(),
+            },
+        });
 
     return reply.code(200).send({
         folderId,

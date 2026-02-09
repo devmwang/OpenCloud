@@ -41,7 +41,7 @@ export function ImagePreviewPane({ fileId }: { fileId: string }) {
             <Image
                 className="object-scale-down transition-transform duration-200 ease-in-out select-none"
                 style={{ transform: `scale(${scale})` }}
-                src={`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`}
+                src={`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/${fileId}/content`}
                 fill={true}
                 alt="File View"
                 unoptimized={true}

@@ -31,7 +31,7 @@ export default async function FileView(props: { params: Promise<{ fileId: string
                 {fileDetails.data.name}
             </div>
             <div className="relative h-full overflow-hidden">
-                <PreviewPane fileId={params.fileId} fileType={fileDetails.data.fileType} />
+                <PreviewPane fileId={params.fileId} fileType={fileDetails.data.mimeType} />
             </div>
         </>
     );
@@ -39,7 +39,7 @@ export default async function FileView(props: { params: Promise<{ fileId: string
 
 async function getFileDetails(fileId: string) {
     const cookieStore = await cookies();
-    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get-details?fileId=${fileId}`, {
+    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/${fileId}`, {
         cache: "no-store",
         headers: { Cookie: cookieStore.toString() },
     });
@@ -61,8 +61,11 @@ const getFileDetailsSchema = z.object({
     id: z.string(),
     name: z.string(),
     ownerId: z.string(),
-    parentId: z.string(),
-    fileType: z.string(),
+    folderId: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number().int().nullable(),
+    access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
+    storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });

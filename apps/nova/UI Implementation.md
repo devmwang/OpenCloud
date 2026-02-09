@@ -33,7 +33,7 @@ This is an implementation guide for engineers/agents. It intentionally avoids vi
     - Refresh/direct on `/file/$fileId` must render full-page file view (not modal).
 - Keep auth+CSRF flow:
     - Better Auth client for sign-in/sign-out/session.
-    - CSRF from `/v1/auth/csrf` and `x-csrf-token` header on protected mutations.
+    - CSRF from `/v1/csrf-token` and `x-csrf-token` header on protected mutations.
 - Keep OG/bot handling:
     - `/file/$fileId` head tags and canonical behavior.
     - Bot middleware proxy for `/file/*` to backend file response.
@@ -134,23 +134,23 @@ This is an implementation guide for engineers/agents. It intentionally avoids vi
 ### `/folder/$folderId` (Primary Work Surface)
 
 - Data:
-    - Folder details (`/v1/folder/get-details`)
-    - Folder contents (`/v1/folder/get-contents`)
+    - Folder details (`/v1/folders/:folderId`)
+    - Folder contents (`/v1/folders/:folderId/children`)
 - Breadcrumb:
     - Navigate to ancestor folders.
 - Create folder:
-    - `/v1/folder/create-folder`
+    - `/v1/folders`
     - Refresh contents.
 - Upload file:
-    - `/v1/upload/single`
+    - `/v1/files` (multipart upload; `folderId` query)
     - Refresh contents.
 - Folder listing actions:
     - Open folder.
-    - Delete empty folder (`/v1/folder/delete-folder`) with confirmation.
+    - Delete folder (`DELETE /v1/folders/:folderId`) with confirmation.
 - File listing actions:
     - Open in modal intercepted route.
     - Open full-page file route.
-    - Delete file (`/v1/files/delete`) with confirmation.
+    - Delete file (`DELETE /v1/files/:fileId`) with confirmation.
 - Must render child `Outlet` for modal route overlay.
 
 ### Folder Item Context Menu (Right-Click / Long-Press)
@@ -220,22 +220,21 @@ Required actions:
 
 ### `/profile`
 
-- Read-only user info from `/v1/auth/info`.
+- Read-only user info from `/v1/users/me`.
 
 ### `/admin`
 
 - Current auth info display.
-- Create user (`/v1/auth/create`).
-- Create access rule (`/v1/auth/create-access-rule`).
-- List owned access rules (`/v1/auth/access-rules`).
-- Purge soft-deleted files (`/v1/files/purge-deleted`).
+- Create user (`/v1/users`).
+- Create access rule (`/v1/access-rules`).
+- List owned access rules (`/v1/access-rules`).
 
 ### `/tools`
 
-- Create upload token (`/v1/auth/create-upload-token`).
-- Create read token (`/v1/auth/create-read-token`).
-- Token-based upload utility (`/v1/upload/token-single`).
-- List owned upload tokens (`/v1/auth/upload-tokens`).
+- Create upload token (`/v1/upload-tokens`).
+- Create read token (`/v1/files/:fileId/read-tokens`).
+- Token-based upload utility (`/v1/files` with `uploadToken` form field).
+- List owned upload tokens (`/v1/upload-tokens`).
 
 ### Root Error + Not Found
 
@@ -248,29 +247,30 @@ Required actions:
     - `authClient.getSession`
     - `authClient.signIn.username`
     - `authClient.signOut`
-    - `GET /v1/auth/info`
-    - `GET /v1/auth/csrf`
+    - `GET /v1/users/me`
+    - `GET /v1/csrf-token`
 - Folder:
-    - `GET /v1/folder/get-details`
-    - `GET /v1/folder/get-contents`
-    - `POST /v1/folder/create-folder`
-    - `DELETE /v1/folder/delete-folder`
+    - `GET /v1/folders/:folderId`
+    - `GET /v1/folders/:folderId/children`
+    - `POST /v1/folders`
+    - `DELETE /v1/folders/:folderId`
 - Files:
-    - `GET /v1/files/get-details`
-    - `GET /v1/files/get/:fileId`
-    - `GET /v1/files/get-thumbnail/:fileId`
-    - `DELETE /v1/files/delete`
-    - `POST /v1/files/purge-deleted`
+    - `GET /v1/files/:fileId`
+    - `GET /v1/files/:fileId/content`
+    - `GET /v1/files/:fileId/thumbnail`
+    - `PATCH /v1/files/:fileId`
+    - `DELETE /v1/files/:fileId`
 - Upload:
-    - `POST /v1/upload/single`
-    - `POST /v1/upload/token-single`
+    - `POST /v1/files` (multipart upload)
 - Admin/tools:
-    - `POST /v1/auth/create`
-    - `POST /v1/auth/create-access-rule`
-    - `GET /v1/auth/access-rules`
-    - `POST /v1/auth/create-upload-token`
-    - `GET /v1/auth/upload-tokens`
-    - `POST /v1/auth/create-read-token`
+    - `POST /v1/users`
+    - `POST /v1/access-rules`
+    - `PATCH /v1/access-rules/:ruleId`
+    - `GET /v1/access-rules`
+    - `POST /v1/upload-tokens`
+    - `PATCH /v1/upload-tokens/:tokenId`
+    - `GET /v1/upload-tokens`
+    - `POST /v1/files/:fileId/read-tokens`
 
 ## State and Cache Rules
 

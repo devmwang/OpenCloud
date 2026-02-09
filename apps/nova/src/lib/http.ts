@@ -151,6 +151,38 @@ export const postJson = async <T>(path: string, schema: z.ZodType<T>, options: R
     return parseJsonResponse(response, schema);
 };
 
+export const patchJson = async <T>(path: string, schema: z.ZodType<T>, options: RequestJsonOptions = {}) => {
+    const { body, headers, ...rest } = options;
+
+    const response = await request(path, {
+        ...rest,
+        method: "PATCH",
+        headers: {
+            "content-type": "application/json",
+            ...headers,
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+    return parseJsonResponse(response, schema);
+};
+
+export const putJson = async <T>(path: string, schema: z.ZodType<T>, options: RequestJsonOptions = {}) => {
+    const { body, headers, ...rest } = options;
+
+    const response = await request(path, {
+        ...rest,
+        method: "PUT",
+        headers: {
+            "content-type": "application/json",
+            ...headers,
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+    return parseJsonResponse(response, schema);
+};
+
 export const postMultipart = async <T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}) => {
     const response = await request(path, {
         ...options,

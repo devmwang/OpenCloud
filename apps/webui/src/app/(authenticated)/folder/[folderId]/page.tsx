@@ -25,7 +25,7 @@ export default async function FolderView(props: { params: Promise<{ folderId: st
 
 async function getFolderDetails(folderId: string) {
     const cookieStore = await cookies();
-    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-details?folderId=${folderId}`, {
+    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folders/${folderId}`, {
         cache: "no-store",
         headers: { Cookie: cookieStore.toString() },
     });
@@ -40,18 +40,27 @@ async function getFolderDetails(folderId: string) {
         throw new Error("Failed to fetch data");
     }
 
-    return parsedFolderDetails;
+    return {
+        success: true,
+        data: {
+            id: parsedFolderDetails.data.id,
+            name: parsedFolderDetails.data.name,
+            type: parsedFolderDetails.data.type,
+            ownerId: parsedFolderDetails.data.ownerId,
+            createdAt: parsedFolderDetails.data.createdAt,
+            updatedAt: parsedFolderDetails.data.updatedAt,
+            folderAccess: parsedFolderDetails.data.access,
+            hierarchy: parsedFolderDetails.data.ancestors,
+        },
+    };
 }
 
 async function getFolderContents(folderId: string) {
     const cookieStore = await cookies();
-    const response = await fetch(
-        `${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folder/get-contents?folderId=${folderId}`,
-        {
-            cache: "no-store",
-            headers: { Cookie: cookieStore.toString() },
-        },
-    );
+    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/folders/${folderId}/children`, {
+        cache: "no-store",
+        headers: { Cookie: cookieStore.toString() },
+    });
 
     if (!response.ok) {
         throw new Error("Failed to fetch data");
@@ -63,37 +72,48 @@ async function getFolderContents(folderId: string) {
         throw new Error("Failed to fetch data");
     }
 
-    return parsedFolderContents;
+    return {
+        success: true,
+        data: {
+            id: parsedFolderContents.data.id,
+            folders: parsedFolderContents.data.folders.map((folder) => ({
+                id: folder.id,
+                folderName: folder.name,
+            })),
+            files: parsedFolderContents.data.files.map((file) => ({
+                id: file.id,
+                fileName: file.name,
+            })),
+        },
+    };
 }
 
 const getFolderDetailsSchema = z.object({
     id: z.string(),
     name: z.string(),
-    type: z.string(),
-    ownerId: z.string().optional(),
-    ownerUsername: z.string().optional(),
-    createdAt: z.string().datetime().optional(),
-    updatedAt: z.string().datetime().optional(),
-    editedAt: z.string().datetime().optional(),
-    folderAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
-    fileAccessPermission: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
-    hierarchy: z
+    ownerId: z.string(),
+    parentFolderId: z.string().nullable(),
+    type: z.enum(["ROOT", "STANDARD"]),
+    access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    ancestors: z
         .object({
             id: z.string(),
             name: z.string(),
-            type: z.string(),
+            type: z.enum(["ROOT", "STANDARD"]),
         })
         .array(),
 });
 
 const folderSchema = z.object({
     id: z.string(),
-    folderName: z.string(),
+    name: z.string(),
 });
 
 const fileSchema = z.object({
     id: z.string(),
-    fileName: z.string(),
+    name: z.string(),
 });
 
 const getFolderContentsSchema = z.object({

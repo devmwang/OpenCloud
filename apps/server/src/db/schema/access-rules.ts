@@ -1,8 +1,14 @@
 import { createId } from "@paralleldrive/cuid2";
-import { foreignKey, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { customType, foreignKey, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 import { accessRuleMethodEnum, allowDisallowEnum } from "./enums";
 import { users } from "./users";
+
+const cidr = customType<{ data: string }>({
+    dataType() {
+        return "cidr";
+    },
+});
 
 export const accessRules = pgTable(
     "AccessRules",
@@ -13,7 +19,7 @@ export const accessRules = pgTable(
         name: text("name").notNull(),
         type: allowDisallowEnum("type").notNull(),
         method: accessRuleMethodEnum("method").notNull(),
-        match: text("match").notNull(),
+        cidr: cidr("cidr").notNull(),
         ownerId: text("ownerId").notNull(),
         createdAt: timestamp("createdAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
         updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
@@ -26,5 +32,7 @@ export const accessRules = pgTable(
         })
             .onUpdate("cascade")
             .onDelete("restrict"),
+        ownerIdIdx: index("AccessRules_ownerId_idx").on(table.ownerId),
+        ownerCidrIdx: index("AccessRules_ownerId_cidr_idx").on(table.ownerId, table.cidr),
     }),
 );

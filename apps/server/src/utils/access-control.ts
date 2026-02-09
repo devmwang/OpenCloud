@@ -16,7 +16,7 @@ export interface AccessControlRuleEvaluatorInput {
     id: string;
     type: string;
     method: string;
-    match: string;
+    cidr: string;
 }
 
 const isIpv6 = (addr: ipaddr.IPv4 | ipaddr.IPv6): addr is ipaddr.IPv6 => addr.kind() === "ipv6";
@@ -29,10 +29,10 @@ const parseIp = (ip: string) => {
     }
 };
 
-const matchIp = (ruleMatch: string, client: ipaddr.IPv4 | ipaddr.IPv6) => {
+const matchIp = (ruleCidr: string, client: ipaddr.IPv4 | ipaddr.IPv6) => {
     try {
-        if (ipaddr.isValidCIDR(ruleMatch)) {
-            const [range, prefix] = ipaddr.parseCIDR(ruleMatch);
+        if (ipaddr.isValidCIDR(ruleCidr)) {
+            const [range, prefix] = ipaddr.parseCIDR(ruleCidr);
             const isMappedIpv6Cidr = isIpv6(range) && range.isIPv4MappedAddress();
             const normalizedRange = isMappedIpv6Cidr ? range.toIPv4Address() : range;
             const normalizedPrefix = isMappedIpv6Cidr ? Math.max(prefix - 96, 0) : prefix;
@@ -44,8 +44,8 @@ const matchIp = (ruleMatch: string, client: ipaddr.IPv4 | ipaddr.IPv6) => {
             return client.match(normalizedRange, normalizedPrefix);
         }
 
-        if (ipaddr.isValid(ruleMatch)) {
-            const normalizedMatch = ipaddr.process(ruleMatch);
+        if (ipaddr.isValid(ruleCidr)) {
+            const normalizedMatch = ipaddr.process(ruleCidr);
             if (client.kind() !== normalizedMatch.kind()) {
                 return null;
             }
@@ -90,7 +90,7 @@ export function resolveAccessControlRules(
         }
 
         if (accessRule.type === "DISALLOW") {
-            const matches = matchIp(accessRule.match, client);
+            const matches = matchIp(accessRule.cidr, client);
             if (matches === true) {
                 return false;
             }
@@ -99,7 +99,7 @@ export function resolveAccessControlRules(
         }
 
         if (accessRule.type === "ALLOW") {
-            const matches = matchIp(accessRule.match, client);
+            const matches = matchIp(accessRule.cidr, client);
             hasAllow = true;
             if (matches === true) {
                 allowMatched = true;
@@ -136,7 +136,7 @@ const accessControlPlugin: FastifyPluginAsync = fp(async (server) => {
                     id: accessRules.id,
                     type: accessRules.type,
                     method: accessRules.method,
-                    match: accessRules.match,
+                    cidr: accessRules.cidr,
                 })
                 .from(accessRules)
                 .where(whereClause);

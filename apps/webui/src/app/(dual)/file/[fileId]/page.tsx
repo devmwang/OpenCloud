@@ -29,7 +29,7 @@ export async function generateMetadata(props: { params: Promise<{ fileId: string
     return {
         title: `OpenCloud - ${fileDetails.data.name}`,
         openGraph: {
-            images: [`https://opencloud-api.devmwang.com/v1/files/get/${fileId}${path.extname(fileDetails.data.name)}`],
+            images: [`https://opencloud-api.devmwang.com/v1/files/${fileId}/content`],
         },
     };
 }
@@ -72,7 +72,7 @@ export default async function FileView(props: { params: Promise<{ fileId: string
                 </div>
 
                 <div className="relative h-full overflow-hidden">
-                    <PreviewPane fileId={params.fileId} fileType={fileDetails.data.fileType} />
+                    <PreviewPane fileId={params.fileId} fileType={fileDetails.data.mimeType} />
                 </div>
             </div>
         </div>
@@ -81,7 +81,7 @@ export default async function FileView(props: { params: Promise<{ fileId: string
 
 async function getFileDetails(fileId: string) {
     const cookieStore = await cookies();
-    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get-details?fileId=${fileId}`, {
+    const response = await fetch(`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/${fileId}`, {
         cache: "no-store",
         headers: { Cookie: cookieStore.toString() },
     });
@@ -107,17 +107,12 @@ async function getFileDetails(fileId: string) {
 const getFileDetailsSchema = z.object({
     id: z.string(),
     name: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number().int().nullable(),
     ownerId: z.string(),
-    ownerUsername: z.string().optional(),
-    parentId: z.string(),
-    fileType: z.string(),
-    type: z.string().optional(),
-    fileSize: z.number().int().nullable().optional(),
-    size: z.number().int().nullable().optional(),
-    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
-    fileAccessPermission: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
+    folderId: z.string(),
+    access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
     createdAt: z.string().datetime(),
-    uploadedAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime(),
-    editedAt: z.string().datetime().optional(),
+    storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });

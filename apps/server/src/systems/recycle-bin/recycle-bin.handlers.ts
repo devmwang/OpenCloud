@@ -9,11 +9,10 @@ import { env } from "@/env/env";
 
 import type {
     DestinationFoldersQuery,
-    EmptyBody,
+    EmptyQuery,
+    ItemParams,
     ListQuery,
-    MoveToBinBody,
-    PermanentlyDeleteBody,
-    PurgeExpiredBody,
+    PurgeBody,
     RecycleItemType,
     RestoreBody,
 } from "./recycle-bin.schemas";
@@ -515,7 +514,7 @@ const permanentlyDeleteFolderSubtree = async (
 
 const getActiveDestinationFolder = async (server: FastifyInstance, ownerId: string, folderId: string) => {
     const [destinationFolder] = await server.db
-        .select({ id: folders.id })
+        .select({ id: folders.id, folderPath: folders.folderPath })
         .from(folders)
         .where(and(eq(folders.id, folderId), eq(folders.ownerId, ownerId), isNull(folders.deletedAt)))
         .limit(1);
@@ -542,12 +541,14 @@ const resolveRestoreParentFolder = async (
 
         return {
             parentFolderId: destinationFolder.id,
+            parentFolderPath: destinationFolder.folderPath,
         } as const;
     }
 
     if (!originalParentFolderId) {
         return {
             parentFolderId: null,
+            parentFolderPath: null,
         } as const;
     }
 
@@ -563,6 +564,7 @@ const resolveRestoreParentFolder = async (
 
     return {
         parentFolderId: originalParent.id,
+        parentFolderPath: originalParent.folderPath,
     } as const;
 };
 
@@ -647,88 +649,6 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
         purgedFolders: lockResult.result.purgedFolders,
         skipped: false,
     };
-}
-
-export async function moveToBinHandler(
-    this: FastifyInstance,
-    request: FastifyRequest<{ Body: MoveToBinBody }>,
-    reply: FastifyReply,
-) {
-    const userId = request.user?.id;
-    if (!userId) {
-        return reply.code(401).send({ message: "Unauthorized" });
-    }
-
-    const { itemType, itemId } = request.body;
-    const deletedAt = new Date();
-
-    if (itemType === "FILE") {
-        const [file] = await this.db
-            .select({ id: files.id, ownerId: files.ownerId, deletedAt: files.deletedAt })
-            .from(files)
-            .where(eq(files.id, itemId))
-            .limit(1);
-
-        if (!file || file.deletedAt !== null) {
-            return reply.code(404).send({ message: "File not found" });
-        }
-
-        if (file.ownerId !== userId) {
-            return reply.code(403).send({ message: "You do not have permission to move this file to recycle bin" });
-        }
-
-        await this.db.update(files).set({ deletedAt }).where(eq(files.id, itemId));
-
-        return reply.code(200).send({
-            status: "success",
-            message: "File moved to recycle bin",
-            itemType,
-            itemId,
-            deletedAt: toIso(deletedAt),
-        });
-    }
-
-    const [folder] = await this.db
-        .select({ id: folders.id, ownerId: folders.ownerId, type: folders.type, deletedAt: folders.deletedAt })
-        .from(folders)
-        .where(eq(folders.id, itemId))
-        .limit(1);
-
-    if (!folder || folder.deletedAt !== null) {
-        return reply.code(404).send({ message: "Folder not found" });
-    }
-
-    if (folder.ownerId !== userId) {
-        return reply.code(403).send({ message: "You do not have permission to move this folder to recycle bin" });
-    }
-
-    if (folder.type === "ROOT") {
-        return reply.code(400).send({ message: "Root folder cannot be moved to recycle bin" });
-    }
-
-    const subtreeFolderIds = await collectFolderSubtreeIds(this, userId, itemId);
-
-    await this.db.transaction(async (tx) => {
-        await tx
-            .update(files)
-            .set({ deletedAt })
-            .where(and(eq(files.ownerId, userId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)));
-
-        await tx
-            .update(folders)
-            .set({ deletedAt })
-            .where(and(eq(folders.ownerId, userId), inArray(folders.id, subtreeFolderIds), isNull(folders.deletedAt)));
-
-        await tx.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
-    });
-
-    return reply.code(200).send({
-        status: "success",
-        message: "Folder moved to recycle bin",
-        itemType,
-        itemId,
-        deletedAt: toIso(deletedAt),
-    });
 }
 
 export async function listRecycleBinHandler(
@@ -830,7 +750,7 @@ export async function destinationFoldersHandler(
 
 export async function restoreHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: RestoreBody }>,
+    request: FastifyRequest<{ Params: ItemParams; Body: RestoreBody }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
@@ -838,7 +758,8 @@ export async function restoreHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const { itemType, itemId, destinationFolderId } = request.body;
+    const { itemType, itemId } = request.params;
+    const { destinationFolderId } = request.body;
 
     if (itemType === "FILE") {
         const [file] = await this.db
@@ -896,6 +817,7 @@ export async function restoreHandler(
             ownerId: folders.ownerId,
             type: folders.type,
             parentFolderId: folders.parentFolderId,
+            folderPath: folders.folderPath,
             deletedAt: folders.deletedAt,
         })
         .from(folders)
@@ -931,12 +853,27 @@ export async function restoreHandler(
     }
 
     const parentFolderId = restoreParentResolution.parentFolderId;
+    const parentFolderPath = restoreParentResolution.parentFolderPath;
+
+    if (!parentFolderId || !parentFolderPath) {
+        return reply.code(409).send({ message: "A destination folder is required to restore this folder" });
+    }
 
     if (parentFolderId && subtreeFolderIds.includes(parentFolderId)) {
         return reply.code(400).send({ message: "Folder cannot be restored into its own descendant" });
     }
 
     const restoreCounts = await this.db.transaction(async (tx) => {
+        const newFolderPath = `${parentFolderPath}/${itemId}`;
+        if (folder.folderPath !== newFolderPath) {
+            await tx.execute(sql`
+                update "Folders"
+                set "folderPath" = ${newFolderPath} || substring("folderPath" from ${folder.folderPath.length + 1})
+                where "ownerId" = ${userId}
+                  and ("folderPath" = ${folder.folderPath} or "folderPath" like ${`${folder.folderPath}/%`})
+            `);
+        }
+
         if (folder.parentFolderId !== parentFolderId) {
             await tx.update(folders).set({ parentFolderId }).where(eq(folders.id, itemId));
         }
@@ -983,7 +920,7 @@ export async function restoreHandler(
 
 export async function permanentlyDeleteHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: PermanentlyDeleteBody }>,
+    request: FastifyRequest<{ Params: ItemParams }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
@@ -991,7 +928,7 @@ export async function permanentlyDeleteHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const { itemType, itemId } = request.body;
+    const { itemType, itemId } = request.params;
 
     if (itemType === "FILE") {
         const [file] = await this.db
@@ -1063,7 +1000,7 @@ export async function permanentlyDeleteHandler(
 
 export async function emptyRecycleBinHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: EmptyBody }>,
+    request: FastifyRequest<{ Querystring: EmptyQuery }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
@@ -1071,7 +1008,7 @@ export async function emptyRecycleBinHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const itemType = request.body?.itemType;
+    const itemType = request.query.itemType;
 
     const { topLevelDeletedFiles, topLevelDeletedFolders } = await getTopLevelDeletedRowsForOwner(this, userId, {
         itemType,
@@ -1115,7 +1052,7 @@ export async function emptyRecycleBinHandler(
 
 export async function purgeExpiredHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: PurgeExpiredBody }>,
+    request: FastifyRequest<{ Body: PurgeBody }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;

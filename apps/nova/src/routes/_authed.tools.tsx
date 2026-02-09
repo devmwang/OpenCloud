@@ -114,7 +114,7 @@ function ToolsPage() {
                 name: String(formData.get("name") ?? ""),
                 type: String(formData.get("type") ?? "ALLOW") as "ALLOW" | "DISALLOW",
                 method: "IP_ADDRESS",
-                match: String(formData.get("match") ?? ""),
+                cidr: String(formData.get("match") ?? ""),
             });
 
             setAccessRuleResult(result.message);
@@ -144,7 +144,7 @@ function ToolsPage() {
                 name: String(formData.get("name") ?? ""),
                 type: String(formData.get("type") ?? "ALLOW") as "ALLOW" | "DISALLOW",
                 method: "IP_ADDRESS",
-                match: String(formData.get("match") ?? ""),
+                cidr: String(formData.get("match") ?? ""),
             });
 
             setEditRuleResult(result.message);
@@ -172,7 +172,7 @@ function ToolsPage() {
                 folderId: String(formData.get("folderId") ?? ""),
                 fileAccess: String(formData.get("fileAccess") ?? "PROTECTED") as "PRIVATE" | "PROTECTED" | "PUBLIC",
                 description: String(formData.get("description") ?? "") || undefined,
-                accessControlRuleIds: accessRuleIds.length > 0 ? accessRuleIds : undefined,
+                accessRuleIds: accessRuleIds.length > 0 ? accessRuleIds : undefined,
                 expiresAt: toIsoDatetime(String(formData.get("expiresAt") ?? "")) ?? null,
             });
 
@@ -204,7 +204,7 @@ function ToolsPage() {
                 folderId: String(formData.get("folderId") ?? ""),
                 fileAccess: String(formData.get("fileAccess") ?? "PROTECTED") as "PRIVATE" | "PROTECTED" | "PUBLIC",
                 description: String(formData.get("description") ?? "") || undefined,
-                accessControlRuleIds: accessRuleIds,
+                accessRuleIds: accessRuleIds,
                 expiresAt: toIsoDatetime(String(formData.get("expiresAt") ?? "")) ?? null,
             });
 
@@ -333,7 +333,7 @@ function ToolsPage() {
                                             {rule.type}
                                         </Badge>
                                     </div>
-                                    <code className="text-accent mt-1 block text-xs">{rule.match}</code>
+                                    <code className="text-accent mt-1 block text-xs">{rule.cidr}</code>
                                     <span className="text-text-dim mt-1 block text-sm">ID: {rule.id}</span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-3">
@@ -495,9 +495,7 @@ function ToolsPage() {
                                     <span className="text-text-dim">ID: {token.id}</span>
                                     <span className="text-text-dim">
                                         Rules:{" "}
-                                        {token.accessControlRuleIds.length > 0
-                                            ? token.accessControlRuleIds.join(", ")
-                                            : "None"}
+                                        {token.accessRuleIds.length > 0 ? token.accessRuleIds.join(", ") : "None"}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1 text-sm">
@@ -580,7 +578,7 @@ function ToolsPage() {
                                 name="match"
                                 label="IP or CIDR Match"
                                 required
-                                defaultValue={editingRule.match}
+                                defaultValue={editingRule.cidr}
                                 placeholder="203.0.113.0/24"
                                 key={`match-${editingRule.id}`}
                             />
@@ -647,7 +645,7 @@ function ToolsPage() {
                             <Input
                                 name="accessControlRuleIds"
                                 label="Access Rule IDs (comma-separated)"
-                                defaultValue={editingToken.accessControlRuleIds.join(", ")}
+                                defaultValue={editingToken.accessRuleIds.join(", ")}
                                 placeholder="rule-id-1, rule-id-2"
                                 key={`rules-${editingToken.id}`}
                             />

@@ -1,53 +1,73 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
-import { getDetailsHandler, getFileHandler, getThumbnailHandler, moveFileHandler } from "./fs.handlers";
+import {
+    deleteFileHandler,
+    getDetailsHandler,
+    getFileHandler,
+    getThumbnailHandler,
+    patchFileHandler,
+} from "./fs.handlers";
 import { $ref } from "./fs.schemas";
 
 async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
-        url: "/get-details",
+        url: "/files/:fileId",
         onRequest: [server.optionalAuthenticate],
         schema: {
-            querystring: $ref("getDetailsQuerySchema"),
-            response: { 200: $ref("getDetailsResponseSchema") },
+            params: $ref("fileParamsSchema"),
+            querystring: $ref("fileReadQuerySchema"),
+            response: { 200: $ref("fileDetailsResponseSchema") },
         },
         handler: getDetailsHandler,
     });
 
     server.route({
         method: "GET",
-        url: "/get/:fileId",
+        url: "/files/:fileId/content",
         onRequest: [server.optionalAuthenticate],
         schema: {
-            params: $ref("getFileParamsSchema"),
-            querystring: $ref("getFileQuerySchema"),
+            params: $ref("fileParamsSchema"),
+            querystring: $ref("fileReadQuerySchema"),
         },
         handler: getFileHandler,
     });
 
     server.route({
         method: "GET",
-        url: "/get-thumbnail/:fileId",
+        url: "/files/:fileId/thumbnail",
         onRequest: [server.optionalAuthenticate],
         schema: {
-            params: $ref("getThumbnailParamsSchema"),
-            querystring: $ref("getThumbnailQuerySchema"),
+            params: $ref("fileParamsSchema"),
+            querystring: $ref("fileReadQuerySchema"),
         },
         handler: getThumbnailHandler,
     });
 
     server.route({
-        method: "POST",
-        url: "/move",
+        method: "PATCH",
+        url: "/files/:fileId",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            body: $ref("moveFileBodySchema"),
-            response: { 200: $ref("moveFileResponseSchema") },
+            params: $ref("fileParamsSchema"),
+            body: $ref("patchFileBodySchema"),
+            response: { 200: $ref("mutateFileResponseSchema") },
         },
-        handler: moveFileHandler,
+        handler: patchFileHandler,
+    });
+
+    server.route({
+        method: "DELETE",
+        url: "/files/:fileId",
+        onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            params: $ref("fileParamsSchema"),
+            response: { 200: $ref("mutateFileResponseSchema") },
+        },
+        handler: deleteFileHandler,
     });
 }
 

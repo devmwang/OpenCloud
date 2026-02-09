@@ -46,7 +46,10 @@ export const botFileProxyMiddleware = createMiddleware().server(async ({ request
         return next();
     }
 
-    const targetUrl = new URL(`/v1/files/get/${encodeURIComponent(routeFileId)}`, env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL);
+    const targetUrl = new URL(
+        `/v1/files/${encodeURIComponent(routeFileId)}/content`,
+        env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL,
+    );
     targetUrl.search = requestUrl.search;
 
     const headers = new Headers();

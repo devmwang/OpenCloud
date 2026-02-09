@@ -1,87 +1,88 @@
 import { z } from "zod";
 
 import { createCsrfHeaders } from "@/lib/csrf";
-import { getJson, postJson } from "@/lib/http";
-
-const folderEntrySchema = z
-    .object({
-        id: z.union([z.string(), z.number()]).transform((value) => String(value)),
-        folderName: z.string().optional(),
-        name: z.string().optional(),
-        createdAt: z
-            .union([z.string().datetime(), z.date()])
-            .transform((value) => (value instanceof Date ? value.toISOString() : value))
-            .optional(),
-    })
-    .transform((value) => ({
-        id: value.id,
-        folderName: value.folderName ?? value.name ?? "(unnamed folder)",
-        createdAt: value.createdAt,
-    }));
-
-const fileEntrySchema = z
-    .object({
-        id: z.union([z.string(), z.number()]).transform((value) => String(value)),
-        fileName: z.string().optional(),
-        name: z.string().optional(),
-        fileSize: z
-            .union([z.number().int(), z.string().regex(/^\d+$/), z.null()])
-            .transform((value) => {
-                if (value === null) {
-                    return null;
-                }
-
-                return typeof value === "string" ? Number(value) : value;
-            })
-            .optional(),
-        createdAt: z
-            .union([z.string().datetime(), z.date()])
-            .transform((value) => (value instanceof Date ? value.toISOString() : value))
-            .optional(),
-    })
-    .transform((value) => ({
-        id: value.id,
-        fileName: value.fileName ?? value.name ?? "(unnamed file)",
-        fileSize: value.fileSize,
-        createdAt: value.createdAt,
-    }));
+import { getJson, postJson, putJson } from "@/lib/http";
 
 const folderNodeSchema = z.object({
     id: z.string(),
     name: z.string(),
-    type: z.string(),
+    type: z.enum(["ROOT", "STANDARD"]),
 });
 
-const folderDetailsSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    type: z.string(),
-    ownerId: z.string().optional(),
-    ownerUsername: z.string().optional(),
-    createdAt: z.string().datetime().optional(),
-    updatedAt: z.string().datetime().optional(),
-    editedAt: z.string().datetime().optional(),
-    folderAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
-    fileAccessPermission: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
-    hierarchy: z.array(folderNodeSchema),
-});
+const folderDetailsSchema = z
+    .object({
+        id: z.string(),
+        name: z.string(),
+        ownerId: z.string(),
+        parentFolderId: z.string().nullable(),
+        type: z.enum(["ROOT", "STANDARD"]),
+        access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+        createdAt: z.string().datetime(),
+        updatedAt: z.string().datetime(),
+        ancestors: z.array(folderNodeSchema),
+    })
+    .transform((value) => ({
+        id: value.id,
+        name: value.name,
+        type: value.type,
+        ownerId: value.ownerId,
+        createdAt: value.createdAt,
+        updatedAt: value.updatedAt,
+        folderAccess: value.access,
+        hierarchy: value.ancestors,
+    }));
 
 const folderContentsPayloadSchema = z.object({
     id: z.union([z.string(), z.number()]).transform((value) => String(value)),
-    folders: z.array(folderEntrySchema).default([]),
-    files: z.array(fileEntrySchema).default([]),
+    folders: z
+        .array(
+            z.object({
+                id: z.union([z.string(), z.number()]).transform((value) => String(value)),
+                name: z.string(),
+                createdAt: z
+                    .union([z.string().datetime(), z.date()])
+                    .transform((value) => (value instanceof Date ? value.toISOString() : value)),
+            }),
+        )
+        .default([]),
+    files: z
+        .array(
+            z.object({
+                id: z.union([z.string(), z.number()]).transform((value) => String(value)),
+                name: z.string(),
+                sizeBytes: z.union([z.number().int(), z.string().regex(/^\d+$/), z.null()]).transform((value) => {
+                    if (value === null) {
+                        return null;
+                    }
+
+                    return typeof value === "string" ? Number(value) : value;
+                }),
+                createdAt: z
+                    .union([z.string().datetime(), z.date()])
+                    .transform((value) => (value instanceof Date ? value.toISOString() : value)),
+            }),
+        )
+        .default([]),
     limit: z.coerce.number().int().optional(),
     offset: z.coerce.number().int().optional(),
 });
 
-const folderContentsSchema = z
-    .union([
-        folderContentsPayloadSchema,
-        z.object({
-            data: folderContentsPayloadSchema,
-        }),
-    ])
-    .transform((value) => ("data" in value ? value.data : value));
+const folderContentsSchema = folderContentsPayloadSchema.transform((value) => ({
+    id: value.id,
+    folders: value.folders.map((folder) => ({
+        id: folder.id,
+        folderName: folder.name,
+        createdAt: folder.createdAt,
+    })),
+    files: value.files.map((file) => ({
+        id: file.id,
+        fileName: file.name,
+        fileSize: file.sizeBytes,
+        createdAt: file.createdAt,
+    })),
+    limit: value.limit,
+    offset: value.offset,
+}));
 
 const createFolderInputSchema = z.object({
     folderName: z.string().min(1),
@@ -104,29 +105,25 @@ export type GetFolderContentsOptions = {
 };
 
 export const getFolderDetails = async (folderId: string) => {
-    return getJson("/v1/folder/get-details", folderDetailsSchema, {
-        query: { folderId },
-    });
+    return getJson(`/v1/folders/${encodeURIComponent(folderId)}`, folderDetailsSchema);
 };
 
 export const getFolderContents = async (folderId: string, options: GetFolderContentsOptions = {}) => {
     const { limit, offset, sortType, sortOrder } = options;
 
-    return getJson("/v1/folder/get-contents", folderContentsSchema, {
-        query: { folderId, limit, offset, sortType, sortOrder },
+    return getJson(`/v1/folders/${encodeURIComponent(folderId)}/children`, folderContentsSchema, {
+        query: { limit, offset, sortType, sortOrder },
     });
 };
 
 export const createFolder = async (input: CreateFolderInput) => {
     const body = createFolderInputSchema.parse(input);
 
-    return postJson("/v1/folder/create-folder", createFolderResponseSchema, {
-        body,
+    return postJson("/v1/folders", createFolderResponseSchema, {
+        body: { name: body.folderName, parentFolderId: body.parentFolderId },
         headers: await createCsrfHeaders(),
     });
 };
-
-// ── Display Order ─────────────────────────────────────────────
 
 export const displayTypeEnum = z.enum(["GRID", "LIST"]);
 export const sortOrderEnum = z.enum(["ASC", "DESC"]);
@@ -155,16 +152,18 @@ const setDisplayOrderInputSchema = z.object({
 export type SetDisplayOrderInput = z.infer<typeof setDisplayOrderInputSchema>;
 
 export const getDisplayOrder = async (folderId: string) => {
-    return getJson("/v1/folder/get-display-order", displayOrderResponseSchema, {
-        query: { folderId },
-    });
+    return getJson(`/v1/folders/${encodeURIComponent(folderId)}/display-preferences`, displayOrderResponseSchema);
 };
 
 export const setDisplayOrder = async (input: SetDisplayOrderInput) => {
     const body = setDisplayOrderInputSchema.parse(input);
 
-    return postJson("/v1/folder/set-display-order", displayOrderResponseSchema, {
-        body,
+    return putJson(`/v1/folders/${encodeURIComponent(body.folderId)}/display-preferences`, displayOrderResponseSchema, {
+        body: {
+            displayType: body.displayType,
+            sortOrder: body.sortOrder,
+            sortType: body.sortType,
+        },
         headers: await createCsrfHeaders(),
     });
 };

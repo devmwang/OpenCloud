@@ -90,10 +90,10 @@ for (const schema of [...authSchemas, ...uploadSchemas, ...fsSchemas, ...folderS
 }
 
 // Register Routes
-void server.register(authRouter, { prefix: "/v1/auth" });
-void server.register(uploadRouter, { prefix: "/v1/upload" });
-void server.register(fileSystemRouter, { prefix: "/v1/files" });
-void server.register(folderRouter, { prefix: "/v1/folder" });
+void server.register(authRouter, { prefix: "/v1" });
+void server.register(uploadRouter, { prefix: "/v1" });
+void server.register(fileSystemRouter, { prefix: "/v1" });
+void server.register(folderRouter, { prefix: "/v1" });
 void server.register(recycleBinRouter, { prefix: "/v1/recycle-bin" });
 
 // Server Health Check

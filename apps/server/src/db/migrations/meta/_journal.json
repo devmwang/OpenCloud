@@ -50,6 +50,13 @@
       "when": 1770456977745,
       "tag": "0006_recycle_bin_folders_deleted_at_duplicate_names",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770613200000,
+      "tag": "0007_schema_api_refactor",
+      "breakpoints": true
     }
   ]
 }

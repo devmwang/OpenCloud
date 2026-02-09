@@ -5,7 +5,6 @@ import {
     destinationFoldersHandler,
     emptyRecycleBinHandler,
     listRecycleBinHandler,
-    moveToBinHandler,
     permanentlyDeleteHandler,
     purgeExpiredHandler,
     recycleBinScheduler,
@@ -16,20 +15,8 @@ import { $ref } from "./recycle-bin.schemas";
 
 async function recycleBinRouter(server: FastifyInstance) {
     server.route({
-        method: "POST",
-        url: "/move-to-bin",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
-        schema: {
-            body: $ref("moveToBinBodySchema"),
-            response: { 200: $ref("moveToBinResponseSchema") },
-        },
-        handler: moveToBinHandler,
-    });
-
-    server.route({
         method: "GET",
-        url: "/list",
+        url: "/items",
         onRequest: [server.authenticate],
         schema: {
             querystring: $ref("listQuerySchema"),
@@ -51,10 +38,11 @@ async function recycleBinRouter(server: FastifyInstance) {
 
     server.route({
         method: "POST",
-        url: "/restore",
+        url: "/items/:itemType/:itemId/restore",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
+            params: $ref("itemParamsSchema"),
             body: $ref("restoreBodySchema"),
             response: { 200: $ref("restoreResponseSchema") },
         },
@@ -62,24 +50,24 @@ async function recycleBinRouter(server: FastifyInstance) {
     });
 
     server.route({
-        method: "POST",
-        url: "/permanently-delete",
+        method: "DELETE",
+        url: "/items/:itemType/:itemId",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            body: $ref("permanentlyDeleteBodySchema"),
+            params: $ref("itemParamsSchema"),
             response: { 200: $ref("permanentlyDeleteResponseSchema") },
         },
         handler: permanentlyDeleteHandler,
     });
 
     server.route({
-        method: "POST",
-        url: "/empty",
+        method: "DELETE",
+        url: "/items",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            body: $ref("emptyBodySchema"),
+            querystring: $ref("emptyQuerySchema"),
             response: { 200: $ref("emptyResponseSchema") },
         },
         handler: emptyRecycleBinHandler,
@@ -87,12 +75,12 @@ async function recycleBinRouter(server: FastifyInstance) {
 
     server.route({
         method: "POST",
-        url: "/purge-expired",
+        url: "/purge",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            body: $ref("purgeExpiredBodySchema"),
-            response: { 200: $ref("purgeExpiredResponseSchema") },
+            body: $ref("purgeBodySchema"),
+            response: { 200: $ref("purgeResponseSchema") },
         },
         handler: purgeExpiredHandler,
     });
