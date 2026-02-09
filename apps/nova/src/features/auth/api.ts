@@ -217,7 +217,11 @@ export const signInWithUsername = async (username: string, password: string) => 
 };
 
 export const signOut = async () => {
-    await authClient.signOut();
+    const result = (await authClient.signOut()) as BetterAuthResult;
+
+    if (result?.error) {
+        throw new Error(result.error.message ?? "Failed to sign out");
+    }
 };
 
 export const getAuthInfo = async () => {

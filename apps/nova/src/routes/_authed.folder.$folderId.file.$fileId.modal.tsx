@@ -180,6 +180,7 @@ function FileModalRoute() {
                         <div className="h-full">
                             <PreviewPane
                                 fileRouteId={fileId}
+                                fileName={detailsQuery.data.name}
                                 fileType={detailsQuery.data.fileType}
                                 fileAccess={detailsQuery.data.fileAccess}
                             />

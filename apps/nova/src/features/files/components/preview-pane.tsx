@@ -9,6 +9,7 @@ import { ViewToolbar } from "./view-toolbar";
 
 type PreviewPaneProps = {
     fileRouteId: string;
+    fileName?: string;
     fileType: string;
     fileAccess?: "PRIVATE" | "PROTECTED" | "PUBLIC";
     readToken?: string;
@@ -56,19 +57,27 @@ const isVideoFile = (fileType: string, fileRouteId: string) => {
     return videoExtensions.has(getLowercaseExtension(fileRouteId));
 };
 
-export function PreviewPane({ fileRouteId, fileType, fileAccess, readToken }: PreviewPaneProps) {
+export function PreviewPane({ fileRouteId, fileName, fileType, fileAccess, readToken }: PreviewPaneProps) {
     const normalizedFileType = typeof fileType === "string" ? fileType.toLowerCase() : "";
+    const resolvedFileName = fileName ?? fileRouteId;
 
     if (normalizedFileType.startsWith("image/")) {
-        return <ImagePreviewPane fileRouteId={fileRouteId} readToken={readToken} />;
+        return <ImagePreviewPane fileRouteId={fileRouteId} fileName={resolvedFileName} readToken={readToken} />;
     }
 
     if (isVideoFile(normalizedFileType, fileRouteId)) {
-        return <VideoPreviewPane fileRouteId={fileRouteId} readToken={readToken} />;
+        return <VideoPreviewPane fileRouteId={fileRouteId} fileName={resolvedFileName} readToken={readToken} />;
     }
 
     if (isOfficeFile(normalizedFileType, fileRouteId)) {
-        return <OfficePreviewPane fileRouteId={fileRouteId} readToken={readToken} fileAccess={fileAccess} />;
+        return (
+            <OfficePreviewPane
+                fileRouteId={fileRouteId}
+                fileName={resolvedFileName}
+                readToken={readToken}
+                fileAccess={fileAccess}
+            />
+        );
     }
 
     return (
@@ -83,13 +92,29 @@ export function PreviewPane({ fileRouteId, fileType, fileAccess, readToken }: Pr
     );
 }
 
-function ImagePreviewPane({ fileRouteId, readToken }: { fileRouteId: string; readToken?: string }) {
+function ImagePreviewPane({
+    fileRouteId,
+    fileName,
+    readToken,
+}: {
+    fileRouteId: string;
+    fileName: string;
+    readToken?: string;
+}) {
     const source = buildFileContentUrl(fileRouteId, readToken);
 
-    return <ImageViewer src={source} fileName={fileRouteId} />;
+    return <ImageViewer src={source} fileName={fileName} />;
 }
 
-function VideoPreviewPane({ fileRouteId, readToken }: { fileRouteId: string; readToken?: string }) {
+function VideoPreviewPane({
+    fileRouteId,
+    fileName,
+    readToken,
+}: {
+    fileRouteId: string;
+    fileName: string;
+    readToken?: string;
+}) {
     const source = buildFileContentUrl(fileRouteId, readToken);
 
     return (
@@ -98,17 +123,19 @@ function VideoPreviewPane({ fileRouteId, readToken }: { fileRouteId: string; rea
                 <track kind="captions" />
                 Your browser does not support video playback.
             </video>
-            <ViewToolbar downloadUrl={source} fileName={fileRouteId} />
+            <ViewToolbar downloadUrl={source} fileName={fileName} />
         </div>
     );
 }
 
 function OfficePreviewPane({
     fileRouteId,
+    fileName,
     readToken,
     fileAccess,
 }: {
     fileRouteId: string;
+    fileName: string;
     readToken?: string;
     fileAccess?: "PRIVATE" | "PROTECTED" | "PUBLIC";
 }) {
@@ -147,7 +174,7 @@ function OfficePreviewPane({
                     <p className="text-text-muted text-sm">
                         This document needs a public or tokenized URL for Office Online rendering.
                     </p>
-                    <ViewToolbar downloadUrl={source} fileName={fileRouteId} />
+                    <ViewToolbar downloadUrl={source} fileName={fileName} />
                 </div>
             </div>
         );
@@ -158,7 +185,7 @@ function OfficePreviewPane({
     return (
         <div className="preview-shell">
             <iframe src={officeSource} title="Office File Preview" />
-            <ViewToolbar downloadUrl={source} fileName={fileRouteId} />
+            <ViewToolbar downloadUrl={source} fileName={fileName} />
         </div>
     );
 }

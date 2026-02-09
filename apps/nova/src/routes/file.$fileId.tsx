@@ -193,6 +193,7 @@ function FilePage() {
                     <div className="border-border bg-surface h-[calc(100vh-8rem)] overflow-hidden rounded-xl border">
                         <PreviewPane
                             fileRouteId={data.fileRouteId}
+                            fileName={data.file.name}
                             fileType={data.file.fileType}
                             fileAccess={data.file.fileAccess}
                             readToken={data.readToken}
