@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import sharp from "sharp";
 
 import { fileReadTokens } from "@/db/schema/auth";
-import { files } from "@/db/schema/storage";
+import { files, folders } from "@/db/schema/storage";
 import { users } from "@/db/schema/users";
 import { env } from "@/env/env";
 
@@ -17,6 +17,7 @@ import type {
     GetFileQuerystring,
     GetThumbnailParams,
     GetThumbnailQuerystring,
+    MoveFileBody,
     PurgeDeletedBody,
 } from "./fs.schemas";
 
@@ -61,7 +62,7 @@ const ensureFileAccess = async (
     server: FastifyInstance,
     request: FastifyRequest,
     reply: FastifyReply,
-    file: typeof files.$inferSelect,
+    file: Pick<typeof files.$inferSelect, "id" | "ownerId" | "fileAccess">,
 ) => {
     if (file.fileAccess === "PUBLIC") {
         return true;
@@ -93,7 +94,17 @@ export async function getDetailsHandler(
     const fileId = request.query.fileId;
 
     const [file] = await this.db
-        .select()
+        .select({
+            id: files.id,
+            fileName: files.fileName,
+            ownerId: files.ownerId,
+            parentId: files.parentId,
+            fileType: files.fileType,
+            fileSize: files.fileSize,
+            fileAccess: files.fileAccess,
+            createdAt: files.createdAt,
+            updatedAt: files.updatedAt,
+        })
         .from(files)
         .where(and(eq(files.id, fileId), isNull(files.deletedAt)))
         .limit(1);
@@ -106,14 +117,32 @@ export async function getDetailsHandler(
         return reply;
     }
 
+    const [owner] = await this.db
+        .select({ username: users.username })
+        .from(users)
+        .where(eq(users.id, file.ownerId))
+        .limit(1);
+
+    if (!owner) {
+        return reply.code(404).send({ message: "User not found" });
+    }
+
     return reply.code(200).send({
         id: fileId,
         name: file.fileName,
         ownerId: file.ownerId,
+        ownerUsername: owner.username,
         parentId: file.parentId,
         fileType: file.fileType,
+        type: file.fileType,
+        fileSize: file.fileSize,
+        size: file.fileSize,
+        fileAccess: file.fileAccess,
+        fileAccessPermission: file.fileAccess,
         createdAt: file.createdAt,
+        uploadedAt: file.createdAt,
         updatedAt: file.updatedAt,
+        editedAt: file.updatedAt,
     });
 }
 
@@ -239,6 +268,65 @@ export async function deleteFileHandler(
     }
 
     return reply.code(200).send({ status: "success", message: "File deletion scheduled" });
+}
+
+export async function moveFileHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Body: MoveFileBody }>,
+    reply: FastifyReply,
+) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const { fileId, destinationFolderId } = request.body;
+
+    const [fileDetails] = await this.db
+        .select({ id: files.id, ownerId: files.ownerId, parentId: files.parentId })
+        .from(files)
+        .where(and(eq(files.id, fileId), isNull(files.deletedAt)))
+        .limit(1);
+
+    if (!fileDetails) {
+        return reply.code(404).send({ message: "File not found" });
+    }
+
+    if (fileDetails.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to edit this file" });
+    }
+
+    const [destinationFolder] = await this.db
+        .select({ id: folders.id, ownerId: folders.ownerId })
+        .from(folders)
+        .where(and(eq(folders.id, destinationFolderId), isNull(folders.deletedAt)))
+        .limit(1);
+
+    if (!destinationFolder) {
+        return reply.code(404).send({ message: "Destination folder not found" });
+    }
+
+    if (destinationFolder.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to move files to this folder" });
+    }
+
+    if (fileDetails.parentId === destinationFolderId) {
+        return reply.code(200).send({
+            status: "success",
+            message: "File already in destination folder",
+            fileId,
+            parentId: destinationFolderId,
+        });
+    }
+
+    await this.db.update(files).set({ parentId: destinationFolderId }).where(eq(files.id, fileId));
+
+    return reply.code(200).send({
+        status: "success",
+        message: "File moved successfully",
+        fileId,
+        parentId: destinationFolderId,
+    });
 }
 
 export async function purgeDeletedHandler(

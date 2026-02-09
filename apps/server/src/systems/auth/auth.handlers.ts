@@ -1,5 +1,5 @@
 import * as argon2 from "argon2";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { accessRules } from "@/db/schema/access-rules";
@@ -12,6 +12,7 @@ import type {
     CreateReadTokenInput,
     CreateUploadTokenInput,
     CreateUserInput,
+    UpdateAccessRuleInput,
 } from "./auth.schemas";
 import { createUserWithRootFolder } from "./auth.utils";
 
@@ -84,6 +85,8 @@ export async function infoHandler(this: FastifyInstance, request: FastifyRequest
         return reply.code(500).send({ message: "Something went wrong. Please try again." });
     }
 
+    reply.header("Cache-Control", "no-store, private");
+
     return reply.code(200).send({
         id: user.id,
         username: user.username,
@@ -91,6 +94,74 @@ export async function infoHandler(this: FastifyInstance, request: FastifyRequest
         lastName: user.lastName,
         role: user.role,
         rootFolderId: user.rootFolderId,
+    });
+}
+
+export async function listAccessRulesHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const rules = await this.db
+        .select({
+            id: accessRules.id,
+            name: accessRules.name,
+            type: accessRules.type,
+            method: accessRules.method,
+            match: accessRules.match,
+            createdAt: accessRules.createdAt,
+            updatedAt: accessRules.updatedAt,
+        })
+        .from(accessRules)
+        .where(eq(accessRules.ownerId, userId))
+        .orderBy(desc(accessRules.createdAt));
+
+    return reply.code(200).send({
+        accessRules: rules.map((rule) => ({
+            id: rule.id,
+            name: rule.name,
+            type: rule.type,
+            method: rule.method,
+            match: rule.match,
+            createdAt: rule.createdAt.toISOString(),
+            updatedAt: rule.updatedAt.toISOString(),
+        })),
+    });
+}
+
+export async function listUploadTokensHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const tokens = await this.db
+        .select({
+            id: uploadTokens.id,
+            description: uploadTokens.description,
+            folderId: uploadTokens.folderId,
+            fileAccess: uploadTokens.fileAccess,
+            accessControlRuleIds: uploadTokens.accessControlRuleIds,
+            expiresAt: uploadTokens.expiresAt,
+            createdAt: uploadTokens.createdAt,
+            updatedAt: uploadTokens.updatedAt,
+        })
+        .from(uploadTokens)
+        .where(eq(uploadTokens.userId, userId))
+        .orderBy(desc(uploadTokens.createdAt));
+
+    return reply.code(200).send({
+        uploadTokens: tokens.map((token) => ({
+            id: token.id,
+            description: token.description,
+            folderId: token.folderId,
+            fileAccess: token.fileAccess,
+            accessControlRuleIds: token.accessControlRuleIds ?? [],
+            expiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
+            createdAt: token.createdAt.toISOString(),
+            updatedAt: token.updatedAt.toISOString(),
+        })),
     });
 }
 
@@ -116,6 +187,41 @@ export async function createAccessRuleHandler(
     return reply.code(200).send({ status: "success", message: "Access Rule created" });
 }
 
+export async function updateAccessRuleHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Body: UpdateAccessRuleInput }>,
+    reply: FastifyReply,
+) {
+    const { id, name, type, method, match } = request.body;
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const [existing] = await this.db
+        .select({ id: accessRules.id })
+        .from(accessRules)
+        .where(and(eq(accessRules.id, id), eq(accessRules.ownerId, userId)))
+        .limit(1);
+
+    if (!existing) {
+        return reply.code(404).send({ message: "Access rule not found" });
+    }
+
+    await this.db
+        .update(accessRules)
+        .set({
+            name,
+            type,
+            method,
+            match,
+            updatedAt: new Date(),
+        })
+        .where(eq(accessRules.id, id));
+
+    return reply.code(200).send({ status: "success", message: "Access Rule updated" });
+}
+
 export async function createUploadTokenHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Body: CreateUploadTokenInput }>,
@@ -131,7 +237,7 @@ export async function createUploadTokenHandler(
     const [folder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId })
         .from(folders)
-        .where(eq(folders.id, request.body.folderId))
+        .where(and(eq(folders.id, request.body.folderId), isNull(folders.deletedAt)))
         .limit(1);
 
     if (!user || !folder) {

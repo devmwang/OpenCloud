@@ -1,7 +1,11 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "globalDependencies": ["**/.env.*local"],
-    "globalEnv": ["NEXT_PUBLIC_OPENCLOUD_SERVER_URL"],
+    "globalEnv": [
+        "NEXT_PUBLIC_OPENCLOUD_SERVER_URL",
+        "NEXT_PUBLIC_FILE_PURGE_RETENTION_DAYS",
+        "ENABLE_EXPERIMENTAL_COREPACK"
+    ],
     "tasks": {
         "build": {
             "dependsOn": ["^build"]

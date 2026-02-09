@@ -1,13 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
-import {
-    deleteFileHandler,
-    getDetailsHandler,
-    getFileHandler,
-    getThumbnailHandler,
-    purgeDeletedHandler,
-} from "./fs.handlers";
+import { getDetailsHandler, getFileHandler, getThumbnailHandler, moveFileHandler } from "./fs.handlers";
 import { $ref } from "./fs.schemas";
 
 async function fileSystemRouter(server: FastifyInstance) {
@@ -45,27 +39,15 @@ async function fileSystemRouter(server: FastifyInstance) {
     });
 
     server.route({
-        method: "DELETE",
-        url: "/delete",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
-        schema: {
-            querystring: $ref("deleteFileQuerySchema"),
-            response: { 200: $ref("deleteFileResponseSchema") },
-        },
-        handler: deleteFileHandler,
-    });
-
-    server.route({
         method: "POST",
-        url: "/purge-deleted",
+        url: "/move",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            body: $ref("purgeDeletedBodySchema"),
-            response: { 200: $ref("purgeDeletedResponseSchema") },
+            body: $ref("moveFileBodySchema"),
+            response: { 200: $ref("moveFileResponseSchema") },
         },
-        handler: purgeDeletedHandler,
+        handler: moveFileHandler,
     });
 }
 

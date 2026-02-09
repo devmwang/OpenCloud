@@ -16,6 +16,8 @@ import folderRouter from "@/systems/folder/folder.routes";
 import { folderSchemas } from "@/systems/folder/folder.schemas";
 import fileSystemRouter from "@/systems/fs/fs.routes";
 import { fsSchemas } from "@/systems/fs/fs.schemas";
+import recycleBinRouter from "@/systems/recycle-bin/recycle-bin.routes";
+import { recycleBinSchemas } from "@/systems/recycle-bin/recycle-bin.schemas";
 import uploadRouter from "@/systems/upload/upload.routes";
 import { uploadSchemas } from "@/systems/upload/upload.schemas";
 import accessControlPlugin from "@/utils/access-control";
@@ -45,6 +47,7 @@ void server.register(dbPlugin);
 void server.register(FastifyCORS, {
     origin: [/localhost(?::\d{1,5})?/, /127\.0\.0\.1(?::\d{1,5})?/, env.OPENCLOUD_WEBUI_URL],
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 void server.register(betterAuthPlugin);
 void server.register(authenticationPlugin);
@@ -82,7 +85,7 @@ void server.register(FastifyStatic, {
 });
 
 // Register Route Schemas
-for (const schema of [...authSchemas, ...uploadSchemas, ...fsSchemas, ...folderSchemas]) {
+for (const schema of [...authSchemas, ...uploadSchemas, ...fsSchemas, ...folderSchemas, ...recycleBinSchemas]) {
     server.addSchema(schema);
 }
 
@@ -91,6 +94,7 @@ void server.register(authRouter, { prefix: "/v1/auth" });
 void server.register(uploadRouter, { prefix: "/v1/upload" });
 void server.register(fileSystemRouter, { prefix: "/v1/files" });
 void server.register(folderRouter, { prefix: "/v1/folder" });
+void server.register(recycleBinRouter, { prefix: "/v1/recycle-bin" });
 
 // Server Health Check
 server.get("/v1/health", async () => {

@@ -70,6 +70,13 @@ const getFolderDetailsSchema = z.object({
     id: z.string(),
     name: z.string(),
     type: z.string(),
+    ownerId: z.string().optional(),
+    ownerUsername: z.string().optional(),
+    createdAt: z.string().datetime().optional(),
+    updatedAt: z.string().datetime().optional(),
+    editedAt: z.string().datetime().optional(),
+    folderAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
+    fileAccessPermission: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
     hierarchy: z
         .object({
             id: z.string(),

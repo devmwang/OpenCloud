@@ -14,10 +14,18 @@ const getDetailsResponseSchema = z.object({
     id: z.string(),
     name: z.string(),
     ownerId: z.string(),
+    ownerUsername: z.string(),
     parentId: z.string(),
     fileType: z.string(),
+    type: z.string(),
+    fileSize: z.number().int().nullable(),
+    size: z.number().int().nullable(),
+    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    fileAccessPermission: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
     createdAt: z.string().datetime(),
+    uploadedAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
+    editedAt: z.string().datetime(),
 });
 
 const getFileParamsSchema = z.object({
@@ -54,6 +62,24 @@ const deleteFileResponseSchema = z.object({
     message: z.string(),
 });
 
+const moveFileBodySchema = z.object({
+    fileId: z.string({
+        required_error: "File ID is required",
+        invalid_type_error: "File ID must be a string",
+    }),
+    destinationFolderId: z.string({
+        required_error: "Destination folder ID is required",
+        invalid_type_error: "Destination folder ID must be a string",
+    }),
+});
+
+const moveFileResponseSchema = z.object({
+    status: z.string(),
+    message: z.string(),
+    fileId: z.string(),
+    parentId: z.string(),
+});
+
 const purgeDeletedBodySchema = z
     .object({
         olderThanDays: z.coerce.number().int().min(1).optional(),
@@ -71,6 +97,7 @@ export type GetFileQuerystring = z.infer<typeof getFileQuerySchema>;
 export type GetThumbnailParams = z.infer<typeof getThumbnailParamsSchema>;
 export type GetThumbnailQuerystring = z.infer<typeof getThumbnailQuerySchema>;
 export type DeleteFileQuerystring = z.infer<typeof deleteFileQuerySchema>;
+export type MoveFileBody = z.infer<typeof moveFileBodySchema>;
 export type PurgeDeletedBody = z.infer<typeof purgeDeletedBodySchema>;
 
 export const { schemas: fsSchemas, $ref } = buildJsonSchemas(
@@ -83,6 +110,8 @@ export const { schemas: fsSchemas, $ref } = buildJsonSchemas(
         getThumbnailQuerySchema,
         deleteFileQuerySchema,
         deleteFileResponseSchema,
+        moveFileBodySchema,
+        moveFileResponseSchema,
         purgeDeletedBodySchema,
         purgeDeletedResponseSchema,
     },

@@ -1,5 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
-import { bigint, foreignKey, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, foreignKey, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 import { fileAccessEnum, folderTypeEnum } from "./enums";
 
@@ -11,8 +11,10 @@ export const folders = pgTable(
             .$defaultFn(() => createId()),
         folderName: text("folderName").notNull(),
         ownerId: text("ownerId").notNull(),
+        folderAccess: fileAccessEnum("folderAccess").notNull().default("PRIVATE"),
         type: folderTypeEnum("type").notNull().default("STANDARD"),
         parentFolderId: text("parentFolderId"),
+        deletedAt: timestamp("deletedAt", { mode: "date", precision: 3 }),
         createdAt: timestamp("createdAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
         updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
     },
@@ -26,7 +28,7 @@ export const folders = pgTable(
             .onUpdate("cascade")
             .onDelete("set null"),
         parentFolderIdIdx: index("Folders_parentFolderId_idx").on(table.parentFolderId),
-        ownerParentNameUnique: uniqueIndex("Folders_owner_parent_name_unique").on(
+        ownerParentNameIdx: index("Folders_owner_parent_name_idx").on(
             table.ownerId,
             table.parentFolderId,
             table.folderName,

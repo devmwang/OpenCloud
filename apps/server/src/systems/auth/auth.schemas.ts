@@ -48,6 +48,27 @@ const createAccessRuleSchema = z.object({
         }),
 });
 
+const updateAccessRuleSchema = z.object({
+    id: z.string({
+        required_error: "Access rule ID is required",
+        invalid_type_error: "Access rule ID must be a string",
+    }),
+    name: z.string({
+        required_error: "Name is required",
+        invalid_type_error: "Name must be a string",
+    }),
+    type: z.enum(["ALLOW", "DISALLOW"]),
+    method: z.enum(["IP_ADDRESS"]),
+    match: z
+        .string({
+            required_error: "String to match is required",
+            invalid_type_error: "String to match must be a string",
+        })
+        .refine((value) => ipaddr.isValid(value) || ipaddr.isValidCIDR(value), {
+            message: "Match must be a valid IP address or CIDR range",
+        }),
+});
+
 const createUploadTokenSchema = z.object({
     description: z.string().optional(),
     folderId: z.string({
@@ -78,12 +99,42 @@ const createReadTokenResponseSchema = z.object({
     expiresAt: z.string().datetime(),
 });
 
+const accessRuleListItemSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(["ALLOW", "DISALLOW"]),
+    method: z.enum(["IP_ADDRESS"]),
+    match: z.string(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+});
+
+const listAccessRulesResponseSchema = z.object({
+    accessRules: z.array(accessRuleListItemSchema),
+});
+
+const uploadTokenListItemSchema = z.object({
+    id: z.string(),
+    description: z.string().nullable(),
+    folderId: z.string(),
+    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    accessControlRuleIds: z.array(z.string()),
+    expiresAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+});
+
+const listUploadTokensResponseSchema = z.object({
+    uploadTokens: z.array(uploadTokenListItemSchema),
+});
+
 const csrfTokenResponseSchema = z.object({
     csrfToken: z.string(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleSchema>;
+export type UpdateAccessRuleInput = z.infer<typeof updateAccessRuleSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenSchema>;
 export type CreateReadTokenInput = z.infer<typeof createReadTokenSchema>;
 
@@ -92,10 +143,13 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         createUserSchema,
         userInfoResponseSchema,
         createAccessRuleSchema,
+        updateAccessRuleSchema,
         createUploadTokenSchema,
         createUploadTokenResponseSchema,
         createReadTokenSchema,
         createReadTokenResponseSchema,
+        listAccessRulesResponseSchema,
+        listUploadTokensResponseSchema,
         csrfTokenResponseSchema,
     },
     { $id: "Auth" },

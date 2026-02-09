@@ -10,7 +10,11 @@ declare module "fastify" {
 }
 
 const dbPlugin: FastifyPluginAsync = fp(async (server) => {
-    const { db, pool } = createDatabase();
+    const { db, pool } = createDatabase({
+        onPoolError: (error) => {
+            server.log.error({ err: error }, "Postgres pool client error");
+        },
+    });
 
     server.decorate("db", db);
 
