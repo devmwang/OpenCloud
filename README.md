@@ -12,21 +12,26 @@ Clone the repository and install dependencies. Copy the `.env.example` file to `
 
 Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Run the database migrations with `pnpm --filter server db:migrate`. Then, run the server using `pnpm run start --filter server`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run the server in the background (with `pm2 start "pnpm run start --filter server"`). The server will be available at `localhost:8080`.
 
-### WebUI Client Only
+### Nova Client
 
 There are two options: Automatic hosting using Vercel or local self-hosting.
 
 #### Option 1: Automatic Hosting with Vercel
 
-Fork the repository and create a new project on [Vercel](https://vercel.com). Connect the project to your forked repository. Copy the `.env.example` file into the deployment configuration panel and fill in the required values. Then, deploy the project. The web client will be available at the domain you select in the Vercel control panel. Ensure that the domain you use is listed in the `OPENCLOUD_WEBUI_URL` environment variable in the server configuration for CORS to work correctly on the server.
+Create a Vercel project with root directory set to `apps/nova`. Use the Nitro build preset. Configure these Vercel environment variables:
+
+- `NEXT_PUBLIC_OPENCLOUD_SERVER_URL` (required): public URL of the OpenCloud API server.
+- `NEXT_PUBLIC_FILE_PURGE_RETENTION_DAYS` (optional): defaults to `30`.
+- `OPENCLOUD_WEBUI_URL` (recommended): public Nova URL for canonical metadata.
+
+Also configure the backend server so Nova can authenticate successfully:
+
+- `OPENCLOUD_WEBUI_URL` must include your deployed Nova origin for CORS and trusted origins.
+- `COOKIE_URL` must match your cookie domain strategy.
 
 #### Option 2: Local Self-Hosting
 
-Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Then, run WebUI using `pnpm run start --filter webui`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run WebUI in the background (with `pm2 start "pnpm run start --filter webui"`). WebUI will be available at `127.0.0.1:3000` (or `localhost:3000`).
-
-### Nova Client (TanStack Start) (Preview)
-
-Nova is the new-generation OpenCloud frontend under `apps/nova`. For local development, run `pnpm run dev -- --filter=nova` (Vite default `localhost:5173`). For production preview, run `pnpm run build -- --filter=nova` then `pnpm run start -- --filter=nova`.
+For local development, run `pnpm run dev -- --filter=nova` (Vite default `localhost:5173`). For production preview, run `pnpm run build -- --filter=nova` then `pnpm run start -- --filter=nova`.
 
 ## OpenCloud System Architecture
 
