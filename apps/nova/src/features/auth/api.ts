@@ -209,7 +209,9 @@ export const signOut = async () => {
 };
 
 export const getAuthInfo = async () => {
-    return getJson("/v1/auth/info", authInfoSchema);
+    return getJson("/v1/auth/info", authInfoSchema, {
+        forwardServerCookies: true,
+    });
 };
 
 export const createUser = async (input: CreateUserInput) => {

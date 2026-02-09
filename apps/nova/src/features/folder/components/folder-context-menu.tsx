@@ -8,21 +8,26 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
+import { env } from "@/env";
 
 type FolderContextMenuProps = {
     folderId: string;
+    folderName: string;
     onDelete: (folderId: string) => Promise<void>;
     onRefresh: () => void;
     children: React.ReactNode;
 };
 
-export function FolderContextMenu({ folderId, onDelete, onRefresh, children }: FolderContextMenuProps) {
+export function FolderContextMenu({ folderId, folderName, onDelete, onRefresh, children }: FolderContextMenuProps) {
     const router = useRouter();
     const { addToast } = useToast();
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     const handleOpen = () => {
         void router.navigate({ to: "/folder/$folderId", params: { folderId } });
@@ -47,13 +52,7 @@ export function FolderContextMenu({ folderId, onDelete, onRefresh, children }: F
                     Open in New Tab
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem
-                    icon={<TrashIcon />}
-                    variant="danger"
-                    onClick={() => {
-                        void onDelete(folderId).catch(() => {});
-                    }}
-                >
+                <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => setDeleteOpen(true)}>
                     Delete
                 </ContextMenuItem>
                 <ContextMenuSeparator />
@@ -75,6 +74,16 @@ export function FolderContextMenu({ folderId, onDelete, onRefresh, children }: F
                     </ContextMenuItem>
                 </Tooltip>
             </ContextMenu>
+
+            <ConfirmDialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title="Move to recycle bin?"
+                description={`"${folderName}" will be deleted in ${env.NEXT_PUBLIC_FILE_PURGE_RETENTION_DAYS} days.`}
+                confirmLabel="Delete"
+                variant="danger"
+                onConfirm={() => onDelete(folderId)}
+            />
         </>
     );
 }

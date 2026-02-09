@@ -9,10 +9,13 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
+import { env } from "@/env";
 import { toFileRouteId } from "@/lib/file-id";
 
 type FileContextMenuProps = {
@@ -26,6 +29,7 @@ type FileContextMenuProps = {
 export function FileContextMenu({ fileId, fileName, folderId, onDelete, children }: FileContextMenuProps) {
     const router = useRouter();
     const { addToast } = useToast();
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     const fileRouteId = toFileRouteId(fileId, fileName);
 
@@ -73,13 +77,7 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
                     Open in New Tab
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem
-                    icon={<TrashIcon />}
-                    variant="danger"
-                    onClick={() => {
-                        void onDelete(fileId).catch(() => {});
-                    }}
-                >
+                <ContextMenuItem icon={<TrashIcon />} variant="danger" onClick={() => setDeleteOpen(true)}>
                     Delete
                 </ContextMenuItem>
                 <ContextMenuSeparator />
@@ -101,6 +99,16 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
                     </ContextMenuItem>
                 </Tooltip>
             </ContextMenu>
+
+            <ConfirmDialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title="Move to recycle bin?"
+                description={`"${fileName}" will be deleted in ${env.NEXT_PUBLIC_FILE_PURGE_RETENTION_DAYS} days.`}
+                confirmLabel="Delete"
+                variant="danger"
+                onConfirm={() => onDelete(fileId)}
+            />
         </>
     );
 }

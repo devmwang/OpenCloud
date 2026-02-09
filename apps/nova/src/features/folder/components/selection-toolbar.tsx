@@ -1,7 +1,10 @@
 import { ArrowDownTrayIcon, InformationCircleIcon, LinkIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { env } from "@/env";
 import { buildFileContentUrl } from "@/features/files/api";
 import { useSelection, type SelectionItem } from "@/features/folder/hooks/use-selection";
 import { toFileRouteId } from "@/lib/file-id";
@@ -15,6 +18,7 @@ type SelectionToolbarProps = {
 export function SelectionToolbar({ onDeleteFiles, onDeleteFolders, onShowInfo }: SelectionToolbarProps) {
     const { selectionCount, selectedFiles, selectedFolders, clearSelection, selected } = useSelection();
     const { addToast } = useToast();
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     const isSingleFile = selectedFiles.length === 1 && selectedFolders.length === 0;
     const isSingleItem = selectionCount === 1;
@@ -63,6 +67,13 @@ export function SelectionToolbar({ onDeleteFiles, onDeleteFolders, onShowInfo }:
         clearSelection();
     };
 
+    const retentionDays = env.NEXT_PUBLIC_FILE_PURGE_RETENTION_DAYS;
+
+    const deleteDescription =
+        selectionCount === 1
+            ? `"${singleItem?.name}" will be deleted in ${retentionDays} days.`
+            : `${selectionCount} items will be deleted in ${retentionDays} days.`;
+
     return (
         <div className="flex items-center gap-3">
             <span className="text-text-muted text-sm">{selectionCount} selected</span>
@@ -95,7 +106,7 @@ export function SelectionToolbar({ onDeleteFiles, onDeleteFolders, onShowInfo }:
             <Button
                 variant="danger"
                 size="sm"
-                onClick={() => void handleDelete()}
+                onClick={() => setDeleteOpen(true)}
                 aria-label="Move selected to recycle bin"
             >
                 <TrashIcon className="h-4.5 w-4.5" />
@@ -105,6 +116,16 @@ export function SelectionToolbar({ onDeleteFiles, onDeleteFolders, onShowInfo }:
             <Button variant="ghost" size="sm" onClick={clearSelection} aria-label="Clear selection">
                 <XMarkIcon className="h-4.5 w-4.5" />
             </Button>
+
+            <ConfirmDialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title="Move to recycle bin?"
+                description={deleteDescription}
+                confirmLabel="Delete"
+                variant="danger"
+                onConfirm={handleDelete}
+            />
         </div>
     );
 }
