@@ -31,10 +31,9 @@ import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_authed/admin")({
     beforeLoad: async ({ context }) => {
-        const authInfo = await context.queryClient.ensureQueryData({
-            queryKey: queryKeys.authInfo,
-            queryFn: getAuthInfo,
-        });
+        // Always fetch fresh auth info here so role checks cannot rely on stale cache data.
+        const authInfo = await getAuthInfo();
+        context.queryClient.setQueryData(queryKeys.authInfo, authInfo);
 
         if (authInfo.role !== "ADMIN") {
             throw redirect({

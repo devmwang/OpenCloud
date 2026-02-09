@@ -5,6 +5,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { getSessionSafe } from "@/features/auth/api";
 import { buildFileContentUrl, getFileDetails, normalizeFileId, type FileDetails } from "@/features/files/api";
 import { PreviewPane } from "@/features/files/components/preview-pane";
@@ -105,6 +106,7 @@ function FilePage() {
     const data = Route.useLoaderData();
 
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
     const deleteMutation = useMutation({
         mutationFn: () => moveToRecycleBin({ itemType: "FILE", itemId: data.normalizedFileId }),
@@ -165,7 +167,7 @@ function FilePage() {
                                 variant="danger"
                                 size="sm"
                                 loading={deleteMutation.isPending}
-                                onClick={() => void handleDelete()}
+                                onClick={() => setDeleteConfirmOpen(true)}
                             >
                                 <TrashIcon className="h-4.5 w-4.5" />
                                 Delete
@@ -198,6 +200,18 @@ function FilePage() {
                     </div>
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={deleteConfirmOpen}
+                onOpenChange={setDeleteConfirmOpen}
+                title="Move File to Recycle Bin"
+                description={`Move "${data.file.name}" to Recycle Bin?`}
+                confirmLabel="Move to Recycle Bin"
+                variant="danger"
+                onConfirm={async () => {
+                    await handleDelete();
+                }}
+            />
         </main>
     );
 }
