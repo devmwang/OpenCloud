@@ -11,6 +11,7 @@ import {
     listAccessRulesHandler,
     listUploadTokensHandler,
     updateAccessRuleHandler,
+    updateUploadTokenHandler,
 } from "./auth.handlers";
 import { $ref } from "./auth.schemas";
 
@@ -101,6 +102,17 @@ async function authRouter(server: FastifyInstance) {
             response: { 200: $ref("createUploadTokenResponseSchema") },
         },
         handler: createUploadTokenHandler,
+    });
+
+    server.route({
+        method: "POST",
+        url: "/update-upload-token",
+        onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("updateUploadTokenSchema"),
+        },
+        handler: updateUploadTokenHandler,
     });
 
     server.route({

@@ -80,6 +80,21 @@ const createUploadTokenSchema = z.object({
     expiresAt: z.string().datetime().optional(),
 });
 
+const updateUploadTokenSchema = z.object({
+    id: z.string({
+        required_error: "Upload token ID is required",
+        invalid_type_error: "Upload token ID must be a string",
+    }),
+    description: z.string().optional(),
+    folderId: z.string({
+        required_error: "Parent folder ID is required",
+        invalid_type_error: "Parent folder ID must be a string",
+    }),
+    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    accessControlRuleIds: z.array(z.string()),
+    expiresAt: z.string().datetime().nullable(),
+});
+
 const createUploadTokenResponseSchema = z.object({
     uploadToken: z.string(),
     expiresAt: z.string().datetime(),
@@ -136,6 +151,7 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleSchema>;
 export type UpdateAccessRuleInput = z.infer<typeof updateAccessRuleSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenSchema>;
+export type UpdateUploadTokenInput = z.infer<typeof updateUploadTokenSchema>;
 export type CreateReadTokenInput = z.infer<typeof createReadTokenSchema>;
 
 export const { schemas: authSchemas, $ref } = buildJsonSchemas(
@@ -145,6 +161,7 @@ export const { schemas: authSchemas, $ref } = buildJsonSchemas(
         createAccessRuleSchema,
         updateAccessRuleSchema,
         createUploadTokenSchema,
+        updateUploadTokenSchema,
         createUploadTokenResponseSchema,
         createReadTokenSchema,
         createReadTokenResponseSchema,

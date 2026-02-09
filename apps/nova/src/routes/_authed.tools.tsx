@@ -1,4 +1,12 @@
-import { ArrowUpTrayIcon, ClockIcon, KeyIcon, PlusIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
+import {
+    ArrowUpTrayIcon,
+    ClockIcon,
+    KeyIcon,
+    PencilIcon,
+    PlusIcon,
+    ShieldCheckIcon,
+    WrenchScrewdriverIcon,
+} from "@heroicons/react/24/outline";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
@@ -8,8 +16,19 @@ import { ErrorCard } from "@/components/shared/error-card";
 import { LoadingState } from "@/components/shared/loading-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input, Select } from "@/components/ui/input";
-import { createReadToken, createUploadToken, getOwnedUploadTokens } from "@/features/auth/api";
+import {
+    createAccessRule,
+    createReadToken,
+    createUploadToken,
+    getOwnedAccessRules,
+    getOwnedUploadTokens,
+    updateAccessRule,
+    updateUploadToken,
+    type AccessRuleSummary,
+    type UploadTokenSummary,
+} from "@/features/auth/api";
 import { uploadFileWithToken } from "@/features/upload/api";
 import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
@@ -27,6 +46,20 @@ const toIsoDatetime = (value: string) => {
     return parsedDate.toISOString();
 };
 
+const toLocalDatetimeValue = (value: string | null) => {
+    if (!value) {
+        return "";
+    }
+
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) {
+        return "";
+    }
+
+    const timezoneOffsetMs = parsedDate.getTimezoneOffset() * 60_000;
+    return new Date(parsedDate.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
+};
+
 const parseCsv = (value: string) => {
     return value
         .split(",")
@@ -40,6 +73,10 @@ export const Route = createFileRoute("/_authed/tools")({
 
 function ToolsPage() {
     const queryClient = useQueryClient();
+    const accessRulesQuery = useQuery({
+        queryKey: queryKeys.accessRules,
+        queryFn: getOwnedAccessRules,
+    });
     const uploadTokensQuery = useQuery({
         queryKey: queryKeys.uploadTokens,
         queryFn: getOwnedUploadTokens,
@@ -48,10 +85,76 @@ function ToolsPage() {
     const [uploadTokenResult, setUploadTokenResult] = useState<string | null>(null);
     const [readTokenResult, setReadTokenResult] = useState<string | null>(null);
     const [tokenUploadResult, setTokenUploadResult] = useState<string | null>(null);
+    const [accessRuleResult, setAccessRuleResult] = useState<string | null>(null);
 
     const [uploadTokenPending, setUploadTokenPending] = useState(false);
     const [readTokenPending, setReadTokenPending] = useState(false);
     const [tokenUploadPending, setTokenUploadPending] = useState(false);
+    const [accessRulePending, setAccessRulePending] = useState(false);
+
+    const [editingRule, setEditingRule] = useState<AccessRuleSummary | null>(null);
+    const [editRuleResult, setEditRuleResult] = useState<string | null>(null);
+    const [editRulePending, setEditRulePending] = useState(false);
+
+    const [editingToken, setEditingToken] = useState<UploadTokenSummary | null>(null);
+    const [editTokenResult, setEditTokenResult] = useState<string | null>(null);
+    const [editTokenPending, setEditTokenPending] = useState(false);
+
+    const handleCreateAccessRule = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setAccessRuleResult(null);
+        setAccessRulePending(true);
+
+        const formData = new FormData(event.currentTarget);
+
+        try {
+            const result = await createAccessRule({
+                name: String(formData.get("name") ?? ""),
+                type: String(formData.get("type") ?? "ALLOW") as "ALLOW" | "DISALLOW",
+                method: "IP_ADDRESS",
+                match: String(formData.get("match") ?? ""),
+            });
+
+            setAccessRuleResult(result.message);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.accessRules });
+            event.currentTarget.reset();
+        } catch (error) {
+            setAccessRuleResult(getErrorMessage(error));
+        } finally {
+            setAccessRulePending(false);
+        }
+    };
+
+    const handleUpdateAccessRule = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!editingRule) {
+            return;
+        }
+
+        setEditRuleResult(null);
+        setEditRulePending(true);
+
+        const formData = new FormData(event.currentTarget);
+
+        try {
+            const result = await updateAccessRule({
+                id: editingRule.id,
+                name: String(formData.get("name") ?? ""),
+                type: String(formData.get("type") ?? "ALLOW") as "ALLOW" | "DISALLOW",
+                method: "IP_ADDRESS",
+                match: String(formData.get("match") ?? ""),
+            });
+
+            setEditRuleResult(result.message);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.accessRules });
+            setEditingRule(null);
+            setEditRuleResult(null);
+        } catch (error) {
+            setEditRuleResult(getErrorMessage(error));
+        } finally {
+            setEditRulePending(false);
+        }
+    };
 
     const handleCreateUploadToken = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -77,6 +180,40 @@ function ToolsPage() {
             setUploadTokenResult(getErrorMessage(error));
         } finally {
             setUploadTokenPending(false);
+        }
+    };
+
+    const handleUpdateUploadToken = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!editingToken) {
+            return;
+        }
+
+        setEditTokenResult(null);
+        setEditTokenPending(true);
+
+        const formData = new FormData(event.currentTarget);
+
+        try {
+            const accessRuleIds = parseCsv(String(formData.get("accessControlRuleIds") ?? ""));
+
+            const result = await updateUploadToken({
+                id: editingToken.id,
+                folderId: String(formData.get("folderId") ?? ""),
+                fileAccess: String(formData.get("fileAccess") ?? "PROTECTED") as "PRIVATE" | "PROTECTED" | "PUBLIC",
+                description: String(formData.get("description") ?? "") || undefined,
+                accessControlRuleIds: accessRuleIds,
+                expiresAt: toIsoDatetime(String(formData.get("expiresAt") ?? "")) ?? null,
+            });
+
+            setEditTokenResult(result.message);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.uploadTokens });
+            setEditingToken(null);
+            setEditTokenResult(null);
+        } catch (error) {
+            setEditTokenResult(getErrorMessage(error));
+        } finally {
+            setEditTokenPending(false);
         }
     };
 
@@ -135,9 +272,87 @@ function ToolsPage() {
         <div>
             <PageHeader
                 title="Tools"
-                description="Upload/read tokens and token-based uploads"
+                description="Access rules, upload/read tokens, and token-based uploads"
                 icon={<WrenchScrewdriverIcon />}
             />
+
+            {/* Create Access Rule */}
+            <div className="border-border bg-surface mb-5 rounded-xl border p-5">
+                <form className="space-y-4" onSubmit={(event) => void handleCreateAccessRule(event)}>
+                    <div className="flex items-center gap-2.5">
+                        <ShieldCheckIcon className="text-accent h-6 w-6" />
+                        <h2 className="text-text text-base font-semibold">Create Access Rule</h2>
+                    </div>
+
+                    <Input name="name" label="Rule Name" required placeholder="e.g. Office Network" />
+                    <Select name="type" label="Rule Type" defaultValue="ALLOW">
+                        <option value="ALLOW">ALLOW</option>
+                        <option value="DISALLOW">DISALLOW</option>
+                    </Select>
+                    <Input name="match" label="IP or CIDR Match" required placeholder="203.0.113.0/24" />
+
+                    {accessRuleResult ? <ResultMessage message={accessRuleResult} /> : null}
+
+                    <Button type="submit" loading={accessRulePending}>
+                        <PlusIcon className="h-5 w-5" />
+                        Create Access Rule
+                    </Button>
+                </form>
+            </div>
+
+            {/* Access Rules List */}
+            <div className="border-border bg-surface mb-5 rounded-xl border p-5">
+                <div className="mb-4 flex items-center gap-2.5">
+                    <ShieldCheckIcon className="text-text-muted h-6 w-6" />
+                    <h2 className="text-text text-base font-semibold">Your Access Rules</h2>
+                </div>
+                <p className="text-text-muted mb-4 text-sm">Rules owned by the currently signed-in user.</p>
+
+                {accessRulesQuery.isPending ? <LoadingState message="Loading access rules..." /> : null}
+                {accessRulesQuery.error ? (
+                    <ErrorCard
+                        message={getErrorMessage(accessRulesQuery.error)}
+                        onRetry={() => void accessRulesQuery.refetch()}
+                    />
+                ) : null}
+
+                {accessRulesQuery.data && accessRulesQuery.data.length === 0 ? (
+                    <p className="text-text-dim py-7 text-center text-sm">No access rules found.</p>
+                ) : null}
+
+                {accessRulesQuery.data && accessRulesQuery.data.length > 0 ? (
+                    <div className="divide-border divide-y">
+                        {accessRulesQuery.data.map((rule) => (
+                            <div key={rule.id} className="flex items-center justify-between gap-5 py-4">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-text text-sm font-medium">{rule.name}</span>
+                                        <Badge variant={rule.type === "ALLOW" ? "success" : "danger"}>
+                                            {rule.type}
+                                        </Badge>
+                                    </div>
+                                    <code className="text-accent mt-1 block text-xs">{rule.match}</code>
+                                    <span className="text-text-dim mt-1 block text-sm">ID: {rule.id}</span>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-3">
+                                    <span className="text-text-dim text-sm">{rule.method}</span>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setEditRuleResult(null);
+                                            setEditingRule(rule);
+                                        }}
+                                    >
+                                        <PencilIcon className="h-4 w-4" />
+                                        Edit
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+            </div>
 
             {/* Token creation forms */}
             <div className="mb-5 grid gap-4 sm:grid-cols-2">
@@ -237,7 +452,20 @@ function ToolsPage() {
                                             <span className="text-text text-sm">{token.description}</span>
                                         ) : null}
                                     </div>
-                                    <span className="text-text-dim shrink-0 text-sm">Folder: {token.folderId}</span>
+                                    <div className="flex shrink-0 items-center gap-3">
+                                        <span className="text-text-dim text-sm">Folder: {token.folderId}</span>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                setEditTokenResult(null);
+                                                setEditingToken(token);
+                                            }}
+                                        >
+                                            <PencilIcon className="h-4 w-4" />
+                                            Edit
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-5 text-sm">
                                     <span className="text-text-dim">ID: {token.id}</span>
@@ -294,6 +522,141 @@ function ToolsPage() {
                     </Button>
                 </form>
             </div>
+
+            {/* Edit Access Rule Dialog */}
+            <Dialog
+                open={editingRule !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingRule(null);
+                        setEditRuleResult(null);
+                    }
+                }}
+            >
+                <DialogContent title="Edit Access Rule" description="Update the name, type, or IP match for this rule.">
+                    {editingRule ? (
+                        <form className="space-y-4" onSubmit={(event) => void handleUpdateAccessRule(event)}>
+                            <Input
+                                name="name"
+                                label="Rule Name"
+                                required
+                                defaultValue={editingRule.name}
+                                key={editingRule.id}
+                            />
+                            <Select
+                                name="type"
+                                label="Rule Type"
+                                defaultValue={editingRule.type}
+                                key={`type-${editingRule.id}`}
+                            >
+                                <option value="ALLOW">ALLOW</option>
+                                <option value="DISALLOW">DISALLOW</option>
+                            </Select>
+                            <Input
+                                name="match"
+                                label="IP or CIDR Match"
+                                required
+                                defaultValue={editingRule.match}
+                                placeholder="203.0.113.0/24"
+                                key={`match-${editingRule.id}`}
+                            />
+
+                            {editRuleResult ? <ResultMessage message={editRuleResult} /> : null}
+
+                            <div className="flex items-center justify-end gap-2.5 pt-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        setEditingRule(null);
+                                        setEditRuleResult(null);
+                                    }}
+                                    disabled={editRulePending}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" loading={editRulePending}>
+                                    Save Changes
+                                </Button>
+                            </div>
+                        </form>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Upload Token Dialog */}
+            <Dialog
+                open={editingToken !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingToken(null);
+                        setEditTokenResult(null);
+                    }
+                }}
+            >
+                <DialogContent title="Edit Upload Token" description="Update the token configuration and expiration.">
+                    {editingToken ? (
+                        <form className="space-y-4" onSubmit={(event) => void handleUpdateUploadToken(event)}>
+                            <Input
+                                name="description"
+                                label="Description (optional)"
+                                defaultValue={editingToken.description ?? ""}
+                                key={`description-${editingToken.id}`}
+                            />
+                            <Input
+                                name="folderId"
+                                label="Folder ID"
+                                required
+                                defaultValue={editingToken.folderId}
+                                key={`folder-${editingToken.id}`}
+                            />
+                            <Select
+                                name="fileAccess"
+                                label="File Access"
+                                defaultValue={editingToken.fileAccess}
+                                key={`file-access-${editingToken.id}`}
+                            >
+                                <option value="PRIVATE">PRIVATE</option>
+                                <option value="PROTECTED">PROTECTED</option>
+                                <option value="PUBLIC">PUBLIC</option>
+                            </Select>
+                            <Input
+                                name="accessControlRuleIds"
+                                label="Access Rule IDs (comma-separated)"
+                                defaultValue={editingToken.accessControlRuleIds.join(", ")}
+                                placeholder="rule-id-1, rule-id-2"
+                                key={`rules-${editingToken.id}`}
+                            />
+                            <Input
+                                name="expiresAt"
+                                label="Expires At (optional)"
+                                type="datetime-local"
+                                defaultValue={toLocalDatetimeValue(editingToken.expiresAt)}
+                                key={`expires-${editingToken.id}`}
+                            />
+
+                            {editTokenResult ? <ResultMessage message={editTokenResult} /> : null}
+
+                            <div className="flex items-center justify-end gap-2.5 pt-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        setEditingToken(null);
+                                        setEditTokenResult(null);
+                                    }}
+                                    disabled={editTokenPending}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" loading={editTokenPending}>
+                                    Save Changes
+                                </Button>
+                            </div>
+                        </form>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -303,5 +666,13 @@ function ResultBlock({ value }: { value: string }) {
         <pre className="bg-surface-raised text-text-muted overflow-x-auto rounded-lg px-4 py-2.5 font-mono text-xs">
             {value}
         </pre>
+    );
+}
+
+function ResultMessage({ message }: { message: string }) {
+    return (
+        <div className="bg-surface-raised rounded-lg px-4 py-2.5">
+            <p className="text-text-muted text-sm">{message}</p>
+        </div>
     );
 }

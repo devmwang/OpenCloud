@@ -13,6 +13,7 @@ import type {
     CreateUploadTokenInput,
     CreateUserInput,
     UpdateAccessRuleInput,
+    UpdateUploadTokenInput,
 } from "./auth.schemas";
 import { createUserWithRootFolder } from "./auth.utils";
 
@@ -287,6 +288,71 @@ export async function createUploadTokenHandler(
         uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }),
         expiresAt: expiry.toISOString(),
     });
+}
+
+export async function updateUploadTokenHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Body: UpdateUploadTokenInput }>,
+    reply: FastifyReply,
+) {
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const { id, description, folderId, fileAccess, accessControlRuleIds, expiresAt } = request.body;
+
+    const [existingToken] = await this.db
+        .select({ id: uploadTokens.id })
+        .from(uploadTokens)
+        .where(and(eq(uploadTokens.id, id), eq(uploadTokens.userId, userId)))
+        .limit(1);
+    if (!existingToken) {
+        return reply.code(404).send({ message: "Upload token not found" });
+    }
+
+    const [folder] = await this.db
+        .select({ id: folders.id, ownerId: folders.ownerId })
+        .from(folders)
+        .where(and(eq(folders.id, folderId), isNull(folders.deletedAt)))
+        .limit(1);
+    if (!folder) {
+        return reply.code(404).send({ message: "Parent folder not found" });
+    }
+
+    if (folder.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to update this upload token" });
+    }
+
+    const expiry = expiresAt === null ? null : new Date(expiresAt);
+    if (expiry !== null && Number.isNaN(expiry.getTime())) {
+        return reply.code(400).send({ message: "Invalid expiresAt value" });
+    }
+
+    const ruleIds = accessControlRuleIds.length > 0 ? Array.from(new Set(accessControlRuleIds)) : [];
+    if (ruleIds.length > 0) {
+        const existingRules = await this.db
+            .select({ id: accessRules.id })
+            .from(accessRules)
+            .where(and(inArray(accessRules.id, ruleIds), eq(accessRules.ownerId, userId)));
+        if (existingRules.length !== ruleIds.length) {
+            return reply.code(400).send({ message: "One or more access control rules are invalid" });
+        }
+    }
+
+    await this.db
+        .update(uploadTokens)
+        .set({
+            description: description != undefined ? description : null,
+            folderId: folderId,
+            fileAccess: fileAccess,
+            accessControlRuleIds: ruleIds.length > 0 ? ruleIds : null,
+            expiresAt: expiry,
+            updatedAt: new Date(),
+        })
+        .where(and(eq(uploadTokens.id, id), eq(uploadTokens.userId, userId)));
+
+    return reply.code(200).send({ status: "success", message: "Upload token updated" });
 }
 
 export async function createReadTokenHandler(

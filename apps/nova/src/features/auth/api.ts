@@ -67,6 +67,15 @@ const createUploadTokenInputSchema = z.object({
     expiresAt: z.string().datetime().optional(),
 });
 
+const updateUploadTokenInputSchema = z.object({
+    id: z.string().min(1),
+    description: z.string().optional(),
+    folderId: z.string().min(1),
+    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    accessControlRuleIds: z.array(z.string()),
+    expiresAt: z.string().datetime().nullable(),
+});
+
 const createUploadTokenResponseSchema = z.object({
     uploadToken: z.string(),
     expiresAt: z.string().datetime(),
@@ -118,6 +127,7 @@ export type CreateUserInput = z.infer<typeof createUserInputSchema>;
 export type CreateAccessRuleInput = z.infer<typeof createAccessRuleInputSchema>;
 export type UpdateAccessRuleInput = z.infer<typeof updateAccessRuleInputSchema>;
 export type CreateUploadTokenInput = z.infer<typeof createUploadTokenInputSchema>;
+export type UpdateUploadTokenInput = z.infer<typeof updateUploadTokenInputSchema>;
 export type CreateReadTokenInput = z.infer<typeof createReadTokenInputSchema>;
 export type AccessRuleSummary = z.infer<typeof accessRuleSummarySchema>;
 export type UploadTokenSummary = z.infer<typeof uploadTokenSummarySchema>;
@@ -262,6 +272,15 @@ export const createUploadToken = async (input: CreateUploadTokenInput) => {
     const body = createUploadTokenInputSchema.parse(input);
 
     return postJson("/v1/auth/create-upload-token", createUploadTokenResponseSchema, {
+        body,
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const updateUploadToken = async (input: UpdateUploadTokenInput) => {
+    const body = updateUploadTokenInputSchema.parse(input);
+
+    return postJson("/v1/auth/update-upload-token", statusMessageSchema, {
         body,
         headers: await createCsrfHeaders(),
     });
