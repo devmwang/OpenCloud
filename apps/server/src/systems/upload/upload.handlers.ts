@@ -117,13 +117,25 @@ export async function tokenUploadHandler(this: FastifyInstance, request: Fastify
         return reply.code(403).send({ status: "fail", error: "You do not have permission to upload to this folder" });
     }
 
-    for (const ruleId of uploadToken.accessControlRuleIds ?? []) {
-        const result = await this.verifyAccessControlRule(request, ruleId, uploadToken.userId);
-        if (!result) {
-            return reply
-                .code(401)
-                .send({ status: "fail", error: "Unable to verify compliance with one or more access control rules" });
-        }
+    const isCompliant = await this.verifyAccessControlRules(
+        request,
+        uploadToken.accessControlRuleIds ?? [],
+        uploadToken.userId,
+    );
+    if (!isCompliant) {
+        request.log.warn(
+            {
+                requestIp: request.ip,
+                requestIps: request.ips,
+                uploadTokenId: uploadToken.id,
+                xForwardedFor: request.headers["x-forwarded-for"],
+            },
+            "Token upload blocked by access control rules",
+        );
+
+        return reply
+            .code(401)
+            .send({ status: "fail", error: "Unable to verify compliance with one or more access control rules" });
     }
 
     try {
