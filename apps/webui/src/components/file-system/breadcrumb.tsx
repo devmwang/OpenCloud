@@ -8,7 +8,7 @@ export function Breadcrumb({
 }) {
     return (
         <div className="-mx-3 flex items-center text-3xl font-semibold">
-            {folderDetails.hierarchy.reverse().map((folder) => {
+            {folderDetails.hierarchy.map((folder) => {
                 return (
                     <div key={folder.id} className="flex items-center">
                         <BreadcrumbFolder folderName={folder.name} folderId={folder.id} />

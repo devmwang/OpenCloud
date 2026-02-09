@@ -221,7 +221,7 @@ function FolderPage() {
     }
 
     const folderDetails = detailsQuery.data;
-    const breadcrumbTrail = [...folderDetails.hierarchy].reverse();
+    const breadcrumbTrail = folderDetails.hierarchy;
     const isEmpty = folderContents.folders.length === 0 && folderContents.files.length === 0;
 
     return (
