@@ -29,5 +29,6 @@ export const uploadFileWithToken = async (input: { uploadToken: string; file: Fi
 
     return postMultipart("/v1/files", uploadResponseSchema, {
         body: formData,
+        credentials: "omit",
     });
 };
