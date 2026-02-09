@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ErrorCard } from "@/components/shared/error-card";
@@ -99,6 +99,8 @@ function ToolsPage() {
     const [editingToken, setEditingToken] = useState<UploadTokenSummary | null>(null);
     const [editTokenResult, setEditTokenResult] = useState<string | null>(null);
     const [editTokenPending, setEditTokenPending] = useState(false);
+    const createUploadTokenExpiryRef = useRef<HTMLInputElement | null>(null);
+    const editUploadTokenExpiryRef = useRef<HTMLInputElement | null>(null);
 
     const handleCreateAccessRule = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -171,10 +173,10 @@ function ToolsPage() {
                 fileAccess: String(formData.get("fileAccess") ?? "PROTECTED") as "PRIVATE" | "PROTECTED" | "PUBLIC",
                 description: String(formData.get("description") ?? "") || undefined,
                 accessControlRuleIds: accessRuleIds.length > 0 ? accessRuleIds : undefined,
-                expiresAt: toIsoDatetime(String(formData.get("expiresAt") ?? "")),
+                expiresAt: toIsoDatetime(String(formData.get("expiresAt") ?? "")) ?? null,
             });
 
-            setUploadTokenResult(`Upload token: ${result.uploadToken}\nExpires: ${result.expiresAt}`);
+            setUploadTokenResult(`Upload token: ${result.uploadToken}\nExpires: ${result.expiresAt ?? "Never"}`);
             await queryClient.invalidateQueries({ queryKey: queryKeys.uploadTokens });
         } catch (error) {
             setUploadTokenResult(getErrorMessage(error));
@@ -378,7 +380,29 @@ function ToolsPage() {
                         label="Access Rule IDs (comma-separated, optional)"
                         placeholder="rule-id-1, rule-id-2"
                     />
-                    <Input name="expiresAt" label="Expires At (optional)" type="datetime-local" />
+                    <div className="space-y-2">
+                        <Input
+                            ref={createUploadTokenExpiryRef}
+                            name="expiresAt"
+                            label="Expires At (optional)"
+                            type="datetime-local"
+                        />
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    if (createUploadTokenExpiryRef.current) {
+                                        createUploadTokenExpiryRef.current.value = "";
+                                    }
+                                }}
+                                disabled={uploadTokenPending}
+                            >
+                                Clear Expiry
+                            </Button>
+                        </div>
+                    </div>
 
                     {uploadTokenResult ? <ResultBlock value={uploadTokenResult} /> : null}
 
@@ -627,13 +651,31 @@ function ToolsPage() {
                                 placeholder="rule-id-1, rule-id-2"
                                 key={`rules-${editingToken.id}`}
                             />
-                            <Input
-                                name="expiresAt"
-                                label="Expires At (optional)"
-                                type="datetime-local"
-                                defaultValue={toLocalDatetimeValue(editingToken.expiresAt)}
-                                key={`expires-${editingToken.id}`}
-                            />
+                            <div className="space-y-2">
+                                <Input
+                                    ref={editUploadTokenExpiryRef}
+                                    name="expiresAt"
+                                    label="Expires At (optional)"
+                                    type="datetime-local"
+                                    defaultValue={toLocalDatetimeValue(editingToken.expiresAt)}
+                                    key={`expires-${editingToken.id}`}
+                                />
+                                <div className="flex justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (editUploadTokenExpiryRef.current) {
+                                                editUploadTokenExpiryRef.current.value = "";
+                                            }
+                                        }}
+                                        disabled={editTokenPending}
+                                    >
+                                        Clear Expiry
+                                    </Button>
+                                </div>
+                            </div>
 
                             {editTokenResult ? <ResultMessage message={editTokenResult} /> : null}
 

@@ -253,8 +253,8 @@ export async function createUploadTokenHandler(
 
     const { description, folderId, fileAccess, accessControlRuleIds, expiresAt } = request.body;
 
-    const expiry = expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    if (Number.isNaN(expiry.getTime())) {
+    const expiry = expiresAt === undefined || expiresAt === null ? null : new Date(expiresAt);
+    if (expiry !== null && Number.isNaN(expiry.getTime())) {
         return reply.code(400).send({ message: "Invalid expiresAt value" });
     }
 
@@ -286,7 +286,7 @@ export async function createUploadTokenHandler(
 
     return reply.code(200).send({
         uploadToken: this.jwt.sign({ id: uploadToken.id, type: "UploadToken" }),
-        expiresAt: expiry.toISOString(),
+        expiresAt: expiry ? expiry.toISOString() : null,
     });
 }
 

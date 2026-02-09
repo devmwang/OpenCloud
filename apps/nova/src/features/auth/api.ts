@@ -64,7 +64,7 @@ const createUploadTokenInputSchema = z.object({
     folderId: z.string().min(1),
     fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
     accessControlRuleIds: z.array(z.string()).min(1).optional(),
-    expiresAt: z.string().datetime().optional(),
+    expiresAt: z.string().datetime().nullable().optional(),
 });
 
 const updateUploadTokenInputSchema = z.object({
@@ -78,7 +78,7 @@ const updateUploadTokenInputSchema = z.object({
 
 const createUploadTokenResponseSchema = z.object({
     uploadToken: z.string(),
-    expiresAt: z.string().datetime(),
+    expiresAt: z.string().datetime().nullable(),
 });
 
 const createReadTokenInputSchema = z.object({
