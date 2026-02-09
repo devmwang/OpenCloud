@@ -1,9 +1,11 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { getGlobalStartContext } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type { NovaRequestContext } from "@/global-middleware";
 import { createCsrfHeaders } from "@/lib/csrf";
 import { getJson, postJson } from "@/lib/http";
+import { queryKeys } from "@/lib/query-keys";
 
 import { authClient } from "./auth-client";
 
@@ -162,6 +164,8 @@ const getServerCookieHeader = () => {
     return context?.requestCookieHeader;
 };
 
+const SESSION_QUERY_STALE_TIME_MS = 60_000;
+
 export const getSession = async () => {
     const cookieHeader = getServerCookieHeader();
 
@@ -189,6 +193,14 @@ export const getSessionSafe = async () => {
     }
 };
 
+export const getSessionSafeCached = (queryClient: QueryClient) => {
+    return queryClient.fetchQuery({
+        queryKey: queryKeys.session,
+        queryFn: getSessionSafe,
+        staleTime: SESSION_QUERY_STALE_TIME_MS,
+    });
+};
+
 export const signInWithUsername = async (username: string, password: string) => {
     const result = (await authClient.signIn.username({ username, password })) as BetterAuthResult;
 
@@ -211,6 +223,7 @@ export const signOut = async () => {
 export const getAuthInfo = async () => {
     return getJson("/v1/auth/info", authInfoSchema, {
         forwardServerCookies: true,
+        cache: "no-store",
     });
 };
 

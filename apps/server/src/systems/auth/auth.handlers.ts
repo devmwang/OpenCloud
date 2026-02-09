@@ -85,6 +85,8 @@ export async function infoHandler(this: FastifyInstance, request: FastifyRequest
         return reply.code(500).send({ message: "Something went wrong. Please try again." });
     }
 
+    reply.header("Cache-Control", "no-store, private");
+
     return reply.code(200).send({
         id: user.id,
         username: user.username,

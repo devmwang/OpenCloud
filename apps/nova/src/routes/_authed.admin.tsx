@@ -29,11 +29,15 @@ import { purgeExpiredRecycleBin } from "@/features/recycle-bin/api";
 import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
 
+const AUTH_INFO_GUARD_STALE_TIME_MS = 60_000;
+
 export const Route = createFileRoute("/_authed/admin")({
     beforeLoad: async ({ context }) => {
-        // Always fetch fresh auth info here so role checks cannot rely on stale cache data.
-        const authInfo = await getAuthInfo();
-        context.queryClient.setQueryData(queryKeys.authInfo, authInfo);
+        const authInfo = await context.queryClient.fetchQuery({
+            queryKey: queryKeys.authInfo,
+            queryFn: getAuthInfo,
+            staleTime: AUTH_INFO_GUARD_STALE_TIME_MS,
+        });
 
         if (authInfo.role !== "ADMIN") {
             throw redirect({

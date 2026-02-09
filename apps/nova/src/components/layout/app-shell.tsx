@@ -6,10 +6,12 @@ import {
     UserCircleIcon,
     WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useMatches } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import type { AuthSession } from "@/features/auth/api";
+import { getAuthInfo, type AuthSession } from "@/features/auth/api";
+import { queryKeys } from "@/lib/query-keys";
 
 type SidebarProps = {
     session: AuthSession;
@@ -40,6 +42,12 @@ function isActiveRoute(matches: Array<{ routeId: string }>, label: string) {
 export function Sidebar({ session, onSignOut }: SidebarProps) {
     const matches = useMatches();
     const rootFolderId = session.user.rootFolderId;
+    const authInfoQuery = useQuery({
+        queryKey: queryKeys.authInfo,
+        queryFn: getAuthInfo,
+    });
+    const visibleNavItems =
+        authInfoQuery.data?.role === "ADMIN" ? navItems : navItems.filter((item) => item.label !== "Admin");
 
     const initials = [session.user.firstName, session.user.lastName]
         .filter(Boolean)
@@ -68,7 +76,7 @@ export function Sidebar({ session, onSignOut }: SidebarProps) {
                     </button>
                 </div>
                 <nav className="flex items-center gap-1 overflow-x-auto px-3 py-2">
-                    {navItems.map((item) => {
+                    {visibleNavItems.map((item) => {
                         const active = isActiveRoute(matches, item.label);
                         const linkProps = item.getTo(rootFolderId);
 
@@ -103,7 +111,7 @@ export function Sidebar({ session, onSignOut }: SidebarProps) {
                     <p className="text-text-dim px-2.5 pb-1 text-xs font-semibold tracking-widest uppercase">
                         Navigate
                     </p>
-                    {navItems.map((item) => {
+                    {visibleNavItems.map((item) => {
                         const active = isActiveRoute(matches, item.label);
                         const linkProps = item.getTo(rootFolderId);
                         const Icon = item.icon;

@@ -3,14 +3,14 @@ import { createFileRoute, Outlet, redirect, useRouter } from "@tanstack/react-ro
 
 import { AppShell, Sidebar } from "@/components/layout/app-shell";
 import { useToast } from "@/components/ui/toast";
-import { getSessionSafe, signOut } from "@/features/auth/api";
+import { getSessionSafeCached, signOut } from "@/features/auth/api";
 import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_authed")({
     ssr: false,
-    beforeLoad: async ({ location }) => {
-        const session = await getSessionSafe();
+    beforeLoad: async ({ location, context }) => {
+        const session = await getSessionSafeCached(context.queryClient);
 
         if (!session?.user.rootFolderId) {
             throw redirect({

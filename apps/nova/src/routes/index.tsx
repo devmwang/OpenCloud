@@ -1,10 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { getSessionSafe } from "@/features/auth/api";
+import { getSessionSafeCached } from "@/features/auth/api";
 
 export const Route = createFileRoute("/")({
-    beforeLoad: async () => {
-        const session = await getSessionSafe();
+    beforeLoad: async ({ context }) => {
+        const session = await getSessionSafeCached(context.queryClient);
 
         if (session?.user.rootFolderId) {
             throw redirect({
