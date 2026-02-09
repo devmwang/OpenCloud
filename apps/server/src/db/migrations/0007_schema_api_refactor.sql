@@ -95,17 +95,55 @@ UPDATE "Folders" f
 SET "parentFolderId" = u."rootFolderId"
 FROM "Users" u
 WHERE f."ownerId" = u."id"
-  AND f."type" = 'STANDARD';
+  AND f."type" = 'STANDARD'
+  AND (
+      f."parentFolderId" IS NULL
+      OR NOT EXISTS (
+          SELECT 1
+          FROM "Folders" p
+          WHERE p."id" = f."parentFolderId"
+            AND p."ownerId" = f."ownerId"
+      )
+  );
 --> statement-breakpoint
 UPDATE "Folders"
 SET "folderPath" = concat('/', "id")
 WHERE "type" = 'ROOT';
 --> statement-breakpoint
+WITH RECURSIVE folder_paths AS (
+    SELECT
+        f."id",
+        f."ownerId",
+        concat('/', f."id") AS folder_path
+    FROM "Folders" f
+    WHERE f."type" = 'ROOT'
+
+    UNION ALL
+
+    SELECT
+        child."id",
+        child."ownerId",
+        concat(parent_paths.folder_path, '/', child."id") AS folder_path
+    FROM "Folders" child
+    JOIN folder_paths parent_paths
+        ON parent_paths."id" = child."parentFolderId"
+       AND parent_paths."ownerId" = child."ownerId"
+    WHERE child."type" = 'STANDARD'
+)
 UPDATE "Folders" f
-SET "folderPath" = concat('/', u."rootFolderId", '/', f."id")
+SET "folderPath" = fp.folder_path
+FROM folder_paths fp
+WHERE f."id" = fp."id"
+  AND f."ownerId" = fp."ownerId";
+--> statement-breakpoint
+UPDATE "Folders" f
+SET
+    "parentFolderId" = u."rootFolderId",
+    "folderPath" = concat('/', u."rootFolderId", '/', f."id")
 FROM "Users" u
 WHERE f."ownerId" = u."id"
-  AND f."type" = 'STANDARD';
+  AND f."type" = 'STANDARD'
+  AND f."folderPath" IS NULL;
 --> statement-breakpoint
 UPDATE "Files" fi
 SET "parentId" = u."rootFolderId"

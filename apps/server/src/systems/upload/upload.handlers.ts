@@ -131,18 +131,22 @@ const resolveUploadContext = async (
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
     uploadTokenValue: string | null,
 ) => {
-    if (request.authenticated) {
+    if (request.authenticated && request.query.folderId) {
         const context = await resolveAuthenticatedUploadContext(server, request);
         if (context) {
             return context;
         }
     }
 
-    if (!uploadTokenValue) {
-        throw new Error("MISSING_UPLOAD_TOKEN");
+    if (uploadTokenValue) {
+        return resolveTokenUploadContext(server, request, uploadTokenValue);
     }
 
-    return resolveTokenUploadContext(server, request, uploadTokenValue);
+    if (request.authenticated) {
+        throw new Error("MISSING_FOLDER_ID");
+    }
+
+    throw new Error("MISSING_UPLOAD_TOKEN");
 };
 
 export async function uploadFileHandler(

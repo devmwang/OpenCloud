@@ -69,6 +69,6 @@ export const createUserWithRootFolder = async (db: Database, input: CreateUserWi
             password: input.passwordHash,
         });
 
-        return user;
+        return { ...user, rootFolderId };
     });
 };
