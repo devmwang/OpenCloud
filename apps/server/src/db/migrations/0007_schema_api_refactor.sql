@@ -237,7 +237,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Folders_root_parent_shape_check') THEN
         ALTER TABLE "Folders"
             ADD CONSTRAINT "Folders_root_parent_shape_check"
-            CHECK ((("type" = 'ROOT' AND "parentFolderId" IS NULL) OR ("type" = 'STANDARD' AND "parentFolderId" IS NOT NULL)));
+            CHECK ((("type" = 'ROOT' AND "parentFolderId" IS NULL) OR ("type" = 'STANDARD' AND ("parentFolderId" IS NOT NULL OR "deletedAt" IS NOT NULL))));
     END IF;
 END $$;
 --> statement-breakpoint

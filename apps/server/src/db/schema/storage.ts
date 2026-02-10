@@ -56,7 +56,7 @@ export const folders = pgTable(
             .where(sql`${table.deletedAt} is not null`),
         rootParentShapeCheck: check(
             "Folders_root_parent_shape_check",
-            sql`((${table.type} = 'ROOT' and ${table.parentFolderId} is null) or (${table.type} = 'STANDARD' and ${table.parentFolderId} is not null))`,
+            sql`((${table.type} = 'ROOT' and ${table.parentFolderId} is null) or (${table.type} = 'STANDARD' and (${table.parentFolderId} is not null or ${table.deletedAt} is not null)))`,
         ),
     }),
 );
