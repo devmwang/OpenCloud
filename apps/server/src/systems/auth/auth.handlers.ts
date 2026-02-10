@@ -288,27 +288,36 @@ export async function createUploadTokenHandler(
         }
     }
 
-    const [uploadToken] = await this.db
-        .insert(uploadTokens)
-        .values({
-            userId: user.id,
-            description: description !== undefined ? description : null,
-            folderId,
-            fileAccess,
-            expiresAt: expiry,
-        })
-        .returning();
+    const uploadToken = await this.db.transaction(async (tx) => {
+        const [createdUploadToken] = await tx
+            .insert(uploadTokens)
+            .values({
+                userId: user.id,
+                description: description !== undefined ? description : null,
+                folderId,
+                fileAccess,
+                expiresAt: expiry,
+            })
+            .returning();
+
+        if (!createdUploadToken) {
+            return null;
+        }
+
+        if (ruleIds && ruleIds.length > 0) {
+            await tx.insert(uploadTokenRules).values(
+                ruleIds.map((ruleId) => ({
+                    uploadTokenId: createdUploadToken.id,
+                    accessRuleId: ruleId,
+                })),
+            );
+        }
+
+        return createdUploadToken;
+    });
+
     if (!uploadToken) {
         return reply.code(500).send({ message: "Failed to create upload token" });
-    }
-
-    if (ruleIds && ruleIds.length > 0) {
-        await this.db.insert(uploadTokenRules).values(
-            ruleIds.map((ruleId) => ({
-                uploadTokenId: uploadToken.id,
-                accessRuleId: ruleId,
-            })),
-        );
     }
 
     return reply.code(200).send({
