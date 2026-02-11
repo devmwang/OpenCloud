@@ -198,7 +198,8 @@ server.addHook("onRequest", async (request) => {
 void server.register(FastifyRateLimit, {
     max: env.RATE_LIMIT_GLOBAL_MAX,
     timeWindow: env.RATE_LIMIT_GLOBAL_WINDOW,
-    hook: "onRequest",
+    // Run after route onRequest auth hooks so user-based keys are available.
+    hook: "preHandler",
     keyGenerator: (request) => buildRateLimitKey(request),
     onExceeding: (request, key) => {
         request.rateLimitEvent = "onExceeding";
