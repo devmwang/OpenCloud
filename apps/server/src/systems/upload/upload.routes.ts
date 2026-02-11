@@ -12,11 +12,7 @@ async function uploadRouter(server: FastifyInstance) {
         preHandler: [
             async (request, reply) => {
                 const query = request.query as { folderId?: string } | undefined;
-                if (
-                    request.authenticated &&
-                    typeof query?.folderId === "string" &&
-                    query.folderId.length > 0
-                ) {
+                if (request.authenticated && typeof query?.folderId === "string" && query.folderId.length > 0) {
                     await server.requireCsrf(request, reply);
                 }
             },

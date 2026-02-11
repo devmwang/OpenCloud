@@ -264,15 +264,7 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
             await fs.promises.unlink(filePath);
         } catch {}
 
-        const errorMessage = error instanceof Error ? error.message.slice(0, 500) : "Unknown upload failure";
-        await db
-            .update(files)
-            .set({
-                storageState: "FAILED",
-                storageError: errorMessage,
-                storageVerifiedAt: null,
-            })
-            .where(eq(files.id, fileId));
+        await db.delete(files).where(eq(files.id, fileId));
 
         throw error;
     }
