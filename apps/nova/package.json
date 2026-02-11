@@ -9,6 +9,7 @@
     "scripts": {
         "dev": "vite dev",
         "build": "vite build",
+        "clean": "node -e \"const fs=require('node:fs');for(const p of ['dist','.output','.vinxi','.tanstack','.vite','.turbo','.vercel/output']){fs.rmSync(p,{recursive:true,force:true});}\"",
         "preview": "vite preview",
         "start": "node .output/server/index.mjs",
         "routes:generate": "tsr generate",

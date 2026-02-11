@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
+import { env } from "@/env/env";
+
 import {
     createFolderHandler,
     deleteFolderHandler,
@@ -28,6 +30,11 @@ async function folderRouter(server: FastifyInstance) {
         method: "GET",
         url: "/folders/:folderId/children",
         onRequest: [server.authenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_FOLDER_MAX,
+            },
+        },
         schema: {
             params: $ref("folderParamsSchema"),
             querystring: $ref("getFolderChildrenQuerySchema"),
@@ -40,6 +47,11 @@ async function folderRouter(server: FastifyInstance) {
         method: "POST",
         url: "/folders",
         onRequest: [server.authenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_MUTATION_MAX,
+            },
+        },
         preHandler: [server.requireCsrf],
         schema: {
             body: $ref("createFolderSchema"),
@@ -52,6 +64,11 @@ async function folderRouter(server: FastifyInstance) {
         method: "PATCH",
         url: "/folders/:folderId",
         onRequest: [server.authenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_MUTATION_MAX,
+            },
+        },
         preHandler: [server.requireCsrf],
         schema: {
             params: $ref("folderParamsSchema"),
@@ -88,6 +105,11 @@ async function folderRouter(server: FastifyInstance) {
         method: "PUT",
         url: "/folders/:folderId/display-preferences",
         onRequest: [server.authenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_MUTATION_MAX,
+            },
+        },
         preHandler: [server.requireCsrf],
         schema: {
             params: $ref("folderParamsSchema"),

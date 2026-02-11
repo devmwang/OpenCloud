@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
+import { env } from "@/env/env";
+
 import {
     deleteFileHandler,
     getDetailsHandler,
@@ -27,6 +29,11 @@ async function fileSystemRouter(server: FastifyInstance) {
         method: "GET",
         url: "/files/:fileId/content",
         onRequest: [server.optionalAuthenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_FILE_GET_MAX,
+            },
+        },
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -38,6 +45,11 @@ async function fileSystemRouter(server: FastifyInstance) {
         method: "GET",
         url: "/files/:fileId/thumbnail",
         onRequest: [server.optionalAuthenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_THUMBNAIL_MAX,
+            },
+        },
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -49,6 +61,11 @@ async function fileSystemRouter(server: FastifyInstance) {
         method: "PATCH",
         url: "/files/:fileId",
         onRequest: [server.authenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_MUTATION_MAX,
+            },
+        },
         preHandler: [server.requireCsrf],
         schema: {
             params: $ref("fileParamsSchema"),
@@ -62,6 +79,11 @@ async function fileSystemRouter(server: FastifyInstance) {
         method: "DELETE",
         url: "/files/:fileId",
         onRequest: [server.authenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_MUTATION_MAX,
+            },
+        },
         preHandler: [server.requireCsrf],
         schema: {
             params: $ref("fileParamsSchema"),

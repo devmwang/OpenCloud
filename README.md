@@ -48,6 +48,23 @@ The [backend server](https://github.com/devmwang/OpenCloud/tree/main/apps/server
 
 OpenCloud clients communicate with the backend server using the OpenCloud Server REST API.
 
+### Rate Limiting
+
+The server uses request-based rate limits with route-specific buckets:
+
+- Global fallback for routes without explicit overrides.
+- Separate buckets for folder browsing (`/v1/folder/get-contents`), thumbnails (`/v1/files/get-thumbnail/:fileId`), file downloads (`/v1/files/get/:fileId`), and folder/file mutations.
+- User-first identity keys for authenticated requests, then read-token hash keys, then IP fallback.
+
+#### Phase 2 (planned): Byte-Based Limiting
+
+If request-based limits are still too aggressive for real browsing workloads, the next phase is an in-memory token-bucket limiter keyed by the same identity strategy:
+
+- Separate byte budgets for file downloads and thumbnail requests.
+- `/v1/files/get/:fileId` consumes estimated bytes from stored file size.
+- `/v1/files/get-thumbnail/:fileId` consumes a fixed thumbnail byte estimate.
+- Requests are rejected with `429` when a bucket lacks enough tokens and recover as tokens refill over time.
+
 ### Authentication Mechanism
 
 OpenCloud uses a token-based authentication system. On login, this server return an access-token and refresh-token. The access-token only provides access to protected resources for 15 minutes. Just prior to access-token expiration, the client will preemptively fetch a new token using the refresh-token, which has a 1 week lifespan. To protect the account in the event of a compromised refresh-token, this system implements refresh-token rotation and automatic refresh-token reuse detection. This mechanism is outlined in [this blog post](https://auth0.com/blog/refresh-tokens-what-are-they-and-when-to-use-them/) by the team at Auth0.

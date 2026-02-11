@@ -44,6 +44,12 @@ export const env = createEnv({
         SERVER_HOST: z.string().default("0.0.0.0"),
         SERVER_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
         TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+        RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().min(1).default(2000),
+        RATE_LIMIT_GLOBAL_WINDOW: z.string().default("1 minute"),
+        RATE_LIMIT_FOLDER_MAX: z.coerce.number().int().min(1).default(600),
+        RATE_LIMIT_THUMBNAIL_MAX: z.coerce.number().int().min(1).default(3000),
+        RATE_LIMIT_FILE_GET_MAX: z.coerce.number().int().min(1).default(120),
+        RATE_LIMIT_MUTATION_MAX: z.coerce.number().int().min(1).default(300),
         FILE_PURGE_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
     },
 

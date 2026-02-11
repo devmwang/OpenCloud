@@ -1,4 +1,5 @@
 import fs from "fs";
+import { createHash } from "node:crypto";
 import path from "path";
 
 import FastifyCookie from "@fastify/cookie";
@@ -7,7 +8,7 @@ import FastifyHelmet from "@fastify/helmet";
 import FastifyMultipart from "@fastify/multipart";
 import FastifyRateLimit from "@fastify/rate-limit";
 import FastifyStatic from "@fastify/static";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 
 import { env } from "@/env/env";
 import authRouter from "@/systems/auth/auth.routes";
@@ -33,8 +34,72 @@ export const SERVER_PORT = env.SERVER_PORT;
 declare module "fastify" {
     interface FastifyRequest {
         authenticated: boolean;
+        rateLimitEvent?: "onExceeding" | "onExceeded";
+        rateLimitKey?: string;
     }
 }
+
+const RATE_LIMIT_APPROACHING_THRESHOLD_PERCENT = 0.1;
+const RATE_LIMIT_APPROACHING_THRESHOLD_MINIMUM = 20;
+
+const getReadToken = (request: { query?: unknown }) => {
+    if (!request.query || typeof request.query !== "object") {
+        return undefined;
+    }
+
+    const readToken = (request.query as { readToken?: string }).readToken;
+    return typeof readToken === "string" && readToken.length > 0 ? readToken : undefined;
+};
+
+const buildRateLimitKey = (request: Pick<FastifyRequest, "user" | "ip" | "query">) => {
+    const userId = request.user?.id;
+    if (typeof userId === "string" && userId.length > 0) {
+        return `u:${userId}`;
+    }
+
+    const readToken = getReadToken(request);
+    if (readToken) {
+        const readTokenHash = createHash("sha256").update(readToken).digest("hex").slice(0, 16);
+        return `rt:${readTokenHash}`;
+    }
+
+    return `ip:${request.ip}`;
+};
+
+const getRateLimitKeyType = (key?: string) => {
+    if (!key) {
+        return "unknown";
+    }
+
+    if (key.startsWith("u:")) {
+        return "u";
+    }
+    if (key.startsWith("rt:")) {
+        return "rt";
+    }
+    if (key.startsWith("ip:")) {
+        return "ip";
+    }
+
+    return "unknown";
+};
+
+const parseHeaderNumber = (value: unknown): number | undefined => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (typeof value === "string") {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    if (Array.isArray(value) && value.length > 0) {
+        return parseHeaderNumber(value[0]);
+    }
+
+    return undefined;
+};
 
 // Initialize Fastify Instance
 const server = Fastify({
@@ -63,9 +128,47 @@ void server.register(FastifyHelmet, {
 });
 void server.register(csrfPlugin);
 
+let hasWarnedForProxyHeaders = false;
+server.addHook("onRequest", async (request) => {
+    if (hasWarnedForProxyHeaders || env.TRUST_PROXY_HOPS !== 0) {
+        return;
+    }
+
+    const hasForwardedHeaders = Boolean(
+        request.headers["x-forwarded-for"] ||
+        request.headers["x-forwarded-proto"] ||
+        request.headers["x-real-ip"] ||
+        request.headers["cf-connecting-ip"],
+    );
+
+    if (!hasForwardedHeaders) {
+        return;
+    }
+
+    hasWarnedForProxyHeaders = true;
+    server.log.warn(
+        {
+            route: request.url,
+            method: request.method,
+            trustProxyHops: env.TRUST_PROXY_HOPS,
+        },
+        "Forwarded proxy headers detected while TRUST_PROXY_HOPS is 0; client identity controls may be inaccurate.",
+    );
+});
+
 void server.register(FastifyRateLimit, {
-    max: 1000,
-    timeWindow: "1 minute",
+    max: env.RATE_LIMIT_GLOBAL_MAX,
+    timeWindow: env.RATE_LIMIT_GLOBAL_WINDOW,
+    hook: "preHandler",
+    keyGenerator: (request) => buildRateLimitKey(request),
+    onExceeding: (request, key) => {
+        request.rateLimitEvent = "onExceeding";
+        request.rateLimitKey = String(key);
+    },
+    onExceeded: (request, key) => {
+        request.rateLimitEvent = "onExceeded";
+        request.rateLimitKey = String(key);
+    },
 });
 
 void server.register(FastifyMultipart, {
@@ -82,6 +185,46 @@ if (!fs.existsSync(fileStoreRoot)) {
 void server.register(FastifyStatic, {
     root: fileStoreRoot,
     serve: false,
+});
+
+server.addHook("onResponse", async (request, reply) => {
+    const event = request.rateLimitEvent;
+    if (!event) {
+        return;
+    }
+
+    const limit = parseHeaderNumber(reply.getHeader("x-ratelimit-limit"));
+    const remaining = parseHeaderNumber(reply.getHeader("x-ratelimit-remaining"));
+    const ttlSeconds = parseHeaderNumber(reply.getHeader("x-ratelimit-reset"));
+
+    if (event === "onExceeding" && limit !== undefined && remaining !== undefined) {
+        const threshold = Math.max(
+            Math.ceil(limit * RATE_LIMIT_APPROACHING_THRESHOLD_PERCENT),
+            RATE_LIMIT_APPROACHING_THRESHOLD_MINIMUM,
+        );
+
+        if (remaining > threshold) {
+            return;
+        }
+    }
+
+    const payload = {
+        route: request.routeOptions?.url ?? request.url.split("?")[0],
+        method: request.method,
+        ip: request.ip,
+        userId: request.user?.id ?? null,
+        keyType: getRateLimitKeyType(request.rateLimitKey),
+        limit: limit ?? null,
+        remaining: remaining ?? null,
+        ttlSeconds: ttlSeconds ?? null,
+    };
+
+    if (event === "onExceeded") {
+        server.log.warn(payload, "Rate limit exceeded");
+        return;
+    }
+
+    server.log.info(payload, "Rate limit nearing threshold");
 });
 
 // Register Route Schemas

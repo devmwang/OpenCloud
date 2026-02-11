@@ -10,6 +10,10 @@
         "build": {
             "dependsOn": ["^build"]
         },
+        "clean": {
+            "cache": false,
+            "outputs": []
+        },
         "lint": {
             "outputs": []
         },

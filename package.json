@@ -3,7 +3,7 @@
     "private": true,
     "scripts": {
         "build": "dotenvx run --convention=nextjs -- turbo build",
-        "clean": "turbo clean",
+        "clean": "turbo run clean && node ./scripts/clean-artifacts.mjs",
         "dev": "dotenvx run --convention=nextjs -- turbo dev",
         "lint": "turbo lint",
         "typecheck": "turbo typecheck",
