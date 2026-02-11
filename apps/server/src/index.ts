@@ -187,7 +187,7 @@ server.addHook("onRequest", async (request) => {
     hasWarnedForProxyHeaders = true;
     server.log.warn(
         {
-            route: request.url,
+            route: getRequestPath(request.url),
             method: request.method,
             trustProxyHops: env.TRUST_PROXY_HOPS,
         },

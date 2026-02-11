@@ -3,6 +3,7 @@ import path from "node:path";
 
 import dotenvx from "@dotenvx/dotenvx";
 import { createEnv } from "@t3-oss/env-core";
+import ms, { type StringValue } from "ms";
 import { z } from "zod";
 
 const findEnvFile = (fileName: string) => {
@@ -25,6 +26,11 @@ const findEnvFile = (fileName: string) => {
 
 const envPaths = [findEnvFile(".env.local"), findEnvFile(".env")].filter((value): value is string => Boolean(value));
 
+const isValidRateLimitWindow = (value: string) => {
+    const parsed = ms(value as StringValue);
+    return typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0;
+};
+
 if (envPaths.length > 0) {
     dotenvx.config({
         path: envPaths,
@@ -45,7 +51,10 @@ export const env = createEnv({
         SERVER_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
         TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
         RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().min(1).default(2000),
-        RATE_LIMIT_GLOBAL_WINDOW: z.string().default("1 minute"),
+        RATE_LIMIT_GLOBAL_WINDOW: z
+            .string()
+            .refine(isValidRateLimitWindow, "RATE_LIMIT_GLOBAL_WINDOW must be a valid duration (for example: 1 minute)")
+            .default("1 minute"),
         RATE_LIMIT_FOLDER_MAX: z.coerce.number().int().min(1).default(600),
         RATE_LIMIT_THUMBNAIL_MAX: z.coerce.number().int().min(1).default(3000),
         RATE_LIMIT_FILE_GET_MAX: z.coerce.number().int().min(1).default(120),
