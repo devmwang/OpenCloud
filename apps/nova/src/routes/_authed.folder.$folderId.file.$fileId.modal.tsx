@@ -139,8 +139,8 @@ function FileModalRoute() {
                         <h2 className="text-text truncate text-sm font-semibold">
                             {detailsQuery.data?.name ?? "File"}
                         </h2>
-                        {detailsQuery.data?.fileType ? (
-                            <span className="text-text-dim text-sm">{detailsQuery.data.fileType}</span>
+                        {detailsQuery.data?.mimeType ? (
+                            <span className="text-text-dim text-sm">{detailsQuery.data.mimeType}</span>
                         ) : null}
                     </div>
                     <button
@@ -181,8 +181,8 @@ function FileModalRoute() {
                             <PreviewPane
                                 fileRouteId={fileId}
                                 fileName={detailsQuery.data.name}
-                                fileType={detailsQuery.data.fileType}
-                                fileAccess={detailsQuery.data.fileAccess}
+                                fileType={detailsQuery.data.mimeType}
+                                fileAccess={detailsQuery.data.access}
                             />
                         </div>
                     ) : null}

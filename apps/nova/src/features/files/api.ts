@@ -6,19 +6,14 @@ import { buildApiUrl, getJson } from "@/lib/http";
 const fileDetailsSchema = z.object({
     id: z.string(),
     name: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number().int().nullable(),
     ownerId: z.string(),
-    ownerUsername: z.string().optional(),
-    parentId: z.string(),
-    fileType: z.string(),
-    type: z.string().optional(),
-    fileSize: z.number().int().nullable().optional(),
-    size: z.number().int().nullable().optional(),
-    fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
-    fileAccessPermission: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]).optional(),
+    folderId: z.string(),
+    access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
     createdAt: z.string().datetime(),
-    uploadedAt: z.string().datetime().optional(),
     updatedAt: z.string().datetime(),
-    editedAt: z.string().datetime().optional(),
+    storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
 
 export type FileDetails = z.infer<typeof fileDetailsSchema>;
@@ -32,16 +27,16 @@ export const getFileDetails = async (
     readToken?: string,
     options?: { forwardServerCookies?: boolean },
 ) => {
-    return getJson("/v1/files/get-details", fileDetailsSchema, {
-        query: { fileId, readToken },
+    return getJson(`/v1/files/${encodeURIComponent(fileId)}`, fileDetailsSchema, {
+        query: { readToken },
         forwardServerCookies: options?.forwardServerCookies,
     });
 };
 
 export const buildFileContentUrl = (fileRouteId: string, readToken?: string) => {
-    return buildApiUrl(`/v1/files/get/${encodeURIComponent(fileRouteId)}`, { readToken }).toString();
+    return buildApiUrl(`/v1/files/${encodeURIComponent(fileRouteId)}/content`, { readToken }).toString();
 };
 
 export const buildFileThumbnailUrl = (fileRouteId: string, readToken?: string) => {
-    return buildApiUrl(`/v1/files/get-thumbnail/${encodeURIComponent(fileRouteId)}`, { readToken }).toString();
+    return buildApiUrl(`/v1/files/${encodeURIComponent(fileRouteId)}/thumbnail`, { readToken }).toString();
 };

@@ -24,4 +24,4 @@ Working directory: repo root.
 
 - Nova communicates with the Server at `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`.
 - Auth uses Better Auth session cookies via `/api/auth/*`.
-- CSRF token is required for protected mutations and is read from `/v1/auth/csrf`.
+- CSRF token is required for protected mutations and is read from `/v1/csrf-token`.

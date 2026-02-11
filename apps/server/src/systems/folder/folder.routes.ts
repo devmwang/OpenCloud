@@ -3,40 +3,42 @@ import type { FastifyInstance } from "fastify";
 
 import {
     createFolderHandler,
-    getContentsHandler,
+    deleteFolderHandler,
     getDetailsHandler,
-    getDisplayOrderHandler,
-    moveFolderHandler,
-    setDisplayOrderHandler,
+    getDisplayPreferencesHandler,
+    listChildrenHandler,
+    patchFolderHandler,
+    putDisplayPreferencesHandler,
 } from "./folder.handlers";
 import { $ref } from "./folder.schemas";
 
 async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
-        url: "/get-details",
+        url: "/folders/:folderId",
         onRequest: [server.authenticate],
         schema: {
-            querystring: $ref("getDetailsQuerySchema"),
-            response: { 200: $ref("getDetailsResponseSchema") },
+            params: $ref("folderParamsSchema"),
+            response: { 200: $ref("getFolderDetailsResponseSchema") },
         },
         handler: getDetailsHandler,
     });
 
     server.route({
         method: "GET",
-        url: "/get-contents",
+        url: "/folders/:folderId/children",
         onRequest: [server.authenticate],
         schema: {
-            querystring: $ref("getContentsQuerySchema"),
-            response: { 200: $ref("getContentsResponseSchema") },
+            params: $ref("folderParamsSchema"),
+            querystring: $ref("getFolderChildrenQuerySchema"),
+            response: { 200: $ref("getFolderChildrenResponseSchema") },
         },
-        handler: getContentsHandler,
+        handler: listChildrenHandler,
     });
 
     server.route({
         method: "POST",
-        url: "/create-folder",
+        url: "/folders",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -47,38 +49,52 @@ async function folderRouter(server: FastifyInstance) {
     });
 
     server.route({
-        method: "POST",
-        url: "/move-folder",
+        method: "PATCH",
+        url: "/folders/:folderId",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            body: $ref("moveFolderBodySchema"),
-            response: { 200: $ref("moveFolderResponseSchema") },
+            params: $ref("folderParamsSchema"),
+            body: $ref("patchFolderBodySchema"),
+            response: { 200: $ref("mutateFolderResponseSchema") },
         },
-        handler: moveFolderHandler,
+        handler: patchFolderHandler,
+    });
+
+    server.route({
+        method: "DELETE",
+        url: "/folders/:folderId",
+        onRequest: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            params: $ref("folderParamsSchema"),
+            response: { 200: $ref("mutateFolderResponseSchema") },
+        },
+        handler: deleteFolderHandler,
     });
 
     server.route({
         method: "GET",
-        url: "/get-display-order",
+        url: "/folders/:folderId/display-preferences",
         onRequest: [server.authenticate],
         schema: {
-            querystring: $ref("getDisplayOrderQuerySchema"),
-            response: { 200: $ref("displayOrderResponseSchema") },
+            params: $ref("folderParamsSchema"),
+            response: { 200: $ref("displayPreferencesResponseSchema") },
         },
-        handler: getDisplayOrderHandler,
+        handler: getDisplayPreferencesHandler,
     });
 
     server.route({
-        method: "POST",
-        url: "/set-display-order",
+        method: "PUT",
+        url: "/folders/:folderId/display-preferences",
         onRequest: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
-            body: $ref("setDisplayOrderSchema"),
-            response: { 200: $ref("displayOrderResponseSchema") },
+            params: $ref("folderParamsSchema"),
+            body: $ref("putDisplayPreferencesSchema"),
+            response: { 200: $ref("displayPreferencesResponseSchema") },
         },
-        handler: setDisplayOrderHandler,
+        handler: putDisplayPreferencesHandler,
     });
 }
 

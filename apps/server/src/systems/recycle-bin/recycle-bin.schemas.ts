@@ -4,22 +4,6 @@ import { buildJsonSchemas } from "@/utils/zod-schema";
 
 const recycleItemTypeSchema = z.enum(["FILE", "FOLDER"]);
 
-const moveToBinBodySchema = z.object({
-    itemType: recycleItemTypeSchema,
-    itemId: z.string({
-        required_error: "Item ID is required",
-        invalid_type_error: "Item ID must be a string",
-    }),
-});
-
-const moveToBinResponseSchema = z.object({
-    status: z.literal("success"),
-    message: z.string(),
-    itemType: recycleItemTypeSchema,
-    itemId: z.string(),
-    deletedAt: z.string().datetime(),
-});
-
 const listQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(200).optional(),
     offset: z.coerce.number().int().min(0).optional(),
@@ -59,12 +43,15 @@ const destinationFoldersResponseSchema = z.object({
     ),
 });
 
-const restoreBodySchema = z.object({
+const itemParamsSchema = z.object({
     itemType: recycleItemTypeSchema,
     itemId: z.string({
         required_error: "Item ID is required",
         invalid_type_error: "Item ID must be a string",
     }),
+});
+
+const restoreBodySchema = z.object({
     destinationFolderId: z.string().optional(),
 });
 
@@ -77,14 +64,6 @@ const restoreResponseSchema = z.object({
     restoredCount: z.number().int().optional(),
 });
 
-const permanentlyDeleteBodySchema = z.object({
-    itemType: recycleItemTypeSchema,
-    itemId: z.string({
-        required_error: "Item ID is required",
-        invalid_type_error: "Item ID must be a string",
-    }),
-});
-
 const permanentlyDeleteResponseSchema = z.object({
     status: z.literal("success"),
     message: z.string(),
@@ -94,11 +73,9 @@ const permanentlyDeleteResponseSchema = z.object({
     purgedFolders: z.number().int(),
 });
 
-const emptyBodySchema = z
-    .object({
-        itemType: recycleItemTypeSchema.optional(),
-    })
-    .optional();
+const emptyQuerySchema = z.object({
+    itemType: recycleItemTypeSchema.optional(),
+});
 
 const emptyResponseSchema = z.object({
     status: z.literal("success"),
@@ -107,13 +84,13 @@ const emptyResponseSchema = z.object({
     purgedFolders: z.number().int(),
 });
 
-const purgeExpiredBodySchema = z
+const purgeBodySchema = z
     .object({
         olderThanDays: z.coerce.number().int().min(1).optional(),
     })
     .optional();
 
-const purgeExpiredResponseSchema = z.object({
+const purgeResponseSchema = z.object({
     status: z.literal("success"),
     message: z.string(),
     olderThanDays: z.number().int(),
@@ -122,30 +99,27 @@ const purgeExpiredResponseSchema = z.object({
 });
 
 export type RecycleItemType = z.infer<typeof recycleItemTypeSchema>;
-export type MoveToBinBody = z.infer<typeof moveToBinBodySchema>;
 export type ListQuery = z.infer<typeof listQuerySchema>;
 export type DestinationFoldersQuery = z.infer<typeof destinationFoldersQuerySchema>;
+export type ItemParams = z.infer<typeof itemParamsSchema>;
 export type RestoreBody = z.infer<typeof restoreBodySchema>;
-export type PermanentlyDeleteBody = z.infer<typeof permanentlyDeleteBodySchema>;
-export type EmptyBody = z.infer<typeof emptyBodySchema>;
-export type PurgeExpiredBody = z.infer<typeof purgeExpiredBodySchema>;
+export type EmptyQuery = z.infer<typeof emptyQuerySchema>;
+export type PurgeBody = z.infer<typeof purgeBodySchema>;
 
 export const { schemas: recycleBinSchemas, $ref } = buildJsonSchemas(
     {
-        moveToBinBodySchema,
-        moveToBinResponseSchema,
         listQuerySchema,
         listResponseSchema,
         destinationFoldersQuerySchema,
         destinationFoldersResponseSchema,
+        itemParamsSchema,
         restoreBodySchema,
         restoreResponseSchema,
-        permanentlyDeleteBodySchema,
         permanentlyDeleteResponseSchema,
-        emptyBodySchema,
+        emptyQuerySchema,
         emptyResponseSchema,
-        purgeExpiredBodySchema,
-        purgeExpiredResponseSchema,
+        purgeBodySchema,
+        purgeResponseSchema,
     },
     { $id: "RecycleBin" },
 );

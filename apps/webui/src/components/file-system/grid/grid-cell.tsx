@@ -54,7 +54,7 @@ export function FileGridCell({ fileId, fileName }: { fileId: string; fileName: s
                 <div className="px-2.5 pb-2">
                     <Image
                         className="h-auto w-full rounded-md"
-                        src={`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get-thumbnail/${fileId}`}
+                        src={`${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/${fileId}/thumbnail`}
                         width={300}
                         height={200}
                         alt="File Preview"

@@ -3,7 +3,7 @@
 import { env } from "@/env/env.mjs";
 
 export function OfficePreviewPane({ fileId }: { fileId: string }) {
-    const fileUrl = `${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/get/${fileId}`;
+    const fileUrl = `${env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL}/v1/files/${fileId}/content`;
     const encodedFileUrl = encodeURIComponent(fileUrl);
 
     return (

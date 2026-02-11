@@ -3,17 +3,20 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { accessRules } from "@/db/schema/access-rules";
-import { fileReadTokens, uploadTokens } from "@/db/schema/auth";
+import { fileReadTokens, uploadTokenRules, uploadTokens } from "@/db/schema/auth";
 import { files, folders } from "@/db/schema/storage";
 import { users } from "@/db/schema/users";
 
 import type {
+    AccessRuleParams,
     CreateAccessRuleInput,
     CreateReadTokenInput,
+    CreateReadTokenParams,
     CreateUploadTokenInput,
     CreateUserInput,
     UpdateAccessRuleInput,
     UpdateUploadTokenInput,
+    UploadTokenParams,
 } from "./auth.schemas";
 import { createUserWithRootFolder } from "./auth.utils";
 
@@ -40,7 +43,6 @@ export async function createUserHandler(
             return reply.code(403).send({ message: "Admin access required" });
         }
 
-        // Verify that user does not already exist
         const existingUser = await this.db
             .select({ id: users.id })
             .from(users)
@@ -58,7 +60,6 @@ export async function createUserHandler(
             ...(lastName !== undefined ? { lastName } : {}),
         });
 
-        // Return user
         return reply.code(201).send({
             id: userWithRoot.id,
             username: userWithRoot.username,
@@ -79,7 +80,6 @@ export async function infoHandler(this: FastifyInstance, request: FastifyRequest
     }
 
     const userId = request.user.id;
-
     const [user] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
 
     if (!user) {
@@ -110,7 +110,7 @@ export async function listAccessRulesHandler(this: FastifyInstance, request: Fas
             name: accessRules.name,
             type: accessRules.type,
             method: accessRules.method,
-            match: accessRules.match,
+            cidr: accessRules.cidr,
             createdAt: accessRules.createdAt,
             updatedAt: accessRules.updatedAt,
         })
@@ -124,7 +124,7 @@ export async function listAccessRulesHandler(this: FastifyInstance, request: Fas
             name: rule.name,
             type: rule.type,
             method: rule.method,
-            match: rule.match,
+            cidr: rule.cidr,
             createdAt: rule.createdAt.toISOString(),
             updatedAt: rule.updatedAt.toISOString(),
         })),
@@ -143,7 +143,6 @@ export async function listUploadTokensHandler(this: FastifyInstance, request: Fa
             description: uploadTokens.description,
             folderId: uploadTokens.folderId,
             fileAccess: uploadTokens.fileAccess,
-            accessControlRuleIds: uploadTokens.accessControlRuleIds,
             expiresAt: uploadTokens.expiresAt,
             createdAt: uploadTokens.createdAt,
             updatedAt: uploadTokens.updatedAt,
@@ -152,13 +151,32 @@ export async function listUploadTokensHandler(this: FastifyInstance, request: Fa
         .where(eq(uploadTokens.userId, userId))
         .orderBy(desc(uploadTokens.createdAt));
 
+    const tokenIds = tokens.map((token) => token.id);
+    const links =
+        tokenIds.length === 0
+            ? []
+            : await this.db
+                  .select({
+                      uploadTokenId: uploadTokenRules.uploadTokenId,
+                      accessRuleId: uploadTokenRules.accessRuleId,
+                  })
+                  .from(uploadTokenRules)
+                  .where(inArray(uploadTokenRules.uploadTokenId, tokenIds));
+
+    const accessRuleIdsByToken = new Map<string, string[]>();
+    for (const link of links) {
+        const list = accessRuleIdsByToken.get(link.uploadTokenId) ?? [];
+        list.push(link.accessRuleId);
+        accessRuleIdsByToken.set(link.uploadTokenId, list);
+    }
+
     return reply.code(200).send({
         uploadTokens: tokens.map((token) => ({
             id: token.id,
             description: token.description,
             folderId: token.folderId,
             fileAccess: token.fileAccess,
-            accessControlRuleIds: token.accessControlRuleIds ?? [],
+            accessRuleIds: accessRuleIdsByToken.get(token.id) ?? [],
             expiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
             createdAt: token.createdAt.toISOString(),
             updatedAt: token.updatedAt.toISOString(),
@@ -171,29 +189,30 @@ export async function createAccessRuleHandler(
     request: FastifyRequest<{ Body: CreateAccessRuleInput }>,
     reply: FastifyReply,
 ) {
-    const { name, type, method, match } = request.body;
+    const { name, type, method, cidr } = request.body;
     const userId = request.user?.id;
     if (!userId) {
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
     await this.db.insert(accessRules).values({
-        name: name,
-        type: type,
-        method: method,
-        match: match,
+        name,
+        type,
+        method,
+        cidr,
         ownerId: userId,
     });
 
-    return reply.code(200).send({ status: "success", message: "Access Rule created" });
+    return reply.code(200).send({ status: "success", message: "Access rule created" });
 }
 
 export async function updateAccessRuleHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: UpdateAccessRuleInput }>,
+    request: FastifyRequest<{ Params: AccessRuleParams; Body: UpdateAccessRuleInput }>,
     reply: FastifyReply,
 ) {
-    const { id, name, type, method, match } = request.body;
+    const { ruleId } = request.params;
+    const { name, type, method, cidr } = request.body;
     const userId = request.user?.id;
     if (!userId) {
         return reply.code(401).send({ message: "Unauthorized" });
@@ -202,7 +221,7 @@ export async function updateAccessRuleHandler(
     const [existing] = await this.db
         .select({ id: accessRules.id })
         .from(accessRules)
-        .where(and(eq(accessRules.id, id), eq(accessRules.ownerId, userId)))
+        .where(and(eq(accessRules.id, ruleId), eq(accessRules.ownerId, userId)))
         .limit(1);
 
     if (!existing) {
@@ -215,12 +234,12 @@ export async function updateAccessRuleHandler(
             name,
             type,
             method,
-            match,
+            cidr,
             updatedAt: new Date(),
         })
-        .where(eq(accessRules.id, id));
+        .where(eq(accessRules.id, ruleId));
 
-    return reply.code(200).send({ status: "success", message: "Access Rule updated" });
+    return reply.code(200).send({ status: "success", message: "Access rule updated" });
 }
 
 export async function createUploadTokenHandler(
@@ -245,20 +264,20 @@ export async function createUploadTokenHandler(
         return reply.code(500).send({ message: "Something went wrong. Please try again." });
     }
 
-    if (user.id != folder.ownerId) {
+    if (user.id !== folder.ownerId) {
         return reply
             .code(403)
             .send({ message: "You do not have permission to create an upload token for this folder" });
     }
 
-    const { description, folderId, fileAccess, accessControlRuleIds, expiresAt } = request.body;
+    const { description, folderId, fileAccess, accessRuleIds, expiresAt } = request.body;
 
     const expiry = expiresAt === undefined || expiresAt === null ? null : new Date(expiresAt);
     if (expiry !== null && Number.isNaN(expiry.getTime())) {
         return reply.code(400).send({ message: "Invalid expiresAt value" });
     }
 
-    const ruleIds = accessControlRuleIds?.length ? Array.from(new Set(accessControlRuleIds)) : undefined;
+    const ruleIds = accessRuleIds?.length ? Array.from(new Set(accessRuleIds)) : undefined;
     if (ruleIds && ruleIds.length > 0) {
         const existingRules = await this.db
             .select({ id: accessRules.id })
@@ -269,17 +288,34 @@ export async function createUploadTokenHandler(
         }
     }
 
-    const [uploadToken] = await this.db
-        .insert(uploadTokens)
-        .values({
-            userId: user.id,
-            description: description != undefined ? description : null,
-            folderId: folderId,
-            fileAccess: fileAccess,
-            accessControlRuleIds: ruleIds && ruleIds.length > 0 ? ruleIds : null,
-            expiresAt: expiry,
-        })
-        .returning();
+    const uploadToken = await this.db.transaction(async (tx) => {
+        const [createdUploadToken] = await tx
+            .insert(uploadTokens)
+            .values({
+                userId: user.id,
+                description: description !== undefined ? description : null,
+                folderId,
+                fileAccess,
+                expiresAt: expiry,
+            })
+            .returning();
+
+        if (!createdUploadToken) {
+            return null;
+        }
+
+        if (ruleIds && ruleIds.length > 0) {
+            await tx.insert(uploadTokenRules).values(
+                ruleIds.map((ruleId) => ({
+                    uploadTokenId: createdUploadToken.id,
+                    accessRuleId: ruleId,
+                })),
+            );
+        }
+
+        return createdUploadToken;
+    });
+
     if (!uploadToken) {
         return reply.code(500).send({ message: "Failed to create upload token" });
     }
@@ -292,7 +328,7 @@ export async function createUploadTokenHandler(
 
 export async function updateUploadTokenHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: UpdateUploadTokenInput }>,
+    request: FastifyRequest<{ Params: UploadTokenParams; Body: UpdateUploadTokenInput }>,
     reply: FastifyReply,
 ) {
     const userId = request.user?.id;
@@ -300,12 +336,13 @@ export async function updateUploadTokenHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const { id, description, folderId, fileAccess, accessControlRuleIds, expiresAt } = request.body;
+    const { tokenId } = request.params;
+    const { description, folderId, fileAccess, accessRuleIds, expiresAt } = request.body;
 
     const [existingToken] = await this.db
         .select({ id: uploadTokens.id })
         .from(uploadTokens)
-        .where(and(eq(uploadTokens.id, id), eq(uploadTokens.userId, userId)))
+        .where(and(eq(uploadTokens.id, tokenId), eq(uploadTokens.userId, userId)))
         .limit(1);
     if (!existingToken) {
         return reply.code(404).send({ message: "Upload token not found" });
@@ -329,7 +366,7 @@ export async function updateUploadTokenHandler(
         return reply.code(400).send({ message: "Invalid expiresAt value" });
     }
 
-    const ruleIds = accessControlRuleIds.length > 0 ? Array.from(new Set(accessControlRuleIds)) : [];
+    const ruleIds = accessRuleIds.length > 0 ? Array.from(new Set(accessRuleIds)) : [];
     if (ruleIds.length > 0) {
         const existingRules = await this.db
             .select({ id: accessRules.id })
@@ -340,24 +377,36 @@ export async function updateUploadTokenHandler(
         }
     }
 
-    await this.db
-        .update(uploadTokens)
-        .set({
-            description: description != undefined ? description : null,
-            folderId: folderId,
-            fileAccess: fileAccess,
-            accessControlRuleIds: ruleIds.length > 0 ? ruleIds : null,
-            expiresAt: expiry,
-            updatedAt: new Date(),
-        })
-        .where(and(eq(uploadTokens.id, id), eq(uploadTokens.userId, userId)));
+    await this.db.transaction(async (tx) => {
+        await tx
+            .update(uploadTokens)
+            .set({
+                description: description !== undefined ? description : null,
+                folderId,
+                fileAccess,
+                expiresAt: expiry,
+                updatedAt: new Date(),
+            })
+            .where(and(eq(uploadTokens.id, tokenId), eq(uploadTokens.userId, userId)));
+
+        await tx.delete(uploadTokenRules).where(eq(uploadTokenRules.uploadTokenId, tokenId));
+
+        if (ruleIds.length > 0) {
+            await tx.insert(uploadTokenRules).values(
+                ruleIds.map((ruleId) => ({
+                    uploadTokenId: tokenId,
+                    accessRuleId: ruleId,
+                })),
+            );
+        }
+    });
 
     return reply.code(200).send({ status: "success", message: "Upload token updated" });
 }
 
 export async function createReadTokenHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Body: CreateReadTokenInput }>,
+    request: FastifyRequest<{ Params: CreateReadTokenParams; Body: CreateReadTokenInput }>,
     reply: FastifyReply,
 ) {
     if (!request.user?.id) {
@@ -365,7 +414,8 @@ export async function createReadTokenHandler(
     }
 
     const userId = request.user.id;
-    const { fileId, description, expiresAt } = request.body;
+    const { fileId } = request.params;
+    const { description, expiresAt } = request.body;
 
     const [file] = await this.db
         .select({ id: files.id, ownerId: files.ownerId, fileAccess: files.fileAccess })
@@ -395,7 +445,7 @@ export async function createReadTokenHandler(
         .values({
             userId,
             fileId,
-            description: description != undefined ? description : null,
+            description: description !== undefined ? description : null,
             expiresAt: expiry,
         })
         .returning();
@@ -412,6 +462,5 @@ export async function createReadTokenHandler(
 
 export async function csrfTokenHandler(this: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
     const csrfToken = reply.generateCsrf();
-
     return reply.code(200).send({ csrfToken });
 }

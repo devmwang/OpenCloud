@@ -1,4 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
+import { eq } from "drizzle-orm";
 
 import type { Database } from "@/db";
 import { accounts } from "@/db/schema/better-auth";
@@ -38,7 +39,7 @@ export const createUserWithRootFolder = async (db: Database, input: CreateUserWi
                 firstName: input.firstName ?? null,
                 lastName: input.lastName ?? null,
                 role,
-                rootFolderId,
+                rootFolderId: null,
             })
             .returning();
         if (!user) {
@@ -52,11 +53,14 @@ export const createUserWithRootFolder = async (db: Database, input: CreateUserWi
                 folderName: "Files",
                 ownerId: userId,
                 type: "ROOT",
+                folderPath: `/${rootFolderId}`,
             })
             .returning({ id: folders.id });
         if (!rootFolder) {
             throw new Error("Failed to create root folder");
         }
+
+        await tx.update(users).set({ rootFolderId }).where(eq(users.id, userId));
 
         await tx.insert(accounts).values({
             userId,
@@ -65,6 +69,6 @@ export const createUserWithRootFolder = async (db: Database, input: CreateUserWi
             password: input.passwordHash,
         });
 
-        return user;
+        return { ...user, rootFolderId };
     });
 };

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { NovaRequestContext } from "@/global-middleware";
 import { createCsrfHeaders } from "@/lib/csrf";
-import { getJson, postJson } from "@/lib/http";
+import { getJson, patchJson, postJson } from "@/lib/http";
 import { queryKeys } from "@/lib/query-keys";
 
 import { authClient } from "./auth-client";
@@ -43,7 +43,7 @@ const createAccessRuleInputSchema = z.object({
     name: z.string().min(1),
     type: z.enum(["ALLOW", "DISALLOW"]),
     method: z.literal("IP_ADDRESS"),
-    match: z.string().min(1),
+    cidr: z.string().min(1),
 });
 
 const updateAccessRuleInputSchema = z.object({
@@ -51,7 +51,7 @@ const updateAccessRuleInputSchema = z.object({
     name: z.string().min(1),
     type: z.enum(["ALLOW", "DISALLOW"]),
     method: z.literal("IP_ADDRESS"),
-    match: z.string().min(1),
+    cidr: z.string().min(1),
 });
 
 const statusMessageSchema = z.object({
@@ -63,7 +63,7 @@ const createUploadTokenInputSchema = z.object({
     description: z.string().optional(),
     folderId: z.string().min(1),
     fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
-    accessControlRuleIds: z.array(z.string()).min(1).optional(),
+    accessRuleIds: z.array(z.string()).min(1).optional(),
     expiresAt: z.string().datetime().nullable().optional(),
 });
 
@@ -72,7 +72,7 @@ const updateUploadTokenInputSchema = z.object({
     description: z.string().optional(),
     folderId: z.string().min(1),
     fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
-    accessControlRuleIds: z.array(z.string()),
+    accessRuleIds: z.array(z.string()),
     expiresAt: z.string().datetime().nullable(),
 });
 
@@ -97,7 +97,7 @@ const accessRuleSummarySchema = z.object({
     name: z.string(),
     type: z.enum(["ALLOW", "DISALLOW"]),
     method: z.literal("IP_ADDRESS"),
-    match: z.string(),
+    cidr: z.string(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
 });
@@ -111,7 +111,7 @@ const uploadTokenSummarySchema = z.object({
     description: z.string().nullable(),
     folderId: z.string(),
     fileAccess: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
-    accessControlRuleIds: z.array(z.string()),
+    accessRuleIds: z.array(z.string()),
     expiresAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -235,7 +235,7 @@ export const signOut = async () => {
 };
 
 export const getAuthInfo = async () => {
-    return getJson("/v1/auth/info", authInfoSchema, {
+    return getJson("/v1/users/me", authInfoSchema, {
         forwardServerCookies: true,
         cache: "no-store",
     });
@@ -244,7 +244,7 @@ export const getAuthInfo = async () => {
 export const createUser = async (input: CreateUserInput) => {
     const body = createUserInputSchema.parse(input);
 
-    return postJson("/v1/auth/create", authInfoSchema, {
+    return postJson("/v1/users", authInfoSchema, {
         body,
         headers: await createCsrfHeaders(),
     });
@@ -253,7 +253,7 @@ export const createUser = async (input: CreateUserInput) => {
 export const createAccessRule = async (input: CreateAccessRuleInput) => {
     const body = createAccessRuleInputSchema.parse(input);
 
-    return postJson("/v1/auth/create-access-rule", statusMessageSchema, {
+    return postJson("/v1/access-rules", statusMessageSchema, {
         body,
         headers: await createCsrfHeaders(),
     });
@@ -261,9 +261,10 @@ export const createAccessRule = async (input: CreateAccessRuleInput) => {
 
 export const updateAccessRule = async (input: UpdateAccessRuleInput) => {
     const body = updateAccessRuleInputSchema.parse(input);
+    const { id, ...payload } = body;
 
-    return postJson("/v1/auth/update-access-rule", statusMessageSchema, {
-        body,
+    return patchJson(`/v1/access-rules/${encodeURIComponent(id)}`, statusMessageSchema, {
+        body: payload,
         headers: await createCsrfHeaders(),
     });
 };
@@ -271,7 +272,7 @@ export const updateAccessRule = async (input: UpdateAccessRuleInput) => {
 export const createUploadToken = async (input: CreateUploadTokenInput) => {
     const body = createUploadTokenInputSchema.parse(input);
 
-    return postJson("/v1/auth/create-upload-token", createUploadTokenResponseSchema, {
+    return postJson("/v1/upload-tokens", createUploadTokenResponseSchema, {
         body,
         headers: await createCsrfHeaders(),
     });
@@ -279,28 +280,30 @@ export const createUploadToken = async (input: CreateUploadTokenInput) => {
 
 export const updateUploadToken = async (input: UpdateUploadTokenInput) => {
     const body = updateUploadTokenInputSchema.parse(input);
+    const { id, ...payload } = body;
 
-    return postJson("/v1/auth/update-upload-token", statusMessageSchema, {
-        body,
+    return patchJson(`/v1/upload-tokens/${encodeURIComponent(id)}`, statusMessageSchema, {
+        body: payload,
         headers: await createCsrfHeaders(),
     });
 };
 
 export const createReadToken = async (input: CreateReadTokenInput) => {
     const body = createReadTokenInputSchema.parse(input);
+    const { fileId, ...payload } = body;
 
-    return postJson("/v1/auth/create-read-token", createReadTokenResponseSchema, {
-        body,
+    return postJson(`/v1/files/${encodeURIComponent(fileId)}/read-tokens`, createReadTokenResponseSchema, {
+        body: payload,
         headers: await createCsrfHeaders(),
     });
 };
 
 export const getOwnedAccessRules = async () => {
-    const response = await getJson("/v1/auth/access-rules", listAccessRulesResponseSchema);
+    const response = await getJson("/v1/access-rules", listAccessRulesResponseSchema);
     return response.accessRules;
 };
 
 export const getOwnedUploadTokens = async () => {
-    const response = await getJson("/v1/auth/upload-tokens", listUploadTokensResponseSchema);
+    const response = await getJson("/v1/upload-tokens", listUploadTokensResponseSchema);
     return response.uploadTokens;
 };

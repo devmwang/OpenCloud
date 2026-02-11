@@ -1,5 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
-import { boolean, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { displayTypeEnum, roleEnum } from "./enums";
 
@@ -19,7 +19,6 @@ export const users = pgTable(
         image: text("image"),
         role: roleEnum("role").notNull().default("USER"),
         rootFolderId: text("rootFolderId"),
-        accessControlRuleIds: text("accessControlRuleIds").array(),
         defaultDisplayType: displayTypeEnum("defaultDisplayType").notNull().default("GRID"),
         createdAt: timestamp("createdAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
         updatedAt: timestamp("updatedAt", { mode: "date", precision: 3 }).notNull().defaultNow(),
@@ -27,5 +26,6 @@ export const users = pgTable(
     (table) => ({
         usernameKey: uniqueIndex("Users_username_key").on(table.username),
         emailKey: uniqueIndex("Users_email_unique").on(table.email),
+        rootFolderIdIdx: index("Users_rootFolderId_idx").on(table.rootFolderId),
     }),
 );

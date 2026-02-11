@@ -13,7 +13,7 @@ export const getCsrfToken = async (forceRefresh = false) => {
         return csrfTokenCache;
     }
 
-    const response = await getJson("/v1/auth/csrf", csrfResponseSchema);
+    const response = await getJson("/v1/csrf-token", csrfResponseSchema);
     csrfTokenCache = response.csrfToken;
 
     return response.csrfToken;

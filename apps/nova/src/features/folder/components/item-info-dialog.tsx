@@ -59,10 +59,9 @@ function FileInfoContent({ fileId }: { fileId: string }) {
     return (
         <div className="divide-border divide-y">
             <InfoRow label="Name" value={file.name} />
-            <InfoRow label="Type" value={file.fileType} />
-            <InfoRow label="Size" value={formatBytes(file.fileSize ?? file.size)} />
-            <InfoRow label="Access" value={file.fileAccess ?? file.fileAccessPermission ?? "Unknown"} />
-            {file.ownerUsername ? <InfoRow label="Owner" value={file.ownerUsername} /> : null}
+            <InfoRow label="Type" value={file.mimeType} />
+            <InfoRow label="Size" value={formatBytes(file.sizeBytes)} />
+            <InfoRow label="Access" value={file.access} />
             <InfoRow label="Created" value={formatDate(file.createdAt)} />
             <InfoRow label="Updated" value={formatDate(file.updatedAt)} />
         </div>
@@ -88,8 +87,7 @@ function FolderInfoContent({ folderId }: { folderId: string }) {
     return (
         <div className="divide-border divide-y">
             <InfoRow label="Name" value={folder.name} />
-            <InfoRow label="Access" value={folder.folderAccess ?? folder.fileAccessPermission ?? "Unknown"} />
-            {folder.ownerUsername ? <InfoRow label="Owner" value={folder.ownerUsername} /> : null}
+            <InfoRow label="Access" value={folder.folderAccess} />
             <InfoRow label="Created" value={formatDate(folder.createdAt)} />
             <InfoRow label="Updated" value={formatDate(folder.updatedAt)} />
         </div>

@@ -26,6 +26,10 @@ OpenCloud is a Turborepo monorepo for a self-hosted cloud file server (Fastify A
 - Run: `pnpm run lint`
 - Then format everything: `pnpm run prettier:write`
 
+## Generated files
+
+- Ignore changes to `apps/nova/src/routeTree.gen.ts` during agent work/review. It is auto-generated when the Nova dev server starts.
+
 ## Repo structure (see per-package guides)
 
 - Server app: [apps/server/AGENTS.md](apps/server/AGENTS.md)

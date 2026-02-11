@@ -3,16 +3,13 @@ import { z } from "zod/v3";
 import { buildJsonSchemas } from "@/utils/zod-schema";
 
 const uploadFileQuerySchema = z.object({
-    parentFolderId: z.string({
-        required_error: "Parent folder ID is required",
-        invalid_type_error: "Parent folder ID must be a string",
-    }),
+    folderId: z.string().optional(),
 });
 
 const uploadFileResponseSchema = z.object({
-    status: z.string(),
     id: z.string(),
     fileExtension: z.string(),
+    storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
 
 export type UploadFileQuerystring = z.infer<typeof uploadFileQuerySchema>;

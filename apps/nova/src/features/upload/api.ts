@@ -4,9 +4,9 @@ import { createCsrfHeaders } from "@/lib/csrf";
 import { postMultipart } from "@/lib/http";
 
 const uploadResponseSchema = z.object({
-    status: z.string(),
     id: z.string(),
     fileExtension: z.string(),
+    storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
 
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
@@ -15,8 +15,8 @@ export const uploadSingleFile = async (input: { parentFolderId: string; file: Fi
     const formData = new FormData();
     formData.append("file", input.file);
 
-    return postMultipart("/v1/upload/single", uploadResponseSchema, {
-        query: { parentFolderId: input.parentFolderId },
+    return postMultipart("/v1/files", uploadResponseSchema, {
+        query: { folderId: input.parentFolderId },
         body: formData,
         headers: await createCsrfHeaders(),
     });
@@ -27,7 +27,8 @@ export const uploadFileWithToken = async (input: { uploadToken: string; file: Fi
     formData.append("uploadToken", input.uploadToken);
     formData.append("file", input.file);
 
-    return postMultipart("/v1/upload/token-single", uploadResponseSchema, {
+    return postMultipart("/v1/files", uploadResponseSchema, {
         body: formData,
+        credentials: "omit",
     });
 };

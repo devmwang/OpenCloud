@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { createCsrfHeaders } from "@/lib/csrf";
-import { getJson, postJson } from "@/lib/http";
+import { deleteJson, getJson, postJson } from "@/lib/http";
 
 export const recycleItemTypeEnum = z.enum(["FILE", "FOLDER"]);
 
@@ -18,6 +18,12 @@ const moveToBinResponseSchema = z.object({
     itemType: recycleItemTypeEnum,
     itemId: z.string(),
     deletedAt: z.string().datetime(),
+});
+
+const deleteSourceResponseSchema = z.object({
+    status: z.string(),
+    message: z.string(),
+    id: z.string(),
 });
 
 const recycleBinListItemSchema = z.object({
@@ -88,11 +94,9 @@ const permanentlyDeleteResponseSchema = z.object({
     purgedFolders: z.number().int(),
 });
 
-const emptyRecycleBinInputSchema = z
-    .object({
-        itemType: recycleItemTypeEnum.optional(),
-    })
-    .optional();
+const emptyRecycleBinInputSchema = z.object({
+    itemType: recycleItemTypeEnum.optional(),
+});
 
 const emptyRecycleBinResponseSchema = z.object({
     status: z.literal("success"),
@@ -124,17 +128,28 @@ export type PurgeExpiredRecycleBinInput = z.infer<typeof purgeExpiredInputSchema
 
 export const moveToRecycleBin = async (input: z.infer<typeof moveToBinInputSchema>) => {
     const body = moveToBinInputSchema.parse(input);
+    const endpoint =
+        body.itemType === "FILE"
+            ? `/v1/files/${encodeURIComponent(body.itemId)}`
+            : `/v1/folders/${encodeURIComponent(body.itemId)}`;
 
-    return postJson("/v1/recycle-bin/move-to-bin", moveToBinResponseSchema, {
-        body,
+    const response = await deleteJson(endpoint, deleteSourceResponseSchema, {
         headers: await createCsrfHeaders(),
+    });
+
+    return moveToBinResponseSchema.parse({
+        status: "success",
+        message: response.message,
+        itemType: body.itemType,
+        itemId: body.itemId,
+        deletedAt: new Date().toISOString(),
     });
 };
 
 export const listRecycleBin = async (input: ListRecycleBinInput = {}) => {
     const query = listRecycleBinInputSchema.parse(input);
 
-    return getJson("/v1/recycle-bin/list", listRecycleBinResponseSchema, {
+    return getJson("/v1/recycle-bin/items", listRecycleBinResponseSchema, {
         query,
     });
 };
@@ -150,26 +165,33 @@ export const getRecycleBinDestinationFolders = async (input: DestinationFoldersI
 export const restoreRecycleBinItem = async (input: RestoreRecycleBinInput) => {
     const body = restoreInputSchema.parse(input);
 
-    return postJson("/v1/recycle-bin/restore", restoreResponseSchema, {
-        body,
-        headers: await createCsrfHeaders(),
-    });
+    return postJson(
+        `/v1/recycle-bin/items/${body.itemType}/${encodeURIComponent(body.itemId)}/restore`,
+        restoreResponseSchema,
+        {
+            body: { destinationFolderId: body.destinationFolderId },
+            headers: await createCsrfHeaders(),
+        },
+    );
 };
 
 export const permanentlyDeleteRecycleBinItem = async (input: z.infer<typeof permanentlyDeleteInputSchema>) => {
     const body = permanentlyDeleteInputSchema.parse(input);
 
-    return postJson("/v1/recycle-bin/permanently-delete", permanentlyDeleteResponseSchema, {
-        body,
-        headers: await createCsrfHeaders(),
-    });
+    return deleteJson(
+        `/v1/recycle-bin/items/${body.itemType}/${encodeURIComponent(body.itemId)}`,
+        permanentlyDeleteResponseSchema,
+        {
+            headers: await createCsrfHeaders(),
+        },
+    );
 };
 
 export const emptyRecycleBin = async (input?: EmptyRecycleBinInput) => {
-    const body = emptyRecycleBinInputSchema.parse(input ?? {});
+    const query = emptyRecycleBinInputSchema.parse(input ?? {});
 
-    return postJson("/v1/recycle-bin/empty", emptyRecycleBinResponseSchema, {
-        body,
+    return deleteJson("/v1/recycle-bin/items", emptyRecycleBinResponseSchema, {
+        query,
         headers: await createCsrfHeaders(),
     });
 };
@@ -177,7 +199,7 @@ export const emptyRecycleBin = async (input?: EmptyRecycleBinInput) => {
 export const purgeExpiredRecycleBin = async (input?: PurgeExpiredRecycleBinInput) => {
     const body = purgeExpiredInputSchema.parse(input ?? {});
 
-    return postJson("/v1/recycle-bin/purge-expired", purgeExpiredResponseSchema, {
+    return postJson("/v1/recycle-bin/purge", purgeExpiredResponseSchema, {
         body,
         headers: await createCsrfHeaders(),
     });
