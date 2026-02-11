@@ -9,7 +9,18 @@ async function uploadRouter(server: FastifyInstance) {
         method: "POST",
         url: "/files",
         onRequest: [server.optionalAuthenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [
+            async (request, reply) => {
+                const query = request.query as { folderId?: string } | undefined;
+                if (
+                    request.authenticated &&
+                    typeof query?.folderId === "string" &&
+                    query.folderId.length > 0
+                ) {
+                    await server.requireCsrf(request, reply);
+                }
+            },
+        ],
         schema: {
             querystring: $ref("uploadFileQuerySchema"),
             response: { 201: $ref("uploadFileResponseSchema") },
