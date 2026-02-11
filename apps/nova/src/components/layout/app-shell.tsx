@@ -26,8 +26,8 @@ const navItems = [
     },
     { label: "Recycle Bin", icon: TrashIcon, getTo: () => ({ to: "/recycle-bin" as const }) },
     { label: "Profile", icon: UserCircleIcon, getTo: () => ({ to: "/profile" as const }) },
-    { label: "Admin", icon: ShieldCheckIcon, getTo: () => ({ to: "/admin" as const }) },
     { label: "Tools", icon: WrenchScrewdriverIcon, getTo: () => ({ to: "/tools" as const }) },
+    { label: "Admin", icon: ShieldCheckIcon, getTo: () => ({ to: "/admin" as const }) },
 ] as const;
 
 function isActiveRoute(matches: Array<{ routeId: string }>, label: string) {
@@ -139,7 +139,7 @@ export function Sidebar({ session, onSignOut }: SidebarProps) {
                 {/* User section */}
                 <div className="border-border mt-auto space-y-2 border-t px-4 pt-4 pb-4">
                     <div className="flex items-center gap-2.5 px-2">
-                        <div className="from-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br to-blue-700 text-xs font-bold text-white">
+                        <div className="from-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br to-blue-700 text-xs font-bold text-white">
                             {displayInitials}
                         </div>
                         <div className="min-w-0 flex-1">

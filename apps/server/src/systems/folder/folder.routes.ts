@@ -82,6 +82,11 @@ async function folderRouter(server: FastifyInstance) {
         method: "DELETE",
         url: "/folders/:folderId",
         onRequest: [server.authenticate],
+        config: {
+            rateLimit: {
+                max: env.RATE_LIMIT_MUTATION_MAX,
+            },
+        },
         preHandler: [server.requireCsrf],
         schema: {
             params: $ref("folderParamsSchema"),

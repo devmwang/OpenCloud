@@ -41,17 +41,53 @@ declare module "fastify" {
 
 const RATE_LIMIT_APPROACHING_THRESHOLD_PERCENT = 0.1;
 const RATE_LIMIT_APPROACHING_THRESHOLD_MINIMUM = 20;
+const READ_TOKEN_RATE_LIMIT_PATH = /^\/v1\/files\/[^/]+\/(content|thumbnail)$/;
 
-const getReadToken = (request: { query?: unknown }) => {
-    if (!request.query || typeof request.query !== "object") {
+const getRequestPath = (url: string) => {
+    return url.split("?")[0] ?? url;
+};
+
+const getReadTokenFromQuery = (query: unknown) => {
+    if (!query || typeof query !== "object") {
         return undefined;
     }
 
-    const readToken = (request.query as { readToken?: string }).readToken;
+    const readToken = (query as { readToken?: string }).readToken;
     return typeof readToken === "string" && readToken.length > 0 ? readToken : undefined;
 };
 
-const buildRateLimitKey = (request: Pick<FastifyRequest, "user" | "ip" | "query">) => {
+const getReadTokenFromUrl = (url: string) => {
+    const queryStart = url.indexOf("?");
+    if (queryStart === -1) {
+        return undefined;
+    }
+
+    const readToken = new URLSearchParams(url.slice(queryStart + 1)).get("readToken");
+    return typeof readToken === "string" && readToken.length > 0 ? readToken : undefined;
+};
+
+const getReadToken = (request: Pick<FastifyRequest, "url" | "query">) => {
+    if (!READ_TOKEN_RATE_LIMIT_PATH.test(getRequestPath(request.url))) {
+        return undefined;
+    }
+
+    return getReadTokenFromQuery(request.query) ?? getReadTokenFromUrl(request.url);
+};
+
+const getVerifiedReadTokenId = (request: Pick<FastifyRequest, "server">, readToken: string) => {
+    try {
+        const payload = request.server.jwt.verify<{ id?: string; type?: string }>(readToken);
+        if (payload.type !== "ReadToken" || typeof payload.id !== "string" || payload.id.length === 0) {
+            return undefined;
+        }
+
+        return payload.id;
+    } catch {
+        return undefined;
+    }
+};
+
+const buildRateLimitKey = (request: Pick<FastifyRequest, "user" | "ip" | "url" | "query" | "server">) => {
     const userId = request.user?.id;
     if (typeof userId === "string" && userId.length > 0) {
         return `u:${userId}`;
@@ -59,8 +95,11 @@ const buildRateLimitKey = (request: Pick<FastifyRequest, "user" | "ip" | "query"
 
     const readToken = getReadToken(request);
     if (readToken) {
-        const readTokenHash = createHash("sha256").update(readToken).digest("hex").slice(0, 16);
-        return `rt:${readTokenHash}`;
+        const readTokenId = getVerifiedReadTokenId(request, readToken);
+        if (readTokenId) {
+            const readTokenHash = createHash("sha256").update(readTokenId).digest("hex").slice(0, 16);
+            return `rt:${readTokenHash}`;
+        }
     }
 
     return `ip:${request.ip}`;
@@ -159,7 +198,7 @@ server.addHook("onRequest", async (request) => {
 void server.register(FastifyRateLimit, {
     max: env.RATE_LIMIT_GLOBAL_MAX,
     timeWindow: env.RATE_LIMIT_GLOBAL_WINDOW,
-    hook: "preHandler",
+    hook: "onRequest",
     keyGenerator: (request) => buildRateLimitKey(request),
     onExceeding: (request, key) => {
         request.rateLimitEvent = "onExceeding";
