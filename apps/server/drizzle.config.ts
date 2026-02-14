@@ -11,9 +11,11 @@ const findEnvFile = (fileName: string) => {
 
     while (true) {
         const candidate = path.join(currentDir, fileName);
-        if (fs.existsSync(candidate)) {
-            return candidate;
-        }
+        try {
+            if (fs.statSync(candidate).isFile()) {
+                return candidate;
+            }
+        } catch {}
 
         const parentDir = path.dirname(currentDir);
         if (parentDir === currentDir) {

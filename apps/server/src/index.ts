@@ -42,6 +42,20 @@ const server = Fastify({
     trustProxy: env.TRUST_PROXY_HOPS,
 });
 
+const ensureDirectoryExists = (directoryPath: string) => {
+    try {
+        fs.mkdirSync(directoryPath, { recursive: true });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+            throw error;
+        }
+
+        if (!fs.statSync(directoryPath).isDirectory()) {
+            throw error;
+        }
+    }
+};
+
 // Register Utility Plugins
 void server.register(dbPlugin);
 void server.register(FastifyCORS, {
@@ -75,9 +89,7 @@ void server.register(FastifyMultipart, {
 });
 
 const fileStoreRoot = path.resolve(env.FILE_STORE_PATH);
-if (!fs.existsSync(fileStoreRoot)) {
-    fs.mkdirSync(fileStoreRoot, { recursive: true });
-}
+ensureDirectoryExists(fileStoreRoot);
 
 void server.register(FastifyStatic, {
     root: fileStoreRoot,

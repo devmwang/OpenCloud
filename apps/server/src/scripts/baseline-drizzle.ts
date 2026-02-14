@@ -24,9 +24,11 @@ const findEnvFile = (fileName: string, startDir: string) => {
 
     while (true) {
         const candidate = path.join(currentDir, fileName);
-        if (fs.existsSync(candidate)) {
-            return candidate;
-        }
+        try {
+            if (fs.statSync(candidate).isFile()) {
+                return candidate;
+            }
+        } catch {}
 
         const parentDir = path.dirname(currentDir);
         if (parentDir === currentDir) {
@@ -41,6 +43,18 @@ const getArgValue = (flag: string) => {
     const index = process.argv.indexOf(flag);
     if (index === -1) return undefined;
     return process.argv[index + 1];
+};
+
+const readTextFileOrThrow = (filePath: string, missingErrorMessage: string) => {
+    try {
+        return fs.readFileSync(filePath, "utf8");
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            throw new Error(missingErrorMessage);
+        }
+
+        throw error;
+    }
 };
 
 const run = async () => {
@@ -66,11 +80,7 @@ const run = async () => {
         throw new Error("DATABASE_URL is not set.");
     }
 
-    if (!fs.existsSync(journalPath)) {
-        throw new Error(`Missing migrations journal at ${journalPath}`);
-    }
-
-    const journalRaw = fs.readFileSync(journalPath, "utf8");
+    const journalRaw = readTextFileOrThrow(journalPath, `Missing migrations journal at ${journalPath}`);
     const journal = JSON.parse(journalRaw) as { entries: JournalEntry[] };
 
     const targetTag = getArgValue("--tag") ?? "0000_initial";
@@ -83,11 +93,7 @@ const run = async () => {
     }
 
     const migrationPath = path.join(migrationsDir, `${entry.tag}.sql`);
-    if (!fs.existsSync(migrationPath)) {
-        throw new Error(`Missing migration file at ${migrationPath}`);
-    }
-
-    const migrationSql = fs.readFileSync(migrationPath, "utf8");
+    const migrationSql = readTextFileOrThrow(migrationPath, `Missing migration file at ${migrationPath}`);
     const hash = crypto.createHash("sha256").update(migrationSql).digest("hex");
 
     console.log(`Baseline target: ${entry.tag}`);

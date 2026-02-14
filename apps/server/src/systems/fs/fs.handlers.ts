@@ -1,4 +1,3 @@
-import fs from "fs";
 import path from "path";
 
 import { and, eq, isNull } from "drizzle-orm";
@@ -87,6 +86,22 @@ const ensureFileReadable = (
         storageState: file.storageState,
     });
     return false;
+};
+
+const isMissingFileError = (error: unknown) => {
+    if (typeof error === "object" && error !== null && "code" in error) {
+        const errorCode = (error as NodeJS.ErrnoException).code;
+        if (errorCode === "ENOENT") {
+            return true;
+        }
+    }
+
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    const normalizedMessage = error.message.toLowerCase();
+    return normalizedMessage.includes("input file is missing") || normalizedMessage.includes("no such file");
 };
 
 export async function getDetailsHandler(
@@ -211,15 +226,13 @@ export async function getThumbnailHandler(
 
     const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
     try {
-        await fs.promises.stat(fullFilePath);
-    } catch {
-        return reply.code(404).send({ message: "File not found" });
-    }
-
-    try {
         const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).toBuffer();
         return reply.send(thumbnailBuffer);
-    } catch {
+    } catch (error) {
+        if (isMissingFileError(error)) {
+            return reply.code(404).send({ message: "File not found" });
+        }
+
         return reply.code(500).send({ message: "Thumbnail generation failed" });
     }
 }
