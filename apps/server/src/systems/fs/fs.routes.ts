@@ -14,7 +14,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/files/:fileId",
-        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.optionalAuthenticate],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -26,7 +26,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/files/:fileId/content",
-        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.optionalAuthenticate],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -37,7 +37,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/files/:fileId/thumbnail",
-        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.optionalAuthenticate],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -48,8 +48,8 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/files/:fileId",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate, server.requireCsrf],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             params: $ref("fileParamsSchema"),
             body: $ref("patchFileBodySchema"),
@@ -61,8 +61,8 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/files/:fileId",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate, server.requireCsrf],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             params: $ref("fileParamsSchema"),
             response: { 200: $ref("mutateFileResponseSchema") },

@@ -16,8 +16,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/folders/:folderId",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate],
+        preValidation: [server.authenticate],
         schema: {
             params: $ref("folderParamsSchema"),
             response: { 200: $ref("getFolderDetailsResponseSchema") },
@@ -28,8 +27,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/folders/:folderId/children",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate],
+        preValidation: [server.authenticate],
         schema: {
             params: $ref("folderParamsSchema"),
             querystring: $ref("getFolderChildrenQuerySchema"),
@@ -41,8 +39,8 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/folders",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate, server.requireCsrf],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             body: $ref("createFolderSchema"),
             response: { 201: $ref("createFolderResponseSchema") },
@@ -53,8 +51,8 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/folders/:folderId",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate, server.requireCsrf],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             params: $ref("folderParamsSchema"),
             body: $ref("patchFolderBodySchema"),
@@ -66,8 +64,8 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/folders/:folderId",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate, server.requireCsrf],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             params: $ref("folderParamsSchema"),
             response: { 200: $ref("mutateFolderResponseSchema") },
@@ -78,8 +76,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/folders/:folderId/display-preferences",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate],
+        preValidation: [server.authenticate],
         schema: {
             params: $ref("folderParamsSchema"),
             response: { 200: $ref("displayPreferencesResponseSchema") },
@@ -90,8 +87,8 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "PUT",
         url: "/folders/:folderId/display-preferences",
-        onRequest: [server.optionalAuthenticate],
-        preHandler: [server.authenticate, server.requireCsrf],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
         schema: {
             params: $ref("folderParamsSchema"),
             body: $ref("putDisplayPreferencesSchema"),

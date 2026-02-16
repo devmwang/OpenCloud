@@ -8,7 +8,7 @@ async function uploadRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/files",
-        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.optionalAuthenticate],
         preHandler: [
             async (request, reply) => {
                 const query = request.query as { folderId?: string } | undefined;
