@@ -19,8 +19,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/users",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             body: $ref("createUserSchema"),
             response: { 201: $ref("userInfoResponseSchema") },
@@ -31,7 +31,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/users/me",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate],
         schema: {
             response: { 200: $ref("userInfoResponseSchema") },
         },
@@ -41,7 +42,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/csrf-token",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate],
         schema: {
             response: { 200: $ref("csrfTokenResponseSchema") },
         },
@@ -51,7 +53,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/access-rules",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate],
         schema: {
             response: { 200: $ref("listAccessRulesResponseSchema") },
         },
@@ -61,8 +64,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/access-rules",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             body: $ref("createAccessRuleSchema"),
             response: { 200: $ref("statusMessageResponseSchema") },
@@ -73,8 +76,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/access-rules/:ruleId",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             params: $ref("accessRuleParamsSchema"),
             body: $ref("updateAccessRuleSchema"),
@@ -86,7 +89,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/upload-tokens",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate],
         schema: {
             response: { 200: $ref("listUploadTokensResponseSchema") },
         },
@@ -96,8 +100,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/upload-tokens",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             body: $ref("createUploadTokenSchema"),
             response: { 200: $ref("createUploadTokenResponseSchema") },
@@ -108,8 +112,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/upload-tokens/:tokenId",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             params: $ref("uploadTokenParamsSchema"),
             body: $ref("updateUploadTokenSchema"),
@@ -121,8 +125,8 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/files/:fileId/read-tokens",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             params: $ref("createReadTokenParamsSchema"),
             body: $ref("createReadTokenSchema"),

@@ -48,8 +48,8 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/files/:fileId",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             params: $ref("fileParamsSchema"),
             body: $ref("patchFileBodySchema"),
@@ -61,8 +61,8 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/files/:fileId",
-        onRequest: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        onRequest: [server.optionalAuthenticate],
+        preHandler: [server.authenticate, server.requireCsrf],
         schema: {
             params: $ref("fileParamsSchema"),
             response: { 200: $ref("mutateFileResponseSchema") },
