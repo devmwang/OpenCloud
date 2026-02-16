@@ -19,10 +19,10 @@ Fastify 5 API server (TypeScript, ESM) with Drizzle (Postgres), JWT cookie auth,
 
 Working directory: repo root.
 
-- Dev server only (dotenvx + turbo): `pnpm run dev -- --filter=server`
-- Typecheck server only: `pnpm run typecheck -- --filter=server`
-- Build server only: `pnpm run build -- --filter=server`
-- Start server only (builds first via turbo): `pnpm run start -- --filter=server`
+- Dev server only (dotenvx + turbo): `pnpm run dev --filter=server`
+- Typecheck server only: `pnpm run typecheck --filter=server`
+- Build server only: `pnpm run build --filter=server`
+- Start server only (builds first via turbo): `pnpm run start --filter=server`
 
 ## Database (Drizzle)
 

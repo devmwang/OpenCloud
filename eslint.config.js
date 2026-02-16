@@ -11,7 +11,7 @@ const typeCheckedConfigs = tseslint.configs.recommendedTypeChecked.map((config) 
 module.exports = [
     ...customConfig,
     {
-        ignores: ["**/.next/**", "**/dist/**", "**/.turbo/**", "**/node_modules/**"],
+        ignores: ["**/dist/**", "**/.output/**", "**/.vinxi/**", "**/.tanstack/**", "**/.turbo/**", "**/node_modules/**"],
     },
     {
         settings: {

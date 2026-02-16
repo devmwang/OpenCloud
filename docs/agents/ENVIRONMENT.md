@@ -13,7 +13,7 @@ Working directory: repo root.
 
 Server:
 
-- `OPENCLOUD_WEBUI_URL`: allowed WebUI origin for CORS
+- `OPENCLOUD_WEBUI_URL`: allowed frontend origin for CORS and trusted origins (legacy variable name; set to the Nova origin)
 - `COOKIE_URL`: cookie domain
 - `AUTH_SECRET`: signing secret
 - `DATABASE_URL`: Postgres connection string
@@ -27,7 +27,7 @@ Server:
 - `RATE_LIMIT_READ_MAX_PER_MINUTE`: max requests per minute for other read routes (default `3000`)
 - `RATE_LIMIT_MUTATION_MAX_PER_MINUTE`: max requests per minute for write routes (default `600`)
 
-Web frontends (WebUI + Nova):
+Web frontend (Nova):
 
-- `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by both frontends and by the Server for Better Auth `baseURL`)
-- `OPENCLOUD_WEBUI_URL`: canonical public frontend origin used by the Server (CORS/trusted origin) and Nova canonical URL fallback
+- `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by Nova and by the Server for Better Auth `baseURL`)
+- `OPENCLOUD_WEBUI_URL`: canonical public frontend origin (legacy variable name retained for compatibility) used by the Server and Nova canonical URL fallback
