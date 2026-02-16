@@ -14,11 +14,11 @@ TanStack Start frontend for OpenCloud.
 
 Working directory: repo root.
 
-- Dev Nova only: `pnpm run dev -- --filter=nova`
+- Dev Nova only: `pnpm run dev --filter=nova`
 - Lint Nova only: `pnpm --filter nova lint`
-- Typecheck Nova only: `pnpm run typecheck -- --filter=nova`
-- Build Nova only: `pnpm run build -- --filter=nova`
-- Start Nova only: `pnpm run start -- --filter=nova`
+- Typecheck Nova only: `pnpm run typecheck --filter=nova`
+- Build Nova only: `pnpm run build --filter=nova`
+- Start Nova only: `pnpm run start --filter=nova`
 
 ## Conventions / gotchas
 
