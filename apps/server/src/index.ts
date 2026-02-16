@@ -25,6 +25,7 @@ import authenticationPlugin from "@/utils/authentication";
 import betterAuthPlugin from "@/utils/better-auth";
 import csrfPlugin from "@/utils/csrf";
 import dbPlugin from "@/utils/db";
+import { getRateLimitKey, getRateLimitMax, getRateLimitTimeWindow } from "@/utils/rate-limit";
 
 export const SERVER_HOST = env.SERVER_HOST;
 export const SERVER_PORT = env.SERVER_PORT;
@@ -63,6 +64,14 @@ void server.register(FastifyCORS, {
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
+
+void server.register(FastifyRateLimit, {
+    hook: "onRequest",
+    keyGenerator: getRateLimitKey,
+    max: getRateLimitMax,
+    timeWindow: getRateLimitTimeWindow,
+});
+
 void server.register(betterAuthPlugin);
 void server.register(authenticationPlugin);
 void server.register(accessControlPlugin);
@@ -76,11 +85,6 @@ void server.register(FastifyHelmet, {
     crossOriginResourcePolicy: { policy: "cross-origin" },
 });
 void server.register(csrfPlugin);
-
-void server.register(FastifyRateLimit, {
-    max: 1000,
-    timeWindow: "1 minute",
-});
 
 void server.register(FastifyMultipart, {
     limits: {
@@ -109,9 +113,17 @@ void server.register(folderRouter, { prefix: "/v1" });
 void server.register(recycleBinRouter, { prefix: "/v1/recycle-bin" });
 
 // Server Health Check
-server.get("/v1/health", async () => {
-    return { status: "OK" };
-});
+server.get(
+    "/v1/health",
+    {
+        config: {
+            rateLimit: false,
+        },
+    },
+    async () => {
+        return { status: "OK" };
+    },
+);
 
 void (async () => {
     try {
