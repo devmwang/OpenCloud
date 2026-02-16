@@ -431,6 +431,7 @@ function FolderPageContent({
                 await Promise.all([
                     queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
                     queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(destinationFolderId) }),
+                    queryClient.invalidateQueries({ queryKey: ["folder", "destination-children"] }),
                 ]);
                 clearSelection();
             }
