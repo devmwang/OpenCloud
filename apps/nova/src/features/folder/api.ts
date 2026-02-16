@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { createCsrfHeaders } from "@/lib/csrf";
-import { getJson, postJson, putJson } from "@/lib/http";
+import { getJson, patchJson, postJson, putJson } from "@/lib/http";
 
 const folderNodeSchema = z.object({
     id: z.string(),
@@ -93,9 +93,55 @@ const createFolderResponseSchema = z.object({
     id: z.string(),
 });
 
+const mutateFolderResponseSchema = z.object({
+    status: z.string(),
+    message: z.string(),
+    id: z.string(),
+    parentFolderId: z.string().nullable(),
+});
+
+const moveFolderInputSchema = z.object({
+    folderId: z.string().min(1),
+    destinationFolderId: z.string().min(1),
+});
+
+const renameFolderInputSchema = z.object({
+    folderId: z.string().min(1),
+    name: z.string().trim().min(1),
+});
+
+const destinationFoldersInputSchema = z.object({
+    search: z.string().optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+});
+
+const destinationFoldersResponseSchema = z.object({
+    folders: z.array(
+        z.object({
+            id: z.string(),
+            name: z.string(),
+            path: z.string(),
+        }),
+    ),
+});
+
+const folderDestinationChildrenResponseSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    parentFolderId: z.string().nullable(),
+    folders: z.array(
+        z.object({
+            id: z.string(),
+            name: z.string(),
+        }),
+    ),
+});
+
 export type FolderDetails = z.infer<typeof folderDetailsSchema>;
 export type FolderContents = z.infer<typeof folderContentsSchema>;
 export type CreateFolderInput = z.infer<typeof createFolderInputSchema>;
+export type DestinationFoldersInput = z.infer<typeof destinationFoldersInputSchema>;
+export type FolderDestinationChildren = z.infer<typeof folderDestinationChildrenResponseSchema>;
 
 export type GetFolderContentsOptions = {
     limit?: number;
@@ -123,6 +169,43 @@ export const createFolder = async (input: CreateFolderInput) => {
         body: { name: body.folderName, parentFolderId: body.parentFolderId },
         headers: await createCsrfHeaders(),
     });
+};
+
+export const moveFolder = async (input: z.infer<typeof moveFolderInputSchema>) => {
+    const body = moveFolderInputSchema.parse(input);
+
+    return patchJson(`/v1/folders/${encodeURIComponent(body.folderId)}`, mutateFolderResponseSchema, {
+        body: {
+            destinationFolderId: body.destinationFolderId,
+        },
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const renameFolder = async (input: z.infer<typeof renameFolderInputSchema>) => {
+    const body = renameFolderInputSchema.parse(input);
+
+    return patchJson(`/v1/folders/${encodeURIComponent(body.folderId)}`, mutateFolderResponseSchema, {
+        body: {
+            name: body.name,
+        },
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const getMoveDestinationFolders = async (input: DestinationFoldersInput = {}) => {
+    const query = destinationFoldersInputSchema.parse(input);
+
+    return getJson("/v1/recycle-bin/destination-folders", destinationFoldersResponseSchema, {
+        query,
+    });
+};
+
+export const getFolderDestinationChildren = async (folderId: string) => {
+    return getJson(
+        `/v1/folders/${encodeURIComponent(folderId)}/destination-children`,
+        folderDestinationChildrenResponseSchema,
+    );
 };
 
 export const displayTypeEnum = z.enum(["GRID", "LIST"]);

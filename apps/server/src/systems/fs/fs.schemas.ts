@@ -26,12 +26,28 @@ const fileDetailsResponseSchema = z.object({
     storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
 
-const patchFileBodySchema = z.object({
-    folderId: z.string({
-        required_error: "Destination folder ID is required",
-        invalid_type_error: "Destination folder ID must be a string",
-    }),
-});
+const patchFileMoveBodySchema = z
+    .object({
+        folderId: z.string({
+            required_error: "Destination folder ID is required",
+            invalid_type_error: "Destination folder ID must be a string",
+        }),
+    })
+    .strict();
+
+const patchFileRenameBodySchema = z
+    .object({
+        name: z
+            .string({
+                required_error: "File name is required",
+                invalid_type_error: "File name must be a string",
+            })
+            .trim()
+            .min(1, { message: "File name cannot be empty" }),
+    })
+    .strict();
+
+const patchFileBodySchema = z.union([patchFileMoveBodySchema, patchFileRenameBodySchema]);
 
 const mutateFileResponseSchema = z.object({
     status: z.string(),

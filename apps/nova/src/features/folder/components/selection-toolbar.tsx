@@ -1,4 +1,12 @@
-import { ArrowDownTrayIcon, InformationCircleIcon, LinkIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+    ArrowDownTrayIcon,
+    ArrowsRightLeftIcon,
+    InformationCircleIcon,
+    LinkIcon,
+    PencilIcon,
+    TrashIcon,
+    XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,9 +21,17 @@ type SelectionToolbarProps = {
     onDeleteFiles: (fileIds: string[]) => Promise<void>;
     onDeleteFolders: (folderIds: string[]) => Promise<void>;
     onShowInfo: (item: SelectionItem) => void;
+    onRename: (item: SelectionItem) => void;
+    onMove: (items: SelectionItem[]) => void;
 };
 
-export function SelectionToolbar({ onDeleteFiles, onDeleteFolders, onShowInfo }: SelectionToolbarProps) {
+export function SelectionToolbar({
+    onDeleteFiles,
+    onDeleteFolders,
+    onShowInfo,
+    onRename,
+    onMove,
+}: SelectionToolbarProps) {
     const { selectionCount, selectedFiles, selectedFolders, clearSelection, selected } = useSelection();
     const { addToast } = useToast();
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -51,6 +67,15 @@ export function SelectionToolbar({ onDeleteFiles, onDeleteFolders, onShowInfo }:
     const handleInfo = () => {
         if (!singleItem) return;
         onShowInfo(singleItem);
+    };
+
+    const handleRename = () => {
+        if (!singleItem) return;
+        onRename(singleItem);
+    };
+
+    const handleMove = () => {
+        onMove([...selected.values()]);
     };
 
     const handleDelete = async () => {
@@ -99,6 +124,18 @@ export function SelectionToolbar({ onDeleteFiles, onDeleteFolders, onShowInfo }:
             <Button variant="ghost" size="sm" onClick={handleInfo} disabled={!isSingleItem} aria-label="Info">
                 <InformationCircleIcon className="h-4.5 w-4.5" />
                 Info
+            </Button>
+
+            {isSingleItem ? (
+                <Button variant="ghost" size="sm" onClick={handleRename} aria-label="Rename">
+                    <PencilIcon className="h-4.5 w-4.5" />
+                    Rename
+                </Button>
+            ) : null}
+
+            <Button variant="ghost" size="sm" onClick={handleMove} aria-label="Move selected">
+                <ArrowsRightLeftIcon className="h-4.5 w-4.5" />
+                Move
             </Button>
 
             <div className="bg-border mx-0.5 h-7 w-px" />

@@ -6,9 +6,10 @@ type FolderRowProps = {
     name: string;
     selected?: boolean;
     onClick?: (event: React.MouseEvent | React.KeyboardEvent) => void;
+    onContextMenu?: (event: React.MouseEvent) => void;
 };
 
-export function FolderRow({ id, name, selected, onClick }: FolderRowProps) {
+export function FolderRow({ id, name, selected, onClick, onContextMenu }: FolderRowProps) {
     const router = useRouter();
 
     const openFolder = () => {
@@ -31,6 +32,7 @@ export function FolderRow({ id, name, selected, onClick }: FolderRowProps) {
     return (
         <div
             onClick={onClick}
+            onContextMenu={onContextMenu}
             onDoubleClick={openFolder}
             onKeyDown={handleKeyDown}
             role="button"

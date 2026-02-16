@@ -7,6 +7,7 @@ import {
     getDetailsHandler,
     getDisplayPreferencesHandler,
     listChildrenHandler,
+    listDestinationChildrenHandler,
     patchFolderHandler,
     putDisplayPreferencesHandler,
 } from "./folder.handlers";
@@ -36,6 +37,18 @@ async function folderRouter(server: FastifyInstance) {
             response: { 200: $ref("getFolderChildrenResponseSchema") },
         },
         handler: listChildrenHandler,
+    });
+
+    server.route({
+        method: "GET",
+        url: "/folders/:folderId/destination-children",
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
+        schema: {
+            params: $ref("folderParamsSchema"),
+            response: { 200: $ref("getFolderDestinationChildrenResponseSchema") },
+        },
+        handler: listDestinationChildrenHandler,
     });
 
     server.route({

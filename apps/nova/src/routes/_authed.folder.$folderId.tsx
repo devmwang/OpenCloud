@@ -9,11 +9,14 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorCard } from "@/components/shared/error-card";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { moveFile, renameFile } from "@/features/files/api";
 import {
     createFolder,
     getDisplayOrder,
     getFolderContents,
     getFolderDetails,
+    moveFolder,
+    renameFolder,
     setDisplayOrder,
     type DisplayOrderResponse,
     type DisplayType,
@@ -31,6 +34,8 @@ import { FolderContextMenu } from "@/features/folder/components/folder-context-m
 import { FolderRow } from "@/features/folder/components/folder-row";
 import { FolderToolbar } from "@/features/folder/components/folder-toolbar";
 import { ItemInfoDialog } from "@/features/folder/components/item-info-dialog";
+import { MoveItemsDialog } from "@/features/folder/components/move-items-dialog";
+import { RenameItemDialog } from "@/features/folder/components/rename-item-dialog";
 import { SelectionProvider } from "@/features/folder/components/selection-provider";
 import { SelectionToolbar } from "@/features/folder/components/selection-toolbar";
 import { UploadDialog } from "@/features/folder/components/upload-dialog";
@@ -174,6 +179,22 @@ function FolderPage() {
         }
     };
 
+    const handleRenameFolder = async (targetFolderId: string, name: string) => {
+        await renameFolder({ folderId: targetFolderId, name });
+    };
+
+    const handleRenameFile = async (targetFileId: string, name: string) => {
+        await renameFile({ fileId: targetFileId, name });
+    };
+
+    const handleMoveFolder = async (targetFolderId: string, destinationFolderId: string) => {
+        await moveFolder({ folderId: targetFolderId, destinationFolderId });
+    };
+
+    const handleMoveFile = async (targetFileId: string, destinationFolderId: string) => {
+        await moveFile({ fileId: targetFileId, destinationFolderId });
+    };
+
     const isLoading = detailsQuery.isPending || contentsQuery.isPending;
     const error = detailsQuery.error ?? contentsQuery.error;
 
@@ -244,6 +265,10 @@ function FolderPage() {
                 onRefresh={() => void refreshContents()}
                 onDeleteFolder={handleDeleteFolder}
                 onDeleteFile={handleDeleteFile}
+                onRenameFolder={handleRenameFolder}
+                onRenameFile={handleRenameFile}
+                onMoveFolder={handleMoveFolder}
+                onMoveFile={handleMoveFile}
             />
 
             {/* Dialogs */}
@@ -264,7 +289,7 @@ function FolderPage() {
 
 type FolderPageContentProps = {
     folderId: string;
-    folderDetails: { name: string; hierarchy: { id: string; name: string; type: string }[] };
+    folderDetails: { name: string; type: "ROOT" | "STANDARD"; hierarchy: { id: string; name: string; type: string }[] };
     folderContents: {
         folders: { id: string; folderName: string }[];
         files: { id: string; fileName: string }[];
@@ -283,6 +308,10 @@ type FolderPageContentProps = {
     onRefresh: () => void;
     onDeleteFolder: (folderId: string) => Promise<void>;
     onDeleteFile: (fileId: string) => Promise<void>;
+    onRenameFolder: (folderId: string, name: string) => Promise<void>;
+    onRenameFile: (fileId: string, name: string) => Promise<void>;
+    onMoveFolder: (folderId: string, destinationFolderId: string) => Promise<void>;
+    onMoveFile: (fileId: string, destinationFolderId: string) => Promise<void>;
 };
 
 function FolderPageContent({
@@ -303,17 +332,130 @@ function FolderPageContent({
     onRefresh,
     onDeleteFolder,
     onDeleteFile,
+    onRenameFolder,
+    onRenameFile,
+    onMoveFolder,
+    onMoveFile,
 }: FolderPageContentProps) {
+    const queryClient = useQueryClient();
     const { addToast } = useToast();
     const { selectionCount, isSelected, handleItemClick, clearSelection } = useSelection();
 
     const [infoItem, setInfoItem] = useState<SelectionItem | null>(null);
     const [infoOpen, setInfoOpen] = useState(false);
+    const [renameTarget, setRenameTarget] = useState<SelectionItem | null>(null);
+    const [renameOpen, setRenameOpen] = useState(false);
+    const [moveTargets, setMoveTargets] = useState<SelectionItem[]>([]);
+    const [moveOpen, setMoveOpen] = useState(false);
 
     const handleShowInfo = useCallback((item: SelectionItem) => {
         setInfoItem(item);
         setInfoOpen(true);
     }, []);
+
+    const handleOpenRename = useCallback((items: SelectionItem[]) => {
+        if (items.length !== 1) {
+            return;
+        }
+
+        const target = items[0];
+        if (!target) {
+            return;
+        }
+
+        setRenameTarget(target);
+        setRenameOpen(true);
+    }, []);
+
+    const handleOpenMove = useCallback((items: SelectionItem[]) => {
+        if (items.length === 0) {
+            return;
+        }
+
+        setMoveTargets(items);
+        setMoveOpen(true);
+    }, []);
+
+    const handleRenameSubmit = useCallback(
+        async (nextName: string) => {
+            if (!renameTarget) {
+                return;
+            }
+
+            try {
+                if (renameTarget.kind === "file") {
+                    await onRenameFile(renameTarget.id, nextName);
+                } else {
+                    await onRenameFolder(renameTarget.id, nextName);
+                }
+
+                await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+
+                addToast(`${renameTarget.kind === "file" ? "File" : "Folder"} renamed`, "success");
+            } catch (error) {
+                const message = getErrorMessage(error);
+                addToast(message, "error");
+                throw new Error(message);
+            }
+        },
+        [renameTarget, onRenameFile, onRenameFolder, queryClient, folderId, addToast],
+    );
+
+    const handleMoveSubmit = useCallback(
+        async (destinationFolderId: string) => {
+            if (moveTargets.length === 0) {
+                return;
+            }
+
+            let succeeded = 0;
+            let failed = 0;
+            let firstError: string | null = null;
+
+            for (const item of moveTargets) {
+                try {
+                    if (item.kind === "file") {
+                        await onMoveFile(item.id, destinationFolderId);
+                    } else {
+                        await onMoveFolder(item.id, destinationFolderId);
+                    }
+                    succeeded++;
+                } catch (error) {
+                    failed++;
+                    if (!firstError) {
+                        firstError = getErrorMessage(error);
+                    }
+                }
+            }
+
+            if (succeeded > 0) {
+                await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
+                    queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(destinationFolderId) }),
+                ]);
+                clearSelection();
+            }
+
+            if (failed === 0) {
+                addToast(
+                    succeeded === 1
+                        ? `${moveTargets[0]?.kind === "file" ? "File" : "Folder"} moved`
+                        : `Moved ${succeeded} item(s)`,
+                    "success",
+                );
+                return;
+            }
+
+            if (succeeded > 0) {
+                addToast(`Moved ${succeeded} item(s), ${failed} failed`, "error");
+                return;
+            }
+
+            const message = firstError ?? "Failed to move items";
+            addToast(message, "error");
+            throw new Error(message);
+        },
+        [moveTargets, onMoveFile, onMoveFolder, queryClient, folderId, clearSelection, addToast],
+    );
 
     // ── Batch delete handlers ─────────────────────────────────
     const handleBatchDeleteFiles = useCallback(
@@ -390,7 +532,36 @@ function FolderPageContent({
         [handleItemClick],
     );
 
+    const makeFolderContextMenuHandler = useCallback(
+        (entry: { id: string; folderName: string }) => () => {
+            if (isSelected(entry.id)) {
+                return;
+            }
+
+            handleItemClick(
+                { id: entry.id, kind: "folder", name: entry.folderName },
+                { metaKey: false, ctrlKey: false, shiftKey: false },
+            );
+        },
+        [isSelected, handleItemClick],
+    );
+
+    const makeFileContextMenuHandler = useCallback(
+        (entry: { id: string; fileName: string }) => () => {
+            if (isSelected(entry.id)) {
+                return;
+            }
+
+            handleItemClick(
+                { id: entry.id, kind: "file", name: entry.fileName },
+                { metaKey: false, ctrlKey: false, shiftKey: false },
+            );
+        },
+        [isSelected, handleItemClick],
+    );
+
     const hasSelection = selectionCount > 0;
+    const rootFolderId = folderDetails.type === "ROOT" ? folderId : (folderDetails.hierarchy[0]?.id ?? folderId);
 
     return (
         <>
@@ -404,6 +575,8 @@ function FolderPageContent({
                             onDeleteFiles={handleBatchDeleteFiles}
                             onDeleteFolders={handleBatchDeleteFolders}
                             onShowInfo={handleShowInfo}
+                            onRename={(item) => handleOpenRename([item])}
+                            onMove={handleOpenMove}
                         />
                     ) : (
                         <div className="flex items-center gap-3">
@@ -447,6 +620,8 @@ function FolderPageContent({
                                                     folderId={entry.id}
                                                     folderName={entry.folderName}
                                                     onDelete={onDeleteFolder}
+                                                    onRename={handleOpenRename}
+                                                    onMove={handleOpenMove}
                                                     onRefresh={onRefresh}
                                                 >
                                                     <FolderCard
@@ -454,6 +629,7 @@ function FolderPageContent({
                                                         name={entry.folderName}
                                                         selected={isSelected(entry.id)}
                                                         onClick={makeFolderClickHandler(entry)}
+                                                        onContextMenu={makeFolderContextMenuHandler(entry)}
                                                     />
                                                 </FolderContextMenu>
                                             ))}
@@ -466,6 +642,8 @@ function FolderPageContent({
                                                     folderId={entry.id}
                                                     folderName={entry.folderName}
                                                     onDelete={onDeleteFolder}
+                                                    onRename={handleOpenRename}
+                                                    onMove={handleOpenMove}
                                                     onRefresh={onRefresh}
                                                 >
                                                     <FolderRow
@@ -473,6 +651,7 @@ function FolderPageContent({
                                                         name={entry.folderName}
                                                         selected={isSelected(entry.id)}
                                                         onClick={makeFolderClickHandler(entry)}
+                                                        onContextMenu={makeFolderContextMenuHandler(entry)}
                                                     />
                                                 </FolderContextMenu>
                                             ))}
@@ -496,6 +675,8 @@ function FolderPageContent({
                                                     fileName={entry.fileName}
                                                     folderId={folderId}
                                                     onDelete={onDeleteFile}
+                                                    onRename={handleOpenRename}
+                                                    onMove={handleOpenMove}
                                                 >
                                                     <FileCard
                                                         id={entry.id}
@@ -503,6 +684,7 @@ function FolderPageContent({
                                                         folderId={folderId}
                                                         selected={isSelected(entry.id)}
                                                         onClick={makeFileClickHandler(entry)}
+                                                        onContextMenu={makeFileContextMenuHandler(entry)}
                                                     />
                                                 </FileContextMenu>
                                             ))}
@@ -516,6 +698,8 @@ function FolderPageContent({
                                                     fileName={entry.fileName}
                                                     folderId={folderId}
                                                     onDelete={onDeleteFile}
+                                                    onRename={handleOpenRename}
+                                                    onMove={handleOpenMove}
                                                 >
                                                     <FileRow
                                                         id={entry.id}
@@ -523,6 +707,7 @@ function FolderPageContent({
                                                         folderId={folderId}
                                                         selected={isSelected(entry.id)}
                                                         onClick={makeFileClickHandler(entry)}
+                                                        onContextMenu={makeFileContextMenuHandler(entry)}
                                                     />
                                                 </FileContextMenu>
                                             ))}
@@ -537,6 +722,32 @@ function FolderPageContent({
 
             {/* Item info dialog */}
             <ItemInfoDialog open={infoOpen} onOpenChange={setInfoOpen} item={infoItem} />
+
+            <RenameItemDialog
+                open={renameOpen}
+                onOpenChange={(open) => {
+                    setRenameOpen(open);
+                    if (!open) {
+                        setRenameTarget(null);
+                    }
+                }}
+                item={renameTarget}
+                onSubmit={handleRenameSubmit}
+            />
+
+            <MoveItemsDialog
+                open={moveOpen}
+                onOpenChange={(open) => {
+                    setMoveOpen(open);
+                    if (!open) {
+                        setMoveTargets([]);
+                    }
+                }}
+                items={moveTargets}
+                rootFolderId={rootFolderId}
+                sourceFolderId={folderId}
+                onSubmit={handleMoveSubmit}
+            />
         </>
     );
 }

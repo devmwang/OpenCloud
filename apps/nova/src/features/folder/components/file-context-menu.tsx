@@ -9,13 +9,13 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { useToast } from "@/components/ui/toast";
-import { Tooltip } from "@/components/ui/tooltip";
 import { env } from "@/env";
+import { useSelection, type SelectionItem } from "@/features/folder/hooks/use-selection";
 import { toFileRouteId } from "@/lib/file-id";
 
 type FileContextMenuProps = {
@@ -23,12 +23,23 @@ type FileContextMenuProps = {
     fileName: string;
     folderId: string;
     onDelete: (fileId: string) => Promise<void>;
+    onRename: (items: SelectionItem[]) => void;
+    onMove: (items: SelectionItem[]) => void;
     children: React.ReactNode;
 };
 
-export function FileContextMenu({ fileId, fileName, folderId, onDelete, children }: FileContextMenuProps) {
+export function FileContextMenu({
+    fileId,
+    fileName,
+    folderId,
+    onDelete,
+    onRename,
+    onMove,
+    children,
+}: FileContextMenuProps) {
     const router = useRouter();
     const { addToast } = useToast();
+    const { selected, selectionCount, isSelected } = useSelection();
     const [deleteOpen, setDeleteOpen] = useState(false);
 
     const fileRouteId = toFileRouteId(fileId, fileName);
@@ -64,6 +75,17 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
         addToast("File URL copied to clipboard", "success");
     };
 
+    const actionTargets = useMemo<SelectionItem[]>(() => {
+        if (selectionCount > 1 && isSelected(fileId)) {
+            return [...selected.values()];
+        }
+
+        return [{ id: fileId, kind: "file", name: fileName }];
+    }, [selectionCount, isSelected, fileId, selected, fileName]);
+
+    const showRename = actionTargets.length === 1;
+    const showMove = actionTargets.length >= 1;
+
     return (
         <>
             <ContextMenu trigger={children}>
@@ -87,17 +109,20 @@ export function FileContextMenu({ fileId, fileName, folderId, onDelete, children
                 <ContextMenuItem icon={<LinkIcon />} onClick={() => void handleCopyLink()}>
                     Copy Link
                 </ContextMenuItem>
-                <ContextMenuSeparator />
-                <Tooltip content="Not yet available">
-                    <ContextMenuItem icon={<PencilIcon />} disabled>
+
+                {showRename || showMove ? <ContextMenuSeparator /> : null}
+
+                {showRename ? (
+                    <ContextMenuItem icon={<PencilIcon />} onClick={() => onRename(actionTargets)}>
                         Rename
                     </ContextMenuItem>
-                </Tooltip>
-                <Tooltip content="Not yet available">
-                    <ContextMenuItem icon={<ArrowsRightLeftIcon />} disabled>
+                ) : null}
+
+                {showMove ? (
+                    <ContextMenuItem icon={<ArrowsRightLeftIcon />} onClick={() => onMove(actionTargets)}>
                         Move
                     </ContextMenuItem>
-                </Tooltip>
+                ) : null}
             </ContextMenu>
 
             <ConfirmDialog

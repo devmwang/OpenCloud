@@ -318,6 +318,53 @@ export async function listChildrenHandler(
     });
 }
 
+export async function listDestinationChildrenHandler(
+    this: FastifyInstance,
+    request: FastifyRequest<{ Params: FolderParams }>,
+    reply: FastifyReply,
+) {
+    const folderId = request.params.folderId;
+    const userId = request.user?.id;
+    if (!userId) {
+        return reply.code(401).send({ message: "Unauthorized" });
+    }
+
+    const [folder] = await this.db
+        .select({
+            id: folders.id,
+            ownerId: folders.ownerId,
+            folderName: folders.folderName,
+            parentFolderId: folders.parentFolderId,
+        })
+        .from(folders)
+        .where(and(eq(folders.id, folderId), isNull(folders.deletedAt)))
+        .limit(1);
+
+    if (!folder) {
+        return reply.code(404).send({ message: "Folder not found" });
+    }
+
+    if (folder.ownerId !== userId) {
+        return reply.code(403).send({ message: "You do not have permission to access this folder" });
+    }
+
+    const childFolders = await this.db
+        .select({
+            id: folders.id,
+            name: folders.folderName,
+        })
+        .from(folders)
+        .where(and(eq(folders.parentFolderId, folderId), eq(folders.ownerId, userId), isNull(folders.deletedAt)))
+        .orderBy(asc(folders.folderName), asc(folders.id));
+
+    return reply.code(200).send({
+        id: folder.id,
+        name: folder.folderName,
+        parentFolderId: folder.parentFolderId,
+        folders: childFolders,
+    });
+}
+
 export async function createFolderHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Body: CreateFolderInput }>,
@@ -373,13 +420,13 @@ export async function patchFolderHandler(
     }
 
     const folderId = request.params.folderId;
-    const { destinationFolderId } = request.body;
 
     const [sourceFolder] = await this.db
         .select({
             id: folders.id,
             ownerId: folders.ownerId,
             type: folders.type,
+            folderName: folders.folderName,
             parentFolderId: folders.parentFolderId,
             folderPath: folders.folderPath,
         })
@@ -392,8 +439,34 @@ export async function patchFolderHandler(
     }
 
     if (sourceFolder.ownerId !== userId) {
-        return reply.code(403).send({ message: "You do not have permission to move this folder" });
+        return reply.code(403).send({ message: "You do not have permission to edit this folder" });
     }
+
+    if ("name" in request.body) {
+        if (sourceFolder.type === "ROOT") {
+            return reply.code(400).send({ message: "Root folder cannot be renamed" });
+        }
+
+        if (sourceFolder.folderName === request.body.name) {
+            return reply.code(200).send({
+                status: "success",
+                message: "Folder already has this name",
+                id: folderId,
+                parentFolderId: sourceFolder.parentFolderId,
+            });
+        }
+
+        await this.db.update(folders).set({ folderName: request.body.name }).where(eq(folders.id, folderId));
+
+        return reply.code(200).send({
+            status: "success",
+            message: "Folder renamed successfully",
+            id: folderId,
+            parentFolderId: sourceFolder.parentFolderId,
+        });
+    }
+
+    const destinationFolderId = request.body.destinationFolderId;
 
     if (sourceFolder.type === "ROOT") {
         return reply.code(400).send({ message: "Root folder cannot be moved" });
