@@ -17,7 +17,8 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/items",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
         schema: {
             querystring: $ref("listQuerySchema"),
             response: { 200: $ref("listResponseSchema") },
@@ -28,7 +29,8 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/destination-folders",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
         schema: {
             querystring: $ref("destinationFoldersQuerySchema"),
             response: { 200: $ref("destinationFoldersResponseSchema") },
@@ -39,7 +41,8 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/items/:itemType/:itemId/restore",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
             params: $ref("itemParamsSchema"),
@@ -52,7 +55,8 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/items/:itemType/:itemId",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
             params: $ref("itemParamsSchema"),
@@ -64,7 +68,8 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/items",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
             querystring: $ref("emptyQuerySchema"),
@@ -76,7 +81,8 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/purge",
-        onRequest: [server.authenticate],
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
             body: $ref("purgeBodySchema"),

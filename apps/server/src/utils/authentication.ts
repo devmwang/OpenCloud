@@ -50,6 +50,10 @@ const buildHeaders = (request: FastifyRequest) => {
 };
 
 type SetCookieHeaderSource = Headers | Record<string, string | string[] | undefined>;
+type SessionResolvedRequest = FastifyRequest & {
+    _authSessionResolved?: boolean;
+    _authConfigurationError?: boolean;
+};
 
 const extractSetCookies = (headers: SetCookieHeaderSource) => {
     const headerApi = headers as { getSetCookie?: () => string[]; get?: (name: string) => string | null };
@@ -96,14 +100,19 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
         secret: env.AUTH_SECRET,
     });
 
-    const setBetterAuthSession = async (request: FastifyRequest, reply: FastifyReply, required: boolean) => {
+    const setBetterAuthSession = async (request: FastifyRequest, reply: FastifyReply) => {
+        const statefulRequest = request as SessionResolvedRequest;
+        if (statefulRequest._authSessionResolved) {
+            return;
+        }
+
+        statefulRequest._authSessionResolved = true;
+        statefulRequest._authConfigurationError = false;
         request.authenticated = false;
         request.user = undefined;
 
         if (!server.betterAuth) {
-            if (required) {
-                reply.code(500).send({ error: "Auth not configured" });
-            }
+            statefulRequest._authConfigurationError = true;
             return;
         }
 
@@ -124,8 +133,16 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
             request.authenticated = false;
             request.user = undefined;
         }
+    };
 
-        if (required) {
+    const ensureAuthenticated = (request: FastifyRequest, reply: FastifyReply) => {
+        const statefulRequest = request as SessionResolvedRequest;
+        if (statefulRequest._authConfigurationError) {
+            reply.code(500).send({ error: "Auth not configured" });
+            return;
+        }
+
+        if (!request.authenticated) {
             reply.code(401).send({ error: "Unauthorized" });
             return;
         }
@@ -133,12 +150,13 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
 
     // Make JWT verification/decode available through the fastify server instance: server.authentication
     server.decorate("authenticate", async function (request: FastifyRequest, reply: FastifyReply) {
-        await setBetterAuthSession(request, reply, true);
+        await setBetterAuthSession(request, reply);
+        ensureAuthenticated(request, reply);
     });
 
     // Attempts to verify user but does not stop if verification fails (allows routes with optional authentication)
     server.decorate("optionalAuthenticate", async function (request: FastifyRequest, reply: FastifyReply) {
-        await setBetterAuthSession(request, reply, false);
+        await setBetterAuthSession(request, reply);
     });
 });
 
