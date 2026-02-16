@@ -17,6 +17,7 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/items",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             querystring: $ref("listQuerySchema"),
@@ -28,6 +29,7 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/destination-folders",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             querystring: $ref("destinationFoldersQuerySchema"),
@@ -39,6 +41,7 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/items/:itemType/:itemId/restore",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -52,6 +55,7 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/items/:itemType/:itemId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -64,6 +68,7 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/items",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -76,6 +81,7 @@ async function recycleBinRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/purge",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {

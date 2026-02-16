@@ -19,6 +19,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/users",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -31,6 +32,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/users/me",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             response: { 200: $ref("userInfoResponseSchema") },
@@ -41,6 +43,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/csrf-token",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             response: { 200: $ref("csrfTokenResponseSchema") },
@@ -51,6 +54,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/access-rules",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             response: { 200: $ref("listAccessRulesResponseSchema") },
@@ -61,6 +65,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/access-rules",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -73,6 +78,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/access-rules/:ruleId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -86,6 +92,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/upload-tokens",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             response: { 200: $ref("listUploadTokensResponseSchema") },
@@ -96,6 +103,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/upload-tokens",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -108,6 +116,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/upload-tokens/:tokenId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -121,6 +130,7 @@ async function authRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/files/:fileId/read-tokens",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {

@@ -66,7 +66,7 @@ void server.register(FastifyCORS, {
 });
 
 void server.register(FastifyRateLimit, {
-    // Run before auth/session hooks and before payload parsing.
+    // Run after onRequest hooks but before payload parsing.
     hook: "preParsing",
     keyGenerator: getRateLimitKey,
     max: getRateLimitMax,

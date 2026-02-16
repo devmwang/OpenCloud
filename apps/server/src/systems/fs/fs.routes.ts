@@ -14,7 +14,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/files/:fileId",
-        preValidation: [server.optionalAuthenticate],
+        onRequest: [server.optionalAuthenticate],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -26,7 +26,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/files/:fileId/content",
-        preValidation: [server.optionalAuthenticate],
+        onRequest: [server.optionalAuthenticate],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -37,7 +37,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/files/:fileId/thumbnail",
-        preValidation: [server.optionalAuthenticate],
+        onRequest: [server.optionalAuthenticate],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),
@@ -48,6 +48,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/files/:fileId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -61,6 +62,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/files/:fileId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {

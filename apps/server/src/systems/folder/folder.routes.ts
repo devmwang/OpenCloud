@@ -16,6 +16,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/folders/:folderId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             params: $ref("folderParamsSchema"),
@@ -27,6 +28,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/folders/:folderId/children",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             params: $ref("folderParamsSchema"),
@@ -39,6 +41,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/folders",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -51,6 +54,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "PATCH",
         url: "/folders/:folderId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -64,6 +68,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "DELETE",
         url: "/folders/:folderId",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
@@ -76,6 +81,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/folders/:folderId/display-preferences",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         schema: {
             params: $ref("folderParamsSchema"),
@@ -87,6 +93,7 @@ async function folderRouter(server: FastifyInstance) {
     server.route({
         method: "PUT",
         url: "/folders/:folderId/display-preferences",
+        onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf],
         schema: {
