@@ -5,7 +5,7 @@ export default tseslint.config(
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {
-        ignores: ["dist/**", ".output/**", ".vinxi/**", ".tanstack/**", "node_modules/**", "src/routeTree.gen.ts"],
+        ignores: ["dist/**", ".output/**", ".vinxi/**", ".tanstack/**", "node_modules/**", "**/routeTree.gen.ts"],
     },
     {
         files: ["**/*.{ts,tsx}"],
