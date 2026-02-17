@@ -8,13 +8,13 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { useToast } from "@/components/ui/toast";
 import { env } from "@/env";
-import { useSelection, type SelectionItem } from "@/features/folder/hooks/use-selection";
+import type { SelectionItem } from "@/features/folder/hooks/use-selection";
 
 type FolderContextMenuProps = {
     folderId: string;
@@ -22,6 +22,8 @@ type FolderContextMenuProps = {
     onDelete: (folderId: string) => Promise<void>;
     onRename: (items: SelectionItem[]) => void;
     onMove: (items: SelectionItem[]) => void;
+    resolveActionTargets: () => SelectionItem[];
+    isMultiSelectionTarget: boolean;
     onRefresh: () => void;
     children: React.ReactNode;
 };
@@ -32,12 +34,13 @@ export function FolderContextMenu({
     onDelete,
     onRename,
     onMove,
+    resolveActionTargets,
+    isMultiSelectionTarget,
     onRefresh,
     children,
 }: FolderContextMenuProps) {
     const router = useRouter();
     const { addToast } = useToast();
-    const { selected, selectionCount, isSelected } = useSelection();
     const [deleteOpen, setDeleteOpen] = useState(false);
 
     const handleOpen = () => {
@@ -53,16 +56,8 @@ export function FolderContextMenu({
         addToast("Folder ID copied to clipboard", "success");
     };
 
-    const actionTargets = useMemo<SelectionItem[]>(() => {
-        if (selectionCount > 1 && isSelected(folderId)) {
-            return [...selected.values()];
-        }
-
-        return [{ id: folderId, kind: "folder", name: folderName }];
-    }, [selectionCount, isSelected, folderId, selected, folderName]);
-
-    const showRename = actionTargets.length === 1;
-    const showMove = actionTargets.length >= 1;
+    const getActionTargets = () => resolveActionTargets();
+    const showRename = !isMultiSelectionTarget;
 
     return (
         <>
@@ -85,19 +80,17 @@ export function FolderContextMenu({
                     Refresh
                 </ContextMenuItem>
 
-                {showRename || showMove ? <ContextMenuSeparator /> : null}
+                <ContextMenuSeparator />
 
                 {showRename ? (
-                    <ContextMenuItem icon={<PencilIcon />} onClick={() => onRename(actionTargets)}>
+                    <ContextMenuItem icon={<PencilIcon />} onClick={() => onRename(getActionTargets())}>
                         Rename
                     </ContextMenuItem>
                 ) : null}
 
-                {showMove ? (
-                    <ContextMenuItem icon={<ArrowsRightLeftIcon />} onClick={() => onMove(actionTargets)}>
-                        Move
-                    </ContextMenuItem>
-                ) : null}
+                <ContextMenuItem icon={<ArrowsRightLeftIcon />} onClick={() => onMove(getActionTargets())}>
+                    Move
+                </ContextMenuItem>
             </ContextMenu>
 
             <ConfirmDialog

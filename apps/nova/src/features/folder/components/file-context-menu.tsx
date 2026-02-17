@@ -9,13 +9,13 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { useToast } from "@/components/ui/toast";
 import { env } from "@/env";
-import { useSelection, type SelectionItem } from "@/features/folder/hooks/use-selection";
+import type { SelectionItem } from "@/features/folder/hooks/use-selection";
 import { toFileRouteId } from "@/lib/file-id";
 
 type FileContextMenuProps = {
@@ -25,6 +25,8 @@ type FileContextMenuProps = {
     onDelete: (fileId: string) => Promise<void>;
     onRename: (items: SelectionItem[]) => void;
     onMove: (items: SelectionItem[]) => void;
+    resolveActionTargets: () => SelectionItem[];
+    isMultiSelectionTarget: boolean;
     children: React.ReactNode;
 };
 
@@ -35,11 +37,12 @@ export function FileContextMenu({
     onDelete,
     onRename,
     onMove,
+    resolveActionTargets,
+    isMultiSelectionTarget,
     children,
 }: FileContextMenuProps) {
     const router = useRouter();
     const { addToast } = useToast();
-    const { selected, selectionCount, isSelected } = useSelection();
     const [deleteOpen, setDeleteOpen] = useState(false);
 
     const fileRouteId = toFileRouteId(fileId, fileName);
@@ -75,16 +78,8 @@ export function FileContextMenu({
         addToast("File URL copied to clipboard", "success");
     };
 
-    const actionTargets = useMemo<SelectionItem[]>(() => {
-        if (selectionCount > 1 && isSelected(fileId)) {
-            return [...selected.values()];
-        }
-
-        return [{ id: fileId, kind: "file", name: fileName }];
-    }, [selectionCount, isSelected, fileId, selected, fileName]);
-
-    const showRename = actionTargets.length === 1;
-    const showMove = actionTargets.length >= 1;
+    const getActionTargets = () => resolveActionTargets();
+    const showRename = !isMultiSelectionTarget;
 
     return (
         <>
@@ -110,19 +105,17 @@ export function FileContextMenu({
                     Copy Link
                 </ContextMenuItem>
 
-                {showRename || showMove ? <ContextMenuSeparator /> : null}
+                <ContextMenuSeparator />
 
                 {showRename ? (
-                    <ContextMenuItem icon={<PencilIcon />} onClick={() => onRename(actionTargets)}>
+                    <ContextMenuItem icon={<PencilIcon />} onClick={() => onRename(getActionTargets())}>
                         Rename
                     </ContextMenuItem>
                 ) : null}
 
-                {showMove ? (
-                    <ContextMenuItem icon={<ArrowsRightLeftIcon />} onClick={() => onMove(actionTargets)}>
-                        Move
-                    </ContextMenuItem>
-                ) : null}
+                <ContextMenuItem icon={<ArrowsRightLeftIcon />} onClick={() => onMove(getActionTargets())}>
+                    Move
+                </ContextMenuItem>
             </ContextMenu>
 
             <ConfirmDialog
