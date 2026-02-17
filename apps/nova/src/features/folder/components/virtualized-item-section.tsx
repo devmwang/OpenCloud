@@ -114,11 +114,27 @@ export function VirtualizedItemSection<TItem>({
         return listEstimateHeight + listGapPx;
     }, [displayType, gridEstimateHeight, gridGapPx, listEstimateHeight, listGapPx]);
 
+    const getVirtualRowKey = useCallback(
+        (rowIndex: number) => {
+            if (displayType === "GRID") {
+                const start = rowIndex * columnCount;
+                const firstItem = items[start];
+
+                return firstItem ? `grid:${getItemId(firstItem)}` : `grid-row:${rowIndex}`;
+            }
+
+            const item = items[rowIndex];
+            return item ? getItemId(item) : `list-row:${rowIndex}`;
+        },
+        [displayType, columnCount, items, getItemId],
+    );
+
     const virtualizer = useWindowVirtualizer({
         count: rowCount,
         estimateSize,
         overscan,
         scrollMargin,
+        getItemKey: getVirtualRowKey,
     });
 
     const virtualRows = virtualizer.getVirtualItems();
