@@ -31,6 +31,7 @@ export function FolderCard({ id, name, selected, onClick, onContextMenu }: Folde
 
     return (
         <div
+            data-selection-item="true"
             onClick={onClick}
             onContextMenu={onContextMenu}
             onDoubleClick={openFolder}
