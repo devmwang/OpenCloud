@@ -20,6 +20,7 @@ type FileCardProps = {
     folderId: string;
     selected?: boolean;
     onClick?: (event: React.MouseEvent | React.KeyboardEvent) => void;
+    onContextMenu?: (event: React.MouseEvent) => void;
 };
 
 const getFileExtension = (name: string) => {
@@ -52,7 +53,7 @@ function isImageFile(fileName: string): boolean {
     return imageExtensions.has(getFileExtensionLower(fileName));
 }
 
-export function FileCard({ id, fileName, folderId, selected, onClick }: FileCardProps) {
+export function FileCard({ id, fileName, folderId, selected, onClick, onContextMenu }: FileCardProps) {
     const router = useRouter();
     const fileRouteId = toFileRouteId(id, fileName);
     const ext = getFileExtension(fileName);
@@ -87,6 +88,7 @@ export function FileCard({ id, fileName, folderId, selected, onClick }: FileCard
     return (
         <div
             onClick={onClick}
+            onContextMenu={onContextMenu}
             onDoubleClick={openPreview}
             onKeyDown={handleKeyDown}
             role="button"

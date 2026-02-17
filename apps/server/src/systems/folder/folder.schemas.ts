@@ -59,6 +59,18 @@ const getFolderChildrenResponseSchema = z.object({
     offset: z.number().int().optional(),
 });
 
+const getFolderDestinationChildrenResponseSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    parentFolderId: z.string().nullable(),
+    folders: z.array(
+        z.object({
+            id: z.string(),
+            name: z.string(),
+        }),
+    ),
+});
+
 const createFolderSchema = z.object({
     name: z.string({
         required_error: "Folder name is required",
@@ -74,12 +86,28 @@ const createFolderResponseSchema = z.object({
     id: z.string(),
 });
 
-const patchFolderBodySchema = z.object({
-    destinationFolderId: z.string({
-        required_error: "Destination folder ID is required",
-        invalid_type_error: "Destination folder ID must be a string",
-    }),
-});
+const patchFolderMoveBodySchema = z
+    .object({
+        destinationFolderId: z.string({
+            required_error: "Destination folder ID is required",
+            invalid_type_error: "Destination folder ID must be a string",
+        }),
+    })
+    .strict();
+
+const patchFolderRenameBodySchema = z
+    .object({
+        name: z
+            .string({
+                required_error: "Folder name is required",
+                invalid_type_error: "Folder name must be a string",
+            })
+            .trim()
+            .min(1, { message: "Folder name cannot be empty" }),
+    })
+    .strict();
+
+const patchFolderBodySchema = z.union([patchFolderMoveBodySchema, patchFolderRenameBodySchema]);
 
 const mutateFolderResponseSchema = z.object({
     status: z.string(),
@@ -113,6 +141,7 @@ export const { schemas: folderSchemas, $ref } = buildJsonSchemas(
         getFolderDetailsResponseSchema,
         getFolderChildrenQuerySchema,
         getFolderChildrenResponseSchema,
+        getFolderDestinationChildrenResponseSchema,
         createFolderSchema,
         createFolderResponseSchema,
         patchFolderBodySchema,

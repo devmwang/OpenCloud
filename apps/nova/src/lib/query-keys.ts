@@ -7,6 +7,7 @@ export const queryKeys = {
     folderContents: (folderId: string) => ["folder", "contents", folderId] as const,
     fileDetails: (fileId: string, readToken?: string) => ["file", "details", fileId, readToken] as const,
     folderDisplayOrder: (folderId: string) => ["folder", "display-order", folderId] as const,
+    folderDestinationChildren: (folderId: string) => ["folder", "destination-children", folderId] as const,
     recycleBinList: (itemType?: "FILE" | "FOLDER", limit?: number, offset?: number) =>
         ["recycle-bin", "list", itemType ?? "ALL", limit ?? null, offset ?? 0] as const,
     recycleBinDestinationFolders: (search?: string, limit?: number) =>

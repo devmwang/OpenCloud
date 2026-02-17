@@ -248,10 +248,9 @@ export async function patchFileHandler(
     }
 
     const fileId = request.params.fileId;
-    const destinationFolderId = request.body.folderId;
 
     const [fileDetails] = await this.db
-        .select({ id: files.id, ownerId: files.ownerId, parentId: files.parentId })
+        .select({ id: files.id, ownerId: files.ownerId, parentId: files.parentId, fileName: files.fileName })
         .from(files)
         .where(and(eq(files.id, fileId), isNull(files.deletedAt)))
         .limit(1);
@@ -263,6 +262,28 @@ export async function patchFileHandler(
     if (fileDetails.ownerId !== userId) {
         return reply.code(403).send({ message: "You do not have permission to edit this file" });
     }
+
+    if ("name" in request.body) {
+        if (fileDetails.fileName === request.body.name) {
+            return reply.code(200).send({
+                status: "success",
+                message: "File already has this name",
+                id: fileId,
+                folderId: fileDetails.parentId,
+            });
+        }
+
+        await this.db.update(files).set({ fileName: request.body.name }).where(eq(files.id, fileId));
+
+        return reply.code(200).send({
+            status: "success",
+            message: "File renamed successfully",
+            id: fileId,
+            folderId: fileDetails.parentId,
+        });
+    }
+
+    const destinationFolderId = request.body.folderId;
 
     const [destinationFolder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId })

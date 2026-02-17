@@ -19,6 +19,7 @@ type FileRowProps = {
     folderId: string;
     selected?: boolean;
     onClick?: (event: React.MouseEvent | React.KeyboardEvent) => void;
+    onContextMenu?: (event: React.MouseEvent) => void;
 };
 
 const getFileExtension = (name: string) => {
@@ -47,7 +48,7 @@ function getFileIcon(fileName: string): ReactNode {
     return <DocumentIcon className="h-5 w-5" />;
 }
 
-export function FileRow({ id, fileName, folderId, selected, onClick }: FileRowProps) {
+export function FileRow({ id, fileName, folderId, selected, onClick, onContextMenu }: FileRowProps) {
     const router = useRouter();
     const fileRouteId = toFileRouteId(id, fileName);
     const ext = getFileExtension(fileName);
@@ -80,6 +81,7 @@ export function FileRow({ id, fileName, folderId, selected, onClick }: FileRowPr
     return (
         <div
             onClick={onClick}
+            onContextMenu={onContextMenu}
             onDoubleClick={openPreview}
             onKeyDown={handleKeyDown}
             role="button"
