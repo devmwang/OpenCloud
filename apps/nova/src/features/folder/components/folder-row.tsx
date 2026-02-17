@@ -31,6 +31,7 @@ export function FolderRow({ id, name, selected, onClick, onContextMenu }: Folder
 
     return (
         <div
+            data-selection-item="true"
             onClick={onClick}
             onContextMenu={onContextMenu}
             onDoubleClick={openFolder}

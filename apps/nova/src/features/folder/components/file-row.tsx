@@ -80,6 +80,7 @@ export function FileRow({ id, fileName, folderId, selected, onClick, onContextMe
 
     return (
         <div
+            data-selection-item="true"
             onClick={onClick}
             onContextMenu={onContextMenu}
             onDoubleClick={openPreview}

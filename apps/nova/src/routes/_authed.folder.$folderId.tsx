@@ -521,9 +521,16 @@ function FolderPageContent({
     // ── Background click to clear selection ───────────────────
     const handleBackgroundClick = useCallback(
         (e: React.MouseEvent<HTMLDivElement>) => {
-            if (e.target === e.currentTarget && selectionCount > 0) {
-                clearSelection();
+            if (selectionCount === 0) {
+                return;
             }
+
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('[data-selection-item="true"]')) {
+                return;
+            }
+
+            clearSelection();
         },
         [selectionCount, clearSelection],
     );

@@ -87,6 +87,7 @@ export function FileCard({ id, fileName, folderId, selected, onClick, onContextM
 
     return (
         <div
+            data-selection-item="true"
             onClick={onClick}
             onContextMenu={onContextMenu}
             onDoubleClick={openPreview}
