@@ -1,7 +1,7 @@
 import { FolderIcon } from "@heroicons/react/24/outline";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Breadcrumb } from "@/components/shared/breadcrumb";
@@ -39,7 +39,14 @@ import { RenameItemDialog } from "@/features/folder/components/rename-item-dialo
 import { SelectionProvider } from "@/features/folder/components/selection-provider";
 import { SelectionToolbar } from "@/features/folder/components/selection-toolbar";
 import { UploadDialog } from "@/features/folder/components/upload-dialog";
-import { useSelection, type SelectionItem } from "@/features/folder/hooks/use-selection";
+import { VirtualizedItemSection } from "@/features/folder/components/virtualized-item-section";
+import {
+    useIsItemInMultiSelection,
+    useIsItemSelected,
+    useSelectionActions,
+    useSelectionCount,
+    type SelectionItem,
+} from "@/features/folder/hooks/use-selection";
 import { moveToRecycleBin } from "@/features/recycle-bin/api";
 import { uploadSingleFile } from "@/features/upload/api";
 import { getErrorMessage } from "@/lib/errors";
@@ -314,6 +321,16 @@ type FolderPageContentProps = {
     onMoveFile: (fileId: string, destinationFolderId: string) => Promise<void>;
 };
 
+type FolderListEntry = {
+    id: string;
+    folderName: string;
+};
+
+type FileListEntry = {
+    id: string;
+    fileName: string;
+};
+
 function FolderPageContent({
     folderId,
     folderDetails,
@@ -339,7 +356,8 @@ function FolderPageContent({
 }: FolderPageContentProps) {
     const queryClient = useQueryClient();
     const { addToast } = useToast();
-    const { selectionCount, isSelected, handleItemClick, clearSelection } = useSelection();
+    const selectionCount = useSelectionCount();
+    const { clearSelection } = useSelectionActions();
 
     const [infoItem, setInfoItem] = useState<SelectionItem | null>(null);
     const [infoOpen, setInfoOpen] = useState(false);
@@ -521,47 +539,32 @@ function FolderPageContent({
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [selectionCount, clearSelection]);
 
-    // ── Item click handlers ───────────────────────────────────
-    const makeFolderClickHandler = useCallback(
-        (entry: { id: string; folderName: string }) => (event: React.MouseEvent | React.KeyboardEvent) => {
-            handleItemClick({ id: entry.id, kind: "folder", name: entry.folderName }, event);
-        },
-        [handleItemClick],
+    const renderFolderEntry = useCallback(
+        (entry: FolderListEntry) => (
+            <SelectableFolderItem
+                entry={entry}
+                displayType={displayType}
+                onDelete={onDeleteFolder}
+                onRename={handleOpenRename}
+                onMove={handleOpenMove}
+                onRefresh={onRefresh}
+            />
+        ),
+        [displayType, onDeleteFolder, handleOpenRename, handleOpenMove, onRefresh],
     );
 
-    const makeFileClickHandler = useCallback(
-        (entry: { id: string; fileName: string }) => (event: React.MouseEvent | React.KeyboardEvent) => {
-            handleItemClick({ id: entry.id, kind: "file", name: entry.fileName }, event);
-        },
-        [handleItemClick],
-    );
-
-    const makeFolderContextMenuHandler = useCallback(
-        (entry: { id: string; folderName: string }) => () => {
-            if (isSelected(entry.id)) {
-                return;
-            }
-
-            handleItemClick(
-                { id: entry.id, kind: "folder", name: entry.folderName },
-                { metaKey: false, ctrlKey: false, shiftKey: false },
-            );
-        },
-        [isSelected, handleItemClick],
-    );
-
-    const makeFileContextMenuHandler = useCallback(
-        (entry: { id: string; fileName: string }) => () => {
-            if (isSelected(entry.id)) {
-                return;
-            }
-
-            handleItemClick(
-                { id: entry.id, kind: "file", name: entry.fileName },
-                { metaKey: false, ctrlKey: false, shiftKey: false },
-            );
-        },
-        [isSelected, handleItemClick],
+    const renderFileEntry = useCallback(
+        (entry: FileListEntry) => (
+            <SelectableFileItem
+                entry={entry}
+                folderId={folderId}
+                displayType={displayType}
+                onDelete={onDeleteFile}
+                onRename={handleOpenRename}
+                onMove={handleOpenMove}
+            />
+        ),
+        [folderId, displayType, onDeleteFile, handleOpenRename, handleOpenMove],
     );
 
     const hasSelection = selectionCount > 0;
@@ -616,51 +619,17 @@ function FolderPageContent({
                                     <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
                                         Folders ({folderContents.folders.length})
                                     </h2>
-                                    {displayType === "GRID" ? (
-                                        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-                                            {folderContents.folders.map((entry) => (
-                                                <FolderContextMenu
-                                                    key={entry.id}
-                                                    folderId={entry.id}
-                                                    folderName={entry.folderName}
-                                                    onDelete={onDeleteFolder}
-                                                    onRename={handleOpenRename}
-                                                    onMove={handleOpenMove}
-                                                    onRefresh={onRefresh}
-                                                >
-                                                    <FolderCard
-                                                        id={entry.id}
-                                                        name={entry.folderName}
-                                                        selected={isSelected(entry.id)}
-                                                        onClick={makeFolderClickHandler(entry)}
-                                                        onContextMenu={makeFolderContextMenuHandler(entry)}
-                                                    />
-                                                </FolderContextMenu>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-0.5">
-                                            {folderContents.folders.map((entry) => (
-                                                <FolderContextMenu
-                                                    key={entry.id}
-                                                    folderId={entry.id}
-                                                    folderName={entry.folderName}
-                                                    onDelete={onDeleteFolder}
-                                                    onRename={handleOpenRename}
-                                                    onMove={handleOpenMove}
-                                                    onRefresh={onRefresh}
-                                                >
-                                                    <FolderRow
-                                                        id={entry.id}
-                                                        name={entry.folderName}
-                                                        selected={isSelected(entry.id)}
-                                                        onClick={makeFolderClickHandler(entry)}
-                                                        onContextMenu={makeFolderContextMenuHandler(entry)}
-                                                    />
-                                                </FolderContextMenu>
-                                            ))}
-                                        </div>
-                                    )}
+                                    <VirtualizedItemSection
+                                        items={folderContents.folders}
+                                        getItemId={(entry) => entry.id}
+                                        renderItem={renderFolderEntry}
+                                        displayType={displayType}
+                                        layoutKey={hasSelection}
+                                        gridMinColumnWidth={280}
+                                        gridGapPx={12}
+                                        gridEstimateHeight={120}
+                                        listEstimateHeight={56}
+                                    />
                                 </section>
                             ) : null}
 
@@ -670,53 +639,17 @@ function FolderPageContent({
                                     <h2 className="text-text-dim text-xs font-semibold tracking-widest uppercase">
                                         Files ({folderContents.files.length})
                                     </h2>
-                                    {displayType === "GRID" ? (
-                                        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-                                            {folderContents.files.map((entry) => (
-                                                <FileContextMenu
-                                                    key={entry.id}
-                                                    fileId={entry.id}
-                                                    fileName={entry.fileName}
-                                                    folderId={folderId}
-                                                    onDelete={onDeleteFile}
-                                                    onRename={handleOpenRename}
-                                                    onMove={handleOpenMove}
-                                                >
-                                                    <FileCard
-                                                        id={entry.id}
-                                                        fileName={entry.fileName}
-                                                        folderId={folderId}
-                                                        selected={isSelected(entry.id)}
-                                                        onClick={makeFileClickHandler(entry)}
-                                                        onContextMenu={makeFileContextMenuHandler(entry)}
-                                                    />
-                                                </FileContextMenu>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-0.5">
-                                            {folderContents.files.map((entry) => (
-                                                <FileContextMenu
-                                                    key={entry.id}
-                                                    fileId={entry.id}
-                                                    fileName={entry.fileName}
-                                                    folderId={folderId}
-                                                    onDelete={onDeleteFile}
-                                                    onRename={handleOpenRename}
-                                                    onMove={handleOpenMove}
-                                                >
-                                                    <FileRow
-                                                        id={entry.id}
-                                                        fileName={entry.fileName}
-                                                        folderId={folderId}
-                                                        selected={isSelected(entry.id)}
-                                                        onClick={makeFileClickHandler(entry)}
-                                                        onContextMenu={makeFileContextMenuHandler(entry)}
-                                                    />
-                                                </FileContextMenu>
-                                            ))}
-                                        </div>
-                                    )}
+                                    <VirtualizedItemSection
+                                        items={folderContents.files}
+                                        getItemId={(entry) => entry.id}
+                                        renderItem={renderFileEntry}
+                                        displayType={displayType}
+                                        layoutKey={hasSelection}
+                                        gridMinColumnWidth={240}
+                                        gridGapPx={12}
+                                        gridEstimateHeight={260}
+                                        listEstimateHeight={56}
+                                    />
                                 </section>
                             ) : null}
                         </div>
@@ -755,3 +688,161 @@ function FolderPageContent({
         </>
     );
 }
+
+type SelectableFolderItemProps = {
+    entry: FolderListEntry;
+    displayType: DisplayType;
+    onDelete: (folderId: string) => Promise<void>;
+    onRename: (items: SelectionItem[]) => void;
+    onMove: (items: SelectionItem[]) => void;
+    onRefresh: () => void;
+};
+
+const SelectableFolderItem = memo(function SelectableFolderItem({
+    entry,
+    displayType,
+    onDelete,
+    onRename,
+    onMove,
+    onRefresh,
+}: SelectableFolderItemProps) {
+    const selected = useIsItemSelected(entry.id);
+    const isMultiSelectionTarget = useIsItemInMultiSelection(entry.id);
+    const { handleItemClick, resolveActionTargets } = useSelectionActions();
+
+    const selectionItem = useMemo<SelectionItem>(
+        () => ({ id: entry.id, kind: "folder", name: entry.folderName }),
+        [entry.id, entry.folderName],
+    );
+
+    const handleClick = useCallback(
+        (event: React.MouseEvent | React.KeyboardEvent) => {
+            handleItemClick(selectionItem, event);
+        },
+        [handleItemClick, selectionItem],
+    );
+
+    const handleContextMenu = useCallback(() => {
+        if (selected) {
+            return;
+        }
+
+        handleItemClick(selectionItem, { metaKey: false, ctrlKey: false, shiftKey: false });
+    }, [selected, handleItemClick, selectionItem]);
+
+    const resolveTargets = useCallback(
+        () => resolveActionTargets(selectionItem),
+        [resolveActionTargets, selectionItem],
+    );
+
+    return (
+        <FolderContextMenu
+            folderId={entry.id}
+            folderName={entry.folderName}
+            onDelete={onDelete}
+            onRename={onRename}
+            onMove={onMove}
+            resolveActionTargets={resolveTargets}
+            isMultiSelectionTarget={isMultiSelectionTarget}
+            onRefresh={onRefresh}
+        >
+            {displayType === "GRID" ? (
+                <FolderCard
+                    id={entry.id}
+                    name={entry.folderName}
+                    selected={selected}
+                    onClick={handleClick}
+                    onContextMenu={handleContextMenu}
+                />
+            ) : (
+                <FolderRow
+                    id={entry.id}
+                    name={entry.folderName}
+                    selected={selected}
+                    onClick={handleClick}
+                    onContextMenu={handleContextMenu}
+                />
+            )}
+        </FolderContextMenu>
+    );
+});
+
+type SelectableFileItemProps = {
+    entry: FileListEntry;
+    folderId: string;
+    displayType: DisplayType;
+    onDelete: (fileId: string) => Promise<void>;
+    onRename: (items: SelectionItem[]) => void;
+    onMove: (items: SelectionItem[]) => void;
+};
+
+const SelectableFileItem = memo(function SelectableFileItem({
+    entry,
+    folderId,
+    displayType,
+    onDelete,
+    onRename,
+    onMove,
+}: SelectableFileItemProps) {
+    const selected = useIsItemSelected(entry.id);
+    const isMultiSelectionTarget = useIsItemInMultiSelection(entry.id);
+    const { handleItemClick, resolveActionTargets } = useSelectionActions();
+
+    const selectionItem = useMemo<SelectionItem>(
+        () => ({ id: entry.id, kind: "file", name: entry.fileName }),
+        [entry.id, entry.fileName],
+    );
+
+    const handleClick = useCallback(
+        (event: React.MouseEvent | React.KeyboardEvent) => {
+            handleItemClick(selectionItem, event);
+        },
+        [handleItemClick, selectionItem],
+    );
+
+    const handleContextMenu = useCallback(() => {
+        if (selected) {
+            return;
+        }
+
+        handleItemClick(selectionItem, { metaKey: false, ctrlKey: false, shiftKey: false });
+    }, [selected, handleItemClick, selectionItem]);
+
+    const resolveTargets = useCallback(
+        () => resolveActionTargets(selectionItem),
+        [resolveActionTargets, selectionItem],
+    );
+
+    return (
+        <FileContextMenu
+            fileId={entry.id}
+            fileName={entry.fileName}
+            folderId={folderId}
+            onDelete={onDelete}
+            onRename={onRename}
+            onMove={onMove}
+            resolveActionTargets={resolveTargets}
+            isMultiSelectionTarget={isMultiSelectionTarget}
+        >
+            {displayType === "GRID" ? (
+                <FileCard
+                    id={entry.id}
+                    fileName={entry.fileName}
+                    folderId={folderId}
+                    selected={selected}
+                    onClick={handleClick}
+                    onContextMenu={handleContextMenu}
+                />
+            ) : (
+                <FileRow
+                    id={entry.id}
+                    fileName={entry.fileName}
+                    folderId={folderId}
+                    selected={selected}
+                    onClick={handleClick}
+                    onContextMenu={handleContextMenu}
+                />
+            )}
+        </FileContextMenu>
+    );
+});

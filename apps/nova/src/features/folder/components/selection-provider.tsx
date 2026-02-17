@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
-import { SelectionContext, useSelectionState, type SelectionItem } from "@/features/folder/hooks/use-selection";
+import { SelectionContext, SelectionStore, type SelectionItem } from "@/features/folder/hooks/use-selection";
 
 type SelectionProviderProps = {
     orderedIds: string[];
@@ -9,7 +9,17 @@ type SelectionProviderProps = {
 };
 
 export function SelectionProvider({ orderedIds, itemsById, children }: SelectionProviderProps) {
-    const selection = useSelectionState(orderedIds, itemsById);
+    const storeRef = useRef<SelectionStore | null>(null);
 
-    return <SelectionContext.Provider value={selection}>{children}</SelectionContext.Provider>;
+    if (!storeRef.current) {
+        storeRef.current = new SelectionStore(orderedIds, itemsById);
+    }
+
+    const store = storeRef.current;
+
+    useEffect(() => {
+        store.updateSourceData(orderedIds, itemsById);
+    }, [store, orderedIds, itemsById]);
+
+    return <SelectionContext.Provider value={store}>{children}</SelectionContext.Provider>;
 }

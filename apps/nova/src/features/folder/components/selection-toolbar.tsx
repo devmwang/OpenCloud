@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { env } from "@/env";
 import { buildFileContentUrl } from "@/features/files/api";
-import { useSelection, type SelectionItem } from "@/features/folder/hooks/use-selection";
+import { useSelectedItems, useSelectionActions, type SelectionItem } from "@/features/folder/hooks/use-selection";
 import { toFileRouteId } from "@/lib/file-id";
 
 type SelectionToolbarProps = {
@@ -32,7 +32,8 @@ export function SelectionToolbar({
     onRename,
     onMove,
 }: SelectionToolbarProps) {
-    const { selectionCount, selectedFiles, selectedFolders, clearSelection, selected } = useSelection();
+    const { selected, selectedFiles, selectedFolders, selectionCount } = useSelectedItems();
+    const { clearSelection } = useSelectionActions();
     const { addToast } = useToast();
     const [deleteOpen, setDeleteOpen] = useState(false);
 
