@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 
 import { SelectionContext, SelectionStore, type SelectionItem } from "@/features/folder/hooks/use-selection";
 
@@ -7,6 +7,8 @@ type SelectionProviderProps = {
     itemsById: Map<string, SelectionItem>;
     children: ReactNode;
 };
+
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function SelectionProvider({ orderedIds, itemsById, children }: SelectionProviderProps) {
     const storeRef = useRef<SelectionStore | null>(null);
@@ -17,7 +19,7 @@ export function SelectionProvider({ orderedIds, itemsById, children }: Selection
 
     const store = storeRef.current;
 
-    useEffect(() => {
+    useIsomorphicLayoutEffect(() => {
         store.updateSourceData(orderedIds, itemsById);
     }, [store, orderedIds, itemsById]);
 

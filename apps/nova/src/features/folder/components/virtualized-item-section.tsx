@@ -57,23 +57,44 @@ export function VirtualizedItemSection<TItem>({
             return;
         }
 
+        let frameId: number | null = null;
+
+        const scheduleMeasure = () => {
+            if (frameId !== null) {
+                return;
+            }
+
+            frameId = window.requestAnimationFrame(() => {
+                frameId = null;
+                measureLayout();
+            });
+        };
+
         const onWindowResize = () => {
-            measureLayout();
+            scheduleMeasure();
         };
 
         window.addEventListener("resize", onWindowResize);
 
         let resizeObserver: ResizeObserver | null = null;
-        if (typeof ResizeObserver !== "undefined" && sectionRef.current) {
+        if (typeof ResizeObserver !== "undefined") {
             resizeObserver = new ResizeObserver(() => {
-                measureLayout();
+                scheduleMeasure();
             });
-            resizeObserver.observe(sectionRef.current);
+
+            if (sectionRef.current) {
+                resizeObserver.observe(sectionRef.current);
+            }
+
+            resizeObserver.observe(document.body);
         }
 
         return () => {
             window.removeEventListener("resize", onWindowResize);
             resizeObserver?.disconnect();
+            if (frameId !== null) {
+                window.cancelAnimationFrame(frameId);
+            }
         };
     }, [measureLayout]);
 
@@ -103,6 +124,10 @@ export function VirtualizedItemSection<TItem>({
     const virtualRows = virtualizer.getVirtualItems();
     const totalSize = virtualizer.getTotalSize();
 
+    useEffect(() => {
+        virtualizer.measure();
+    }, [virtualizer, columnCount, displayType, items.length, layoutKey]);
+
     return (
         <div ref={sectionRef} className="relative w-full">
             <div className="relative w-full" style={{ height: `${totalSize}px` }}>
@@ -118,7 +143,13 @@ export function VirtualizedItemSection<TItem>({
                         const isLastRow = virtualRow.index === rowCount - 1;
 
                         return (
-                            <div key={virtualRow.key} className="absolute top-0 left-0 w-full" style={baseStyle}>
+                            <div
+                                key={virtualRow.key}
+                                data-index={virtualRow.index}
+                                ref={virtualizer.measureElement}
+                                className="absolute top-0 left-0 w-full"
+                                style={baseStyle}
+                            >
                                 <div
                                     className="grid"
                                     style={{
@@ -143,7 +174,13 @@ export function VirtualizedItemSection<TItem>({
                     const isLastItem = virtualRow.index === items.length - 1;
 
                     return (
-                        <div key={virtualRow.key} className="absolute top-0 left-0 w-full" style={baseStyle}>
+                        <div
+                            key={virtualRow.key}
+                            data-index={virtualRow.index}
+                            ref={virtualizer.measureElement}
+                            className="absolute top-0 left-0 w-full"
+                            style={baseStyle}
+                        >
                             <div style={{ paddingBottom: isLastItem ? 0 : `${listGapPx}px` }}>{renderItem(item)}</div>
                         </div>
                     );
