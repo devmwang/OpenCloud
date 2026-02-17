@@ -389,7 +389,10 @@ function FolderPageContent({
                     await onRenameFolder(renameTarget.id, nextName);
                 }
 
-                await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+                await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
+                    queryClient.invalidateQueries({ queryKey: ["folder", "destination-children"] }),
+                ]);
 
                 addToast(`${renameTarget.kind === "file" ? "File" : "Folder"} renamed`, "success");
             } catch (error) {

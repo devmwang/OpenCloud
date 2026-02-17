@@ -68,6 +68,7 @@ export function MoveItemsDialog({
 
     useEffect(() => {
         if (!open) {
+            setFocusedFolderPath([{ id: rootFolderId, name: "/" }]);
             setPending(false);
             setError(null);
             return;
