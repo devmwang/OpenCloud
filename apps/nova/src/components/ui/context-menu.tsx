@@ -2,6 +2,8 @@ import { ContextMenu as BaseContextMenu } from "@base-ui/react/context-menu";
 import { Menu } from "@base-ui/react/menu";
 import type { ReactNode } from "react";
 
+import { getPortalRoot } from "@/lib/portal-root";
+
 type ContextMenuProps = {
     children: ReactNode;
     trigger: ReactNode;
@@ -11,7 +13,7 @@ export function ContextMenu({ children, trigger }: ContextMenuProps) {
     return (
         <BaseContextMenu.Root>
             <BaseContextMenu.Trigger className="contents">{trigger}</BaseContextMenu.Trigger>
-            <Menu.Portal>
+            <Menu.Portal container={getPortalRoot()}>
                 <Menu.Positioner className="z-[100]" sideOffset={6}>
                     <Menu.Popup className="border-border-bright bg-surface/95 min-w-[200px] origin-[var(--transform-origin)] rounded-lg border p-1 shadow-2xl shadow-black/50 backdrop-blur-xl transition-all duration-100 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0">
                         {children}

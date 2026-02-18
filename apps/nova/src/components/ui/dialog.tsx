@@ -1,6 +1,8 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import type { ReactNode } from "react";
 
+import { getPortalRoot } from "@/lib/portal-root";
+
 type DialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -24,7 +26,7 @@ type DialogContentProps = {
 
 export function DialogContent({ children, className, title, description }: DialogContentProps) {
     return (
-        <BaseDialog.Portal>
+        <BaseDialog.Portal container={getPortalRoot()}>
             <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
             <BaseDialog.Popup
                 className={`border-border bg-surface fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border shadow-2xl shadow-black/40 transition-all duration-150 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 ${className ?? ""}`}
