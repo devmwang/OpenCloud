@@ -76,6 +76,8 @@ function RootError(props: { error: unknown; reset: () => void }) {
 }
 
 function RootNotFound() {
+    const router = useRouter();
+
     return (
         <div className="flex min-h-screen items-center justify-center p-6">
             <div className="border-border bg-surface w-full max-w-lg space-y-4 rounded-xl border p-7 text-center">
@@ -84,7 +86,12 @@ function RootNotFound() {
                     <h1 className="text-text text-lg font-semibold">Page not found</h1>
                     <p className="text-text-muted mt-1.5 text-sm">The resource you requested does not exist.</p>
                 </div>
-                <Button variant="primary" onClick={() => (window.location.href = "/")}>
+                <Button
+                    variant="primary"
+                    onClick={() => {
+                        void router.navigate({ to: "/" });
+                    }}
+                >
                     Go to Files
                 </Button>
             </div>
@@ -99,7 +106,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                 <HeadContent />
             </head>
             <body>
-                {children}
+                <div id="root-content">{children}</div>
+                <div id="portal-root" />
                 <Scripts />
             </body>
         </html>
