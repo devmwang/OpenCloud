@@ -9,13 +9,14 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorCard } from "@/components/shared/error-card";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { moveFile, renameFile } from "@/features/files/api";
+import { renameFile } from "@/features/files/api";
 import {
+    batchDeleteItems,
+    batchMoveItems,
     createFolder,
     getDisplayOrder,
     getFolderContents,
     getFolderDetails,
-    moveFolder,
     renameFolder,
     setDisplayOrder,
     type DisplayOrderResponse,
@@ -194,14 +195,6 @@ function FolderPage() {
         await renameFile({ fileId: targetFileId, name });
     };
 
-    const handleMoveFolder = async (targetFolderId: string, destinationFolderId: string) => {
-        await moveFolder({ folderId: targetFolderId, destinationFolderId });
-    };
-
-    const handleMoveFile = async (targetFileId: string, destinationFolderId: string) => {
-        await moveFile({ fileId: targetFileId, destinationFolderId });
-    };
-
     const isLoading = detailsQuery.isPending || contentsQuery.isPending;
     const error = detailsQuery.error ?? contentsQuery.error;
 
@@ -274,8 +267,6 @@ function FolderPage() {
                 onDeleteFile={handleDeleteFile}
                 onRenameFolder={handleRenameFolder}
                 onRenameFile={handleRenameFile}
-                onMoveFolder={handleMoveFolder}
-                onMoveFile={handleMoveFile}
             />
 
             {/* Dialogs */}
@@ -317,8 +308,6 @@ type FolderPageContentProps = {
     onDeleteFile: (fileId: string) => Promise<void>;
     onRenameFolder: (folderId: string, name: string) => Promise<void>;
     onRenameFile: (fileId: string, name: string) => Promise<void>;
-    onMoveFolder: (folderId: string, destinationFolderId: string) => Promise<void>;
-    onMoveFile: (fileId: string, destinationFolderId: string) => Promise<void>;
 };
 
 type FolderListEntry = {
@@ -351,8 +340,6 @@ function FolderPageContent({
     onDeleteFile,
     onRenameFolder,
     onRenameFile,
-    onMoveFolder,
-    onMoveFile,
 }: FolderPageContentProps) {
     const queryClient = useQueryClient();
     const { addToast } = useToast();
@@ -428,27 +415,13 @@ function FolderPageContent({
                 return;
             }
 
-            let succeeded = 0;
-            let failed = 0;
-            let firstError: string | null = null;
+            const moveResult = await batchMoveItems({
+                destinationFolderId,
+                fileIds: moveTargets.filter((item) => item.kind === "file").map((item) => item.id),
+                folderIds: moveTargets.filter((item) => item.kind === "folder").map((item) => item.id),
+            });
 
-            for (const item of moveTargets) {
-                try {
-                    if (item.kind === "file") {
-                        await onMoveFile(item.id, destinationFolderId);
-                    } else {
-                        await onMoveFolder(item.id, destinationFolderId);
-                    }
-                    succeeded++;
-                } catch (error) {
-                    failed++;
-                    if (!firstError) {
-                        firstError = getErrorMessage(error);
-                    }
-                }
-            }
-
-            if (succeeded > 0) {
+            if (moveResult.summary.succeeded > 0) {
                 await Promise.all([
                     queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
                     queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(destinationFolderId) }),
@@ -457,65 +430,67 @@ function FolderPageContent({
                 clearSelection();
             }
 
-            if (failed === 0) {
+            if (moveResult.status === "success") {
+                if (moveResult.summary.succeeded === 0) {
+                    addToast(moveResult.message, "success");
+                    return;
+                }
+
                 addToast(
-                    succeeded === 1
-                        ? `${moveTargets[0]?.kind === "file" ? "File" : "Folder"} moved`
-                        : `Moved ${succeeded} item(s)`,
+                    moveResult.summary.succeeded === 1 ? "Item moved" : `Moved ${moveResult.summary.succeeded} item(s)`,
                     "success",
                 );
                 return;
             }
 
-            if (succeeded > 0) {
-                addToast(`Moved ${succeeded} item(s), ${failed} failed`, "error");
+            if (moveResult.status === "partial_success") {
+                addToast(`Moved ${moveResult.summary.succeeded} item(s), ${moveResult.summary.failed} failed`, "error");
                 return;
             }
 
-            const message = firstError ?? "Failed to move items";
+            const message =
+                moveResult.results.find((result) => result.outcome === "FAILED")?.message ?? moveResult.message;
             addToast(message, "error");
             throw new Error(message);
         },
-        [moveTargets, onMoveFile, onMoveFolder, queryClient, folderId, clearSelection, addToast],
+        [moveTargets, queryClient, folderId, clearSelection, addToast],
     );
 
-    // ── Batch delete handlers ─────────────────────────────────
-    const handleBatchDeleteFiles = useCallback(
-        async (fileIds: string[]) => {
-            let succeeded = 0;
-            let failed = 0;
-            for (const id of fileIds) {
-                try {
-                    await onDeleteFile(id);
-                    succeeded++;
-                } catch {
-                    failed++;
-                }
-            }
-            if (failed > 0) {
-                addToast(`Deleted ${succeeded} file(s), ${failed} failed`, "error");
-            }
-        },
-        [onDeleteFile, addToast],
-    );
+    const handleBatchDeleteSelection = useCallback(
+        async (input: { fileIds: string[]; folderIds: string[] }) => {
+            const deleteResult = await batchDeleteItems({
+                fileIds: input.fileIds,
+                folderIds: input.folderIds,
+            });
 
-    const handleBatchDeleteFolders = useCallback(
-        async (folderIds: string[]) => {
-            let succeeded = 0;
-            let failed = 0;
-            for (const id of folderIds) {
-                try {
-                    await onDeleteFolder(id);
-                    succeeded++;
-                } catch {
-                    failed++;
+            if (deleteResult.summary.succeeded > 0) {
+                await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+            }
+
+            if (deleteResult.status === "success") {
+                if (deleteResult.summary.succeeded === 0) {
+                    addToast(deleteResult.message, "success");
+                    return;
                 }
+
+                addToast(`Moved ${deleteResult.summary.succeeded} item(s) to Recycle Bin`, "success");
+                return;
             }
-            if (failed > 0) {
-                addToast(`Deleted ${succeeded} folder(s), ${failed} failed`, "error");
+
+            if (deleteResult.status === "partial_success") {
+                addToast(
+                    `Moved ${deleteResult.summary.succeeded} item(s) to Recycle Bin, ${deleteResult.summary.failed} failed`,
+                    "error",
+                );
+                return;
             }
+
+            const message =
+                deleteResult.results.find((result) => result.outcome === "FAILED")?.message ?? deleteResult.message;
+            addToast(message, "error");
+            throw new Error(message);
         },
-        [onDeleteFolder, addToast],
+        [queryClient, folderId, addToast],
     );
 
     // ── Background click to clear selection ───────────────────
@@ -586,8 +561,7 @@ function FolderPageContent({
                 actions={
                     hasSelection ? (
                         <SelectionToolbar
-                            onDeleteFiles={handleBatchDeleteFiles}
-                            onDeleteFolders={handleBatchDeleteFolders}
+                            onDeleteSelection={handleBatchDeleteSelection}
                             onShowInfo={handleShowInfo}
                             onRename={(item) => handleOpenRename([item])}
                             onMove={handleOpenMove}

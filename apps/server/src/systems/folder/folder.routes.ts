@@ -2,6 +2,8 @@
 import type { FastifyInstance } from "fastify";
 
 import {
+    batchDeleteItemsHandler,
+    batchMoveItemsHandler,
     createFolderHandler,
     deleteFolderHandler,
     getDetailsHandler,
@@ -62,6 +64,32 @@ async function folderRouter(server: FastifyInstance) {
             response: { 201: $ref("createFolderResponseSchema") },
         },
         handler: createFolderHandler,
+    });
+
+    server.route({
+        method: "POST",
+        url: "/folders/batch/move",
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("batchMoveItemsSchema"),
+            response: { 200: $ref("batchMoveItemsResponseSchema") },
+        },
+        handler: batchMoveItemsHandler,
+    });
+
+    server.route({
+        method: "POST",
+        url: "/folders/batch/delete",
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("batchItemIdsSchema"),
+            response: { 200: $ref("batchDeleteItemsResponseSchema") },
+        },
+        handler: batchDeleteItemsHandler,
     });
 
     server.route({

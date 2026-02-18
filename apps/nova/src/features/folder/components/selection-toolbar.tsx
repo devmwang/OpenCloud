@@ -18,20 +18,13 @@ import { useSelectedItems, useSelectionActions, type SelectionItem } from "@/fea
 import { toFileRouteId } from "@/lib/file-id";
 
 type SelectionToolbarProps = {
-    onDeleteFiles: (fileIds: string[]) => Promise<void>;
-    onDeleteFolders: (folderIds: string[]) => Promise<void>;
+    onDeleteSelection: (input: { fileIds: string[]; folderIds: string[] }) => Promise<void>;
     onShowInfo: (item: SelectionItem) => void;
     onRename: (item: SelectionItem) => void;
     onMove: (items: SelectionItem[]) => void;
 };
 
-export function SelectionToolbar({
-    onDeleteFiles,
-    onDeleteFolders,
-    onShowInfo,
-    onRename,
-    onMove,
-}: SelectionToolbarProps) {
+export function SelectionToolbar({ onDeleteSelection, onShowInfo, onRename, onMove }: SelectionToolbarProps) {
     const { selected, selectedFiles, selectedFolders, selectionCount } = useSelectedItems();
     const { clearSelection } = useSelectionActions();
     const { addToast } = useToast();
@@ -83,12 +76,7 @@ export function SelectionToolbar({
         const fileIds = selectedFiles.map((f) => f.id);
         const folderIds = selectedFolders.map((f) => f.id);
 
-        if (folderIds.length > 0) {
-            await onDeleteFolders(folderIds);
-        }
-        if (fileIds.length > 0) {
-            await onDeleteFiles(fileIds);
-        }
+        await onDeleteSelection({ fileIds, folderIds });
 
         clearSelection();
     };

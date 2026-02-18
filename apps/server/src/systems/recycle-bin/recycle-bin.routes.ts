@@ -2,6 +2,8 @@
 import type { FastifyInstance } from "fastify";
 
 import {
+    batchPermanentlyDeleteHandler,
+    batchRestoreHandler,
     destinationFoldersHandler,
     emptyRecycleBinHandler,
     listRecycleBinHandler,
@@ -53,6 +55,19 @@ async function recycleBinRouter(server: FastifyInstance) {
     });
 
     server.route({
+        method: "POST",
+        url: "/items/batch/restore",
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("batchRestoreBodySchema"),
+            response: { 200: $ref("batchRestoreResponseSchema") },
+        },
+        handler: batchRestoreHandler,
+    });
+
+    server.route({
         method: "DELETE",
         url: "/items/:itemType/:itemId",
         onRequest: [server.optionalAuthenticate],
@@ -63,6 +78,19 @@ async function recycleBinRouter(server: FastifyInstance) {
             response: { 200: $ref("permanentlyDeleteResponseSchema") },
         },
         handler: permanentlyDeleteHandler,
+    });
+
+    server.route({
+        method: "POST",
+        url: "/items/batch/permanently-delete",
+        onRequest: [server.optionalAuthenticate],
+        preValidation: [server.authenticate],
+        preHandler: [server.requireCsrf],
+        schema: {
+            body: $ref("batchItemIdsSchema"),
+            response: { 200: $ref("batchPermanentlyDeleteResponseSchema") },
+        },
+        handler: batchPermanentlyDeleteHandler,
     });
 
     server.route({

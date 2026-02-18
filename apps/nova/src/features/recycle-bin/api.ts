@@ -94,6 +94,70 @@ const permanentlyDeleteResponseSchema = z.object({
     purgedFolders: z.number().int(),
 });
 
+const batchItemOutcomeSchema = z.enum(["SUCCESS", "FAILED", "SKIPPED"]);
+const batchOperationStatusSchema = z.enum(["success", "partial_success", "failed"]);
+
+const batchItemIdsInputSchema = z
+    .object({
+        fileIds: z.array(z.string().min(1)).max(500).optional(),
+        folderIds: z.array(z.string().min(1)).max(500).optional(),
+    })
+    .superRefine((value, context) => {
+        const totalIds = (value.fileIds?.length ?? 0) + (value.folderIds?.length ?? 0);
+        if (totalIds === 0) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "At least one fileId or folderId is required",
+                path: ["fileIds"],
+            });
+        }
+    });
+
+const batchRestoreInputSchema = batchItemIdsInputSchema.extend({
+    destinationFolderId: z.string().min(1).optional(),
+});
+
+const batchOperationSummarySchema = z.object({
+    total: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+    skipped: z.number().int(),
+});
+
+const batchRestoreResultSchema = z.object({
+    itemType: recycleItemTypeEnum,
+    itemId: z.string(),
+    outcome: batchItemOutcomeSchema,
+    message: z.string(),
+    code: z.string().optional(),
+    parentFolderId: z.string().nullable().optional(),
+    restoredCount: z.number().int().optional(),
+});
+
+const batchPermanentlyDeleteResultSchema = z.object({
+    itemType: recycleItemTypeEnum,
+    itemId: z.string(),
+    outcome: batchItemOutcomeSchema,
+    message: z.string(),
+    code: z.string().optional(),
+    purgedFiles: z.number().int().optional(),
+    purgedFolders: z.number().int().optional(),
+});
+
+const batchRestoreResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+    results: z.array(batchRestoreResultSchema),
+});
+
+const batchPermanentlyDeleteResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+    results: z.array(batchPermanentlyDeleteResultSchema),
+});
+
 const emptyRecycleBinInputSchema = z.object({
     itemType: recycleItemTypeEnum.optional(),
 });
@@ -123,6 +187,8 @@ export type RecycleBinListItem = z.infer<typeof recycleBinListItemSchema>;
 export type ListRecycleBinInput = z.infer<typeof listRecycleBinInputSchema>;
 export type DestinationFoldersInput = z.infer<typeof destinationFoldersInputSchema>;
 export type RestoreRecycleBinInput = z.infer<typeof restoreInputSchema>;
+export type BatchRestoreRecycleBinInput = z.infer<typeof batchRestoreInputSchema>;
+export type BatchPermanentlyDeleteRecycleBinInput = z.infer<typeof batchItemIdsInputSchema>;
 export type EmptyRecycleBinInput = z.infer<typeof emptyRecycleBinInputSchema>;
 export type PurgeExpiredRecycleBinInput = z.infer<typeof purgeExpiredInputSchema>;
 
@@ -185,6 +251,31 @@ export const permanentlyDeleteRecycleBinItem = async (input: z.infer<typeof perm
             headers: await createCsrfHeaders(),
         },
     );
+};
+
+export const batchRestoreRecycleBinItems = async (input: BatchRestoreRecycleBinInput) => {
+    const body = batchRestoreInputSchema.parse(input);
+
+    return postJson("/v1/recycle-bin/items/batch/restore", batchRestoreResponseSchema, {
+        body: {
+            destinationFolderId: body.destinationFolderId,
+            fileIds: body.fileIds,
+            folderIds: body.folderIds,
+        },
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const batchPermanentlyDeleteRecycleBinItems = async (input: BatchPermanentlyDeleteRecycleBinInput) => {
+    const body = batchItemIdsInputSchema.parse(input);
+
+    return postJson("/v1/recycle-bin/items/batch/permanently-delete", batchPermanentlyDeleteResponseSchema, {
+        body: {
+            fileIds: body.fileIds,
+            folderIds: body.folderIds,
+        },
+        headers: await createCsrfHeaders(),
+    });
 };
 
 export const emptyRecycleBin = async (input?: EmptyRecycleBinInput) => {
