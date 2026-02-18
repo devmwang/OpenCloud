@@ -19,6 +19,8 @@ import {
     getFolderDetails,
     renameFolder,
     setDisplayOrder,
+    type BatchDeleteItemsResponse,
+    type BatchMoveItemsResponse,
     type DisplayOrderResponse,
     type DisplayType,
     type SortOrder,
@@ -56,6 +58,114 @@ import { queryKeys } from "@/lib/query-keys";
 export const Route = createFileRoute("/_authed/folder/$folderId")({
     component: FolderPage,
 });
+
+const BATCH_OPERATION_LIMIT = 500;
+
+type BatchItemOutcome = "SUCCESS" | "FAILED" | "SKIPPED";
+type BatchOperationStatus = "success" | "partial_success" | "failed";
+type BatchOperationSummary = {
+    total: number;
+    succeeded: number;
+    failed: number;
+    skipped: number;
+};
+
+type BatchOperationResult = {
+    outcome: BatchItemOutcome;
+    message: string;
+};
+
+const chunkIds = (ids: string[]) => {
+    if (ids.length === 0) {
+        return [] as string[][];
+    }
+
+    const chunks: string[][] = [];
+    for (let index = 0; index < ids.length; index += BATCH_OPERATION_LIMIT) {
+        chunks.push(ids.slice(index, index + BATCH_OPERATION_LIMIT));
+    }
+    return chunks;
+};
+
+const resolveBatchStatus = (summary: BatchOperationSummary): BatchOperationStatus => {
+    if (summary.failed === 0) {
+        return "success";
+    }
+    if (summary.succeeded === 0 && summary.skipped === 0) {
+        return "failed";
+    }
+    return "partial_success";
+};
+
+const buildBatchMessage = (operationLabel: string, status: BatchOperationStatus, summary: BatchOperationSummary) => {
+    if (status === "success") {
+        return `${operationLabel} completed successfully`;
+    }
+    if (status === "failed") {
+        return `${operationLabel} failed`;
+    }
+    return `${operationLabel} completed with partial success (${summary.failed} failed)`;
+};
+
+type MergedBatchResult<T extends BatchOperationResult> = {
+    status: BatchOperationStatus;
+    message: string;
+    summary: BatchOperationSummary;
+    results: T[];
+};
+
+const mergeBatchResults = <T extends BatchOperationResult>(
+    operationLabel: string,
+    responses: Array<{
+        summary: BatchOperationSummary;
+        results: T[];
+    }>,
+): MergedBatchResult<T> => {
+    const summary = responses.reduce<BatchOperationSummary>(
+        (accumulator, response) => ({
+            total: accumulator.total + response.summary.total,
+            succeeded: accumulator.succeeded + response.summary.succeeded,
+            failed: accumulator.failed + response.summary.failed,
+            skipped: accumulator.skipped + response.summary.skipped,
+        }),
+        { total: 0, succeeded: 0, failed: 0, skipped: 0 },
+    );
+    const status = resolveBatchStatus(summary);
+
+    return {
+        status,
+        message: buildBatchMessage(operationLabel, status, summary),
+        summary,
+        results: responses.flatMap((response) => response.results),
+    };
+};
+
+const runBatchedOperation = async <
+    TResponse extends { summary: BatchOperationSummary; results: BatchOperationResult[] },
+>(params: {
+    fileIds: string[];
+    folderIds: string[];
+    execute: (payload: { fileIds?: string[]; folderIds?: string[] }) => Promise<TResponse>;
+}) => {
+    const fileChunks = chunkIds(params.fileIds);
+    const folderChunks = chunkIds(params.folderIds);
+    const requestCount = Math.max(fileChunks.length, folderChunks.length);
+    const responses: TResponse[] = [];
+
+    for (let index = 0; index < requestCount; index += 1) {
+        const fileIds = fileChunks[index];
+        const folderIds = folderChunks[index];
+
+        responses.push(
+            await params.execute({
+                ...(fileIds && fileIds.length > 0 ? { fileIds } : {}),
+                ...(folderIds && folderIds.length > 0 ? { folderIds } : {}),
+            }),
+        );
+    }
+
+    return responses;
+};
 
 function FolderPage() {
     const { folderId } = Route.useParams();
@@ -415,11 +525,18 @@ function FolderPageContent({
                 return;
             }
 
-            const moveResult = await batchMoveItems({
-                destinationFolderId,
-                fileIds: moveTargets.filter((item) => item.kind === "file").map((item) => item.id),
-                folderIds: moveTargets.filter((item) => item.kind === "folder").map((item) => item.id),
+            const fileIds = moveTargets.filter((item) => item.kind === "file").map((item) => item.id);
+            const folderIds = moveTargets.filter((item) => item.kind === "folder").map((item) => item.id);
+            const responses = await runBatchedOperation<BatchMoveItemsResponse>({
+                fileIds,
+                folderIds,
+                execute: (payload) =>
+                    batchMoveItems({
+                        destinationFolderId,
+                        ...payload,
+                    }),
             });
+            const moveResult = mergeBatchResults("Batch move", responses);
 
             if (moveResult.summary.succeeded > 0) {
                 await Promise.all([
@@ -458,10 +575,22 @@ function FolderPageContent({
 
     const handleBatchDeleteSelection = useCallback(
         async (input: { fileIds: string[]; folderIds: string[] }) => {
-            const deleteResult = await batchDeleteItems({
-                fileIds: input.fileIds,
-                folderIds: input.folderIds,
-            });
+            let deleteResult: MergedBatchResult<BatchDeleteItemsResponse["results"][number]>;
+            try {
+                const responses = await runBatchedOperation<BatchDeleteItemsResponse>({
+                    fileIds: input.fileIds,
+                    folderIds: input.folderIds,
+                    execute: (payload) =>
+                        batchDeleteItems({
+                            ...payload,
+                        }),
+                });
+                deleteResult = mergeBatchResults("Batch delete", responses);
+            } catch (error) {
+                const message = getErrorMessage(error);
+                addToast(message, "error");
+                throw new Error(message);
+            }
 
             if (deleteResult.summary.succeeded > 0) {
                 await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
