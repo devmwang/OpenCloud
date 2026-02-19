@@ -120,29 +120,49 @@ const mergeBatchResults = (
     };
 };
 
+type BatchedOperationResult = {
+    responses: Array<{ summary: BatchOperationSummary }>;
+    firstErrorMessage: string | null;
+};
+
 const runBatchedOperation = async <TResponse extends { summary: BatchOperationSummary }>(params: {
     fileIds: string[];
     folderIds: string[];
     execute: (payload: { fileIds?: string[]; folderIds?: string[] }) => Promise<TResponse>;
-}) => {
+}): Promise<BatchedOperationResult> => {
     const fileChunks = chunkIds(params.fileIds);
     const folderChunks = chunkIds(params.folderIds);
     const requestCount = Math.max(fileChunks.length, folderChunks.length);
-    const responses: TResponse[] = [];
+    const responses: Array<{ summary: BatchOperationSummary }> = [];
+    let firstErrorMessage: string | null = null;
 
     for (let index = 0; index < requestCount; index += 1) {
         const fileIds = fileChunks[index];
         const folderIds = folderChunks[index];
+        const chunkTotal = (fileIds?.length ?? 0) + (folderIds?.length ?? 0);
+        const payload = {
+            ...(fileIds && fileIds.length > 0 ? { fileIds } : {}),
+            ...(folderIds && folderIds.length > 0 ? { folderIds } : {}),
+        };
 
-        responses.push(
-            await params.execute({
-                ...(fileIds && fileIds.length > 0 ? { fileIds } : {}),
-                ...(folderIds && folderIds.length > 0 ? { folderIds } : {}),
-            }),
-        );
+        try {
+            const response = await params.execute(payload);
+            responses.push({ summary: response.summary });
+        } catch (error) {
+            if (!firstErrorMessage) {
+                firstErrorMessage = getErrorMessage(error);
+            }
+            responses.push({
+                summary: {
+                    total: chunkTotal,
+                    succeeded: 0,
+                    failed: chunkTotal,
+                },
+            });
+        }
     }
 
-    return responses;
+    return { responses, firstErrorMessage };
 };
 
 function FolderPage() {
@@ -505,7 +525,7 @@ function FolderPageContent({
 
             const fileIds = moveTargets.filter((item) => item.kind === "file").map((item) => item.id);
             const folderIds = moveTargets.filter((item) => item.kind === "folder").map((item) => item.id);
-            const responses = await runBatchedOperation<BatchMoveItemsResponse>({
+            const { responses, firstErrorMessage } = await runBatchedOperation<BatchMoveItemsResponse>({
                 fileIds,
                 folderIds,
                 execute: (payload) =>
@@ -516,12 +536,14 @@ function FolderPageContent({
             });
             const moveResult = mergeBatchResults("Batch move", responses);
 
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
-                queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(destinationFolderId) }),
-                queryClient.invalidateQueries({ queryKey: ["folder", "destination-children"] }),
-            ]);
-            clearSelection();
+            if (moveResult.summary.succeeded > 0) {
+                await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
+                    queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(destinationFolderId) }),
+                    queryClient.invalidateQueries({ queryKey: ["folder", "destination-children"] }),
+                ]);
+                clearSelection();
+            }
 
             if (moveResult.status === "success") {
                 addToast(
@@ -531,38 +553,48 @@ function FolderPageContent({
                 return;
             }
 
-            addToast(`Move completed with failures (${moveResult.summary.failed} failed)`, "error");
+            if (moveResult.summary.succeeded > 0) {
+                addToast(`Move completed with failures (${moveResult.summary.failed} failed)`, "error");
+                return;
+            }
+
+            const message = firstErrorMessage ?? "Failed to move items";
+            addToast(message, "error");
+            throw new Error(message);
         },
         [moveTargets, queryClient, folderId, clearSelection, addToast],
     );
 
     const handleBatchDeleteSelection = useCallback(
         async (input: { fileIds: string[]; folderIds: string[] }) => {
-            let deleteResult: MergedBatchResult;
-            try {
-                const responses = await runBatchedOperation<BatchDeleteItemsResponse>({
-                    fileIds: input.fileIds,
-                    folderIds: input.folderIds,
-                    execute: (payload) =>
-                        batchDeleteItems({
-                            ...payload,
-                        }),
-                });
-                deleteResult = mergeBatchResults("Batch delete", responses);
-            } catch (error) {
-                const message = getErrorMessage(error);
-                addToast(message, "error");
-                throw new Error(message);
-            }
+            const { responses, firstErrorMessage } = await runBatchedOperation<BatchDeleteItemsResponse>({
+                fileIds: input.fileIds,
+                folderIds: input.folderIds,
+                execute: (payload) =>
+                    batchDeleteItems({
+                        ...payload,
+                    }),
+            });
+            const deleteResult = mergeBatchResults("Batch delete", responses);
 
-            await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+            if (deleteResult.summary.succeeded > 0) {
+                await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
+            }
 
             if (deleteResult.status === "success") {
                 addToast(`Moved ${deleteResult.summary.succeeded} item(s) to Recycle Bin`, "success");
                 return;
             }
 
-            addToast(`Delete completed with failures (${deleteResult.summary.failed} failed)`, "error");
+            if (deleteResult.summary.succeeded > 0) {
+                addToast(`Delete completed with failures (${deleteResult.summary.failed} failed)`, "error");
+                return;
+            }
+
+            addToast(
+                firstErrorMessage ?? `Delete completed with failures (${deleteResult.summary.failed} failed)`,
+                "error",
+            );
         },
         [queryClient, folderId, addToast],
     );
