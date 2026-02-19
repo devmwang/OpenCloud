@@ -9,15 +9,18 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorCard } from "@/components/shared/error-card";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { moveFile, renameFile } from "@/features/files/api";
+import { renameFile } from "@/features/files/api";
 import {
+    batchDeleteItems,
+    batchMoveItems,
     createFolder,
     getDisplayOrder,
     getFolderContents,
     getFolderDetails,
-    moveFolder,
     renameFolder,
     setDisplayOrder,
+    type BatchDeleteItemsResponse,
+    type BatchMoveItemsResponse,
     type DisplayOrderResponse,
     type DisplayType,
     type SortOrder,
@@ -55,6 +58,112 @@ import { queryKeys } from "@/lib/query-keys";
 export const Route = createFileRoute("/_authed/folder/$folderId")({
     component: FolderPage,
 });
+
+const BATCH_OPERATION_LIMIT = 500;
+
+type BatchOperationStatus = "success" | "failed";
+type BatchOperationSummary = {
+    total: number;
+    succeeded: number;
+    failed: number;
+};
+
+const chunkIds = (ids: string[]) => {
+    if (ids.length === 0) {
+        return [] as string[][];
+    }
+
+    const chunks: string[][] = [];
+    for (let index = 0; index < ids.length; index += BATCH_OPERATION_LIMIT) {
+        chunks.push(ids.slice(index, index + BATCH_OPERATION_LIMIT));
+    }
+    return chunks;
+};
+
+const resolveBatchStatus = (summary: BatchOperationSummary): BatchOperationStatus => {
+    return summary.failed === 0 ? "success" : "failed";
+};
+
+const buildBatchMessage = (operationLabel: string, status: BatchOperationStatus) => {
+    if (status === "success") {
+        return `${operationLabel} completed successfully`;
+    }
+    return `${operationLabel} completed with failures`;
+};
+
+type MergedBatchResult = {
+    status: BatchOperationStatus;
+    message: string;
+    summary: BatchOperationSummary;
+};
+
+const mergeBatchResults = (
+    operationLabel: string,
+    responses: Array<{
+        summary: BatchOperationSummary;
+    }>,
+): MergedBatchResult => {
+    const summary = responses.reduce<BatchOperationSummary>(
+        (accumulator, response) => ({
+            total: accumulator.total + response.summary.total,
+            succeeded: accumulator.succeeded + response.summary.succeeded,
+            failed: accumulator.failed + response.summary.failed,
+        }),
+        { total: 0, succeeded: 0, failed: 0 },
+    );
+    const status = resolveBatchStatus(summary);
+
+    return {
+        status,
+        message: buildBatchMessage(operationLabel, status),
+        summary,
+    };
+};
+
+type BatchedOperationResult = {
+    responses: Array<{ summary: BatchOperationSummary }>;
+    firstErrorMessage: string | null;
+};
+
+const runBatchedOperation = async <TResponse extends { summary: BatchOperationSummary }>(params: {
+    fileIds: string[];
+    folderIds: string[];
+    execute: (payload: { fileIds?: string[]; folderIds?: string[] }) => Promise<TResponse>;
+}): Promise<BatchedOperationResult> => {
+    const fileChunks = chunkIds(params.fileIds);
+    const folderChunks = chunkIds(params.folderIds);
+    const requestCount = Math.max(fileChunks.length, folderChunks.length);
+    const responses: Array<{ summary: BatchOperationSummary }> = [];
+    let firstErrorMessage: string | null = null;
+
+    for (let index = 0; index < requestCount; index += 1) {
+        const fileIds = fileChunks[index];
+        const folderIds = folderChunks[index];
+        const chunkTotal = (fileIds?.length ?? 0) + (folderIds?.length ?? 0);
+        const payload = {
+            ...(fileIds && fileIds.length > 0 ? { fileIds } : {}),
+            ...(folderIds && folderIds.length > 0 ? { folderIds } : {}),
+        };
+
+        try {
+            const response = await params.execute(payload);
+            responses.push({ summary: response.summary });
+        } catch (error) {
+            if (!firstErrorMessage) {
+                firstErrorMessage = getErrorMessage(error);
+            }
+            responses.push({
+                summary: {
+                    total: chunkTotal,
+                    succeeded: 0,
+                    failed: chunkTotal,
+                },
+            });
+        }
+    }
+
+    return { responses, firstErrorMessage };
+};
 
 function FolderPage() {
     const { folderId } = Route.useParams();
@@ -194,14 +303,6 @@ function FolderPage() {
         await renameFile({ fileId: targetFileId, name });
     };
 
-    const handleMoveFolder = async (targetFolderId: string, destinationFolderId: string) => {
-        await moveFolder({ folderId: targetFolderId, destinationFolderId });
-    };
-
-    const handleMoveFile = async (targetFileId: string, destinationFolderId: string) => {
-        await moveFile({ fileId: targetFileId, destinationFolderId });
-    };
-
     const isLoading = detailsQuery.isPending || contentsQuery.isPending;
     const error = detailsQuery.error ?? contentsQuery.error;
 
@@ -274,8 +375,6 @@ function FolderPage() {
                 onDeleteFile={handleDeleteFile}
                 onRenameFolder={handleRenameFolder}
                 onRenameFile={handleRenameFile}
-                onMoveFolder={handleMoveFolder}
-                onMoveFile={handleMoveFile}
             />
 
             {/* Dialogs */}
@@ -317,8 +416,6 @@ type FolderPageContentProps = {
     onDeleteFile: (fileId: string) => Promise<void>;
     onRenameFolder: (folderId: string, name: string) => Promise<void>;
     onRenameFile: (fileId: string, name: string) => Promise<void>;
-    onMoveFolder: (folderId: string, destinationFolderId: string) => Promise<void>;
-    onMoveFile: (fileId: string, destinationFolderId: string) => Promise<void>;
 };
 
 type FolderListEntry = {
@@ -351,8 +448,6 @@ function FolderPageContent({
     onDeleteFile,
     onRenameFolder,
     onRenameFile,
-    onMoveFolder,
-    onMoveFile,
 }: FolderPageContentProps) {
     const queryClient = useQueryClient();
     const { addToast } = useToast();
@@ -428,27 +523,20 @@ function FolderPageContent({
                 return;
             }
 
-            let succeeded = 0;
-            let failed = 0;
-            let firstError: string | null = null;
+            const fileIds = moveTargets.filter((item) => item.kind === "file").map((item) => item.id);
+            const folderIds = moveTargets.filter((item) => item.kind === "folder").map((item) => item.id);
+            const { responses, firstErrorMessage } = await runBatchedOperation<BatchMoveItemsResponse>({
+                fileIds,
+                folderIds,
+                execute: (payload) =>
+                    batchMoveItems({
+                        destinationFolderId,
+                        ...payload,
+                    }),
+            });
+            const moveResult = mergeBatchResults("Batch move", responses);
 
-            for (const item of moveTargets) {
-                try {
-                    if (item.kind === "file") {
-                        await onMoveFile(item.id, destinationFolderId);
-                    } else {
-                        await onMoveFolder(item.id, destinationFolderId);
-                    }
-                    succeeded++;
-                } catch (error) {
-                    failed++;
-                    if (!firstError) {
-                        firstError = getErrorMessage(error);
-                    }
-                }
-            }
-
-            if (succeeded > 0) {
+            if (moveResult.summary.succeeded > 0) {
                 await Promise.all([
                     queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) }),
                     queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(destinationFolderId) }),
@@ -457,65 +545,58 @@ function FolderPageContent({
                 clearSelection();
             }
 
-            if (failed === 0) {
+            if (moveResult.status === "success") {
                 addToast(
-                    succeeded === 1
-                        ? `${moveTargets[0]?.kind === "file" ? "File" : "Folder"} moved`
-                        : `Moved ${succeeded} item(s)`,
+                    moveResult.summary.succeeded === 1 ? "Item moved" : `Moved ${moveResult.summary.succeeded} item(s)`,
                     "success",
                 );
                 return;
             }
 
-            if (succeeded > 0) {
-                addToast(`Moved ${succeeded} item(s), ${failed} failed`, "error");
+            if (moveResult.summary.succeeded > 0) {
+                addToast(`Move completed with failures (${moveResult.summary.failed} failed)`, "error");
                 return;
             }
 
-            const message = firstError ?? "Failed to move items";
+            const message = firstErrorMessage ?? "Failed to move items";
             addToast(message, "error");
             throw new Error(message);
         },
-        [moveTargets, onMoveFile, onMoveFolder, queryClient, folderId, clearSelection, addToast],
+        [moveTargets, queryClient, folderId, clearSelection, addToast],
     );
 
-    // ── Batch delete handlers ─────────────────────────────────
-    const handleBatchDeleteFiles = useCallback(
-        async (fileIds: string[]) => {
-            let succeeded = 0;
-            let failed = 0;
-            for (const id of fileIds) {
-                try {
-                    await onDeleteFile(id);
-                    succeeded++;
-                } catch {
-                    failed++;
-                }
-            }
-            if (failed > 0) {
-                addToast(`Deleted ${succeeded} file(s), ${failed} failed`, "error");
-            }
-        },
-        [onDeleteFile, addToast],
-    );
+    const handleBatchDeleteSelection = useCallback(
+        async (input: { fileIds: string[]; folderIds: string[] }) => {
+            const { responses, firstErrorMessage } = await runBatchedOperation<BatchDeleteItemsResponse>({
+                fileIds: input.fileIds,
+                folderIds: input.folderIds,
+                execute: (payload) =>
+                    batchDeleteItems({
+                        ...payload,
+                    }),
+            });
+            const deleteResult = mergeBatchResults("Batch delete", responses);
 
-    const handleBatchDeleteFolders = useCallback(
-        async (folderIds: string[]) => {
-            let succeeded = 0;
-            let failed = 0;
-            for (const id of folderIds) {
-                try {
-                    await onDeleteFolder(id);
-                    succeeded++;
-                } catch {
-                    failed++;
-                }
+            if (deleteResult.summary.succeeded > 0) {
+                await queryClient.invalidateQueries({ queryKey: queryKeys.folderContents(folderId) });
             }
-            if (failed > 0) {
-                addToast(`Deleted ${succeeded} folder(s), ${failed} failed`, "error");
+
+            if (deleteResult.status === "success") {
+                addToast(`Moved ${deleteResult.summary.succeeded} item(s) to Recycle Bin`, "success");
+                return;
             }
+
+            if (deleteResult.summary.succeeded > 0) {
+                addToast(`Delete completed with failures (${deleteResult.summary.failed} failed)`, "error");
+                return;
+            }
+
+            addToast(
+                firstErrorMessage ?? `Delete completed with failures (${deleteResult.summary.failed} failed)`,
+                "error",
+            );
         },
-        [onDeleteFolder, addToast],
+        [queryClient, folderId, addToast],
     );
 
     // ── Background click to clear selection ───────────────────
@@ -586,8 +667,7 @@ function FolderPageContent({
                 actions={
                     hasSelection ? (
                         <SelectionToolbar
-                            onDeleteFiles={handleBatchDeleteFiles}
-                            onDeleteFolders={handleBatchDeleteFolders}
+                            onDeleteSelection={handleBatchDeleteSelection}
                             onShowInfo={handleShowInfo}
                             onRename={(item) => handleOpenRename([item])}
                             onMove={handleOpenMove}

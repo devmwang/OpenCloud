@@ -116,6 +116,66 @@ const mutateFolderResponseSchema = z.object({
     parentFolderId: z.string().nullable(),
 });
 
+const batchOperationStatusSchema = z.enum(["success", "failed"]);
+
+const batchItemIdArraySchema = z.array(z.string()).max(500);
+
+const batchItemIdsSchema = z
+    .object({
+        fileIds: batchItemIdArraySchema.optional(),
+        folderIds: batchItemIdArraySchema.optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+        const totalIds = (value.fileIds?.length ?? 0) + (value.folderIds?.length ?? 0);
+        if (totalIds === 0) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "At least one fileId or folderId is required",
+                path: ["fileIds"],
+            });
+        }
+    });
+
+const batchMoveItemsSchema = z
+    .object({
+        destinationFolderId: z.string({
+            required_error: "Destination folder ID is required",
+            invalid_type_error: "Destination folder ID must be a string",
+        }),
+        fileIds: batchItemIdArraySchema.optional(),
+        folderIds: batchItemIdArraySchema.optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+        const totalIds = (value.fileIds?.length ?? 0) + (value.folderIds?.length ?? 0);
+        if (totalIds === 0) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "At least one fileId or folderId is required",
+                path: ["fileIds"],
+            });
+        }
+    });
+
+const batchOperationSummarySchema = z.object({
+    total: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+});
+
+const batchMoveItemsResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+});
+
+const batchDeleteItemsResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+});
+
 const displayPreferencesResponseSchema = z.object({
     folderId: z.string(),
     displayType: z.enum(["GRID", "LIST"]),
@@ -134,6 +194,8 @@ export type GetFolderChildrenQuery = z.infer<typeof getFolderChildrenQuerySchema
 export type CreateFolderInput = z.infer<typeof createFolderSchema>;
 export type PatchFolderInput = z.infer<typeof patchFolderBodySchema>;
 export type PutDisplayPreferencesInput = z.infer<typeof putDisplayPreferencesSchema>;
+export type BatchMoveItemsInput = z.infer<typeof batchMoveItemsSchema>;
+export type BatchDeleteItemsInput = z.infer<typeof batchItemIdsSchema>;
 
 export const { schemas: folderSchemas, $ref } = buildJsonSchemas(
     {
@@ -146,6 +208,10 @@ export const { schemas: folderSchemas, $ref } = buildJsonSchemas(
         createFolderResponseSchema,
         patchFolderBodySchema,
         mutateFolderResponseSchema,
+        batchMoveItemsSchema,
+        batchMoveItemsResponseSchema,
+        batchItemIdsSchema,
+        batchDeleteItemsResponseSchema,
         displayPreferencesResponseSchema,
         putDisplayPreferencesSchema,
     },

@@ -100,6 +100,46 @@ const mutateFolderResponseSchema = z.object({
     parentFolderId: z.string().nullable(),
 });
 
+const batchOperationStatusSchema = z.enum(["success", "failed"]);
+
+const batchItemIdsInputSchema = z
+    .object({
+        fileIds: z.array(z.string().min(1)).max(500).optional(),
+        folderIds: z.array(z.string().min(1)).max(500).optional(),
+    })
+    .superRefine((value, context) => {
+        const totalIds = (value.fileIds?.length ?? 0) + (value.folderIds?.length ?? 0);
+        if (totalIds === 0) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "At least one fileId or folderId is required",
+                path: ["fileIds"],
+            });
+        }
+    });
+
+const batchMoveItemsInputSchema = batchItemIdsInputSchema.extend({
+    destinationFolderId: z.string().min(1),
+});
+
+const batchOperationSummarySchema = z.object({
+    total: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+});
+
+const batchMoveItemsResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+});
+
+const batchDeleteItemsResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+});
+
 const moveFolderInputSchema = z.object({
     folderId: z.string().min(1),
     destinationFolderId: z.string().min(1),
@@ -142,6 +182,10 @@ export type FolderContents = z.infer<typeof folderContentsSchema>;
 export type CreateFolderInput = z.infer<typeof createFolderInputSchema>;
 export type DestinationFoldersInput = z.infer<typeof destinationFoldersInputSchema>;
 export type FolderDestinationChildren = z.infer<typeof folderDestinationChildrenResponseSchema>;
+export type BatchMoveItemsInput = z.infer<typeof batchMoveItemsInputSchema>;
+export type BatchDeleteItemsInput = z.infer<typeof batchItemIdsInputSchema>;
+export type BatchMoveItemsResponse = z.infer<typeof batchMoveItemsResponseSchema>;
+export type BatchDeleteItemsResponse = z.infer<typeof batchDeleteItemsResponseSchema>;
 
 export type GetFolderContentsOptions = {
     limit?: number;
@@ -177,6 +221,31 @@ export const moveFolder = async (input: z.infer<typeof moveFolderInputSchema>) =
     return patchJson(`/v1/folders/${encodeURIComponent(body.folderId)}`, mutateFolderResponseSchema, {
         body: {
             destinationFolderId: body.destinationFolderId,
+        },
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const batchMoveItems = async (input: BatchMoveItemsInput) => {
+    const body = batchMoveItemsInputSchema.parse(input);
+
+    return postJson("/v1/folders/batch/move", batchMoveItemsResponseSchema, {
+        body: {
+            destinationFolderId: body.destinationFolderId,
+            fileIds: body.fileIds,
+            folderIds: body.folderIds,
+        },
+        headers: await createCsrfHeaders(),
+    });
+};
+
+export const batchDeleteItems = async (input: BatchDeleteItemsInput) => {
+    const body = batchItemIdsInputSchema.parse(input);
+
+    return postJson("/v1/folders/batch/delete", batchDeleteItemsResponseSchema, {
+        body: {
+            fileIds: body.fileIds,
+            folderIds: body.folderIds,
         },
         headers: await createCsrfHeaders(),
     });

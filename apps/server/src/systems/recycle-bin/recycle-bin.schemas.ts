@@ -73,6 +73,62 @@ const permanentlyDeleteResponseSchema = z.object({
     purgedFolders: z.number().int(),
 });
 
+const batchOperationStatusSchema = z.enum(["success", "failed"]);
+const batchItemIdArraySchema = z.array(z.string()).max(500);
+
+const batchItemIdsSchema = z
+    .object({
+        fileIds: batchItemIdArraySchema.optional(),
+        folderIds: batchItemIdArraySchema.optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+        const totalIds = (value.fileIds?.length ?? 0) + (value.folderIds?.length ?? 0);
+        if (totalIds === 0) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "At least one fileId or folderId is required",
+                path: ["fileIds"],
+            });
+        }
+    });
+
+const batchRestoreBodySchema = z
+    .object({
+        destinationFolderId: z.string().optional(),
+        fileIds: batchItemIdArraySchema.optional(),
+        folderIds: batchItemIdArraySchema.optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+        const totalIds = (value.fileIds?.length ?? 0) + (value.folderIds?.length ?? 0);
+        if (totalIds === 0) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "At least one fileId or folderId is required",
+                path: ["fileIds"],
+            });
+        }
+    });
+
+const batchOperationSummarySchema = z.object({
+    total: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+});
+
+const batchRestoreResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+});
+
+const batchPermanentlyDeleteResponseSchema = z.object({
+    status: batchOperationStatusSchema,
+    message: z.string(),
+    summary: batchOperationSummarySchema,
+});
+
 const emptyQuerySchema = z.object({
     itemType: recycleItemTypeSchema.optional(),
 });
@@ -103,6 +159,8 @@ export type ListQuery = z.infer<typeof listQuerySchema>;
 export type DestinationFoldersQuery = z.infer<typeof destinationFoldersQuerySchema>;
 export type ItemParams = z.infer<typeof itemParamsSchema>;
 export type RestoreBody = z.infer<typeof restoreBodySchema>;
+export type BatchRestoreBody = z.infer<typeof batchRestoreBodySchema>;
+export type BatchPermanentlyDeleteBody = z.infer<typeof batchItemIdsSchema>;
 export type EmptyQuery = z.infer<typeof emptyQuerySchema>;
 export type PurgeBody = z.infer<typeof purgeBodySchema>;
 
@@ -116,6 +174,10 @@ export const { schemas: recycleBinSchemas, $ref } = buildJsonSchemas(
         restoreBodySchema,
         restoreResponseSchema,
         permanentlyDeleteResponseSchema,
+        batchRestoreBodySchema,
+        batchRestoreResponseSchema,
+        batchItemIdsSchema,
+        batchPermanentlyDeleteResponseSchema,
         emptyQuerySchema,
         emptyResponseSchema,
         purgeBodySchema,
