@@ -1524,7 +1524,6 @@ export async function batchRestoreHandler(
                                 select 1
                                 from validated_roots as ancestor_root
                                 where ancestor_root."id" <> validated_roots."id"
-                                  and ancestor_root."rootDeletedAt" = validated_roots."rootDeletedAt"
                                   and validated_roots."oldPath" like ancestor_root."oldPath" || '/%'
                             )`
                                 : sql`true`
@@ -1628,7 +1627,6 @@ export async function batchRestoreHandler(
                                 select 1
                                 from validated_roots as ancestor_root
                                 where ancestor_root."id" <> validated_roots."id"
-                                  and ancestor_root."rootDeletedAt" = validated_roots."rootDeletedAt"
                                   and validated_roots."oldPath" like ancestor_root."oldPath" || '/%'
                             )`
                                 : sql`true`

@@ -588,11 +588,37 @@ export async function batchMoveItemsHandler(
         });
     }
 
+    const moveRootPaths = moveRoots.map((root) => root.oldPath);
+    const requestedFileParentIds = Array.from(new Set(requestedFiles.map((fileRow) => fileRow.parentId)));
+    const parentFolderPathById = new Map<string, string>();
+    for (const idChunk of chunkIds(requestedFileParentIds)) {
+        const rows = await this.db
+            .select({ id: folders.id, ownerId: folders.ownerId, folderPath: folders.folderPath })
+            .from(folders)
+            .where(inArray(folders.id, idChunk));
+
+        for (const row of rows) {
+            if (row.ownerId !== userId) {
+                continue;
+            }
+            parentFolderPathById.set(row.id, row.folderPath);
+        }
+    }
+
     const movableFileIds = requestedFiles
-        .filter(
-            (fileRow) =>
-                fileRow.ownerId === userId && fileRow.deletedAt === null && fileRow.parentId !== destinationFolderId,
-        )
+        .filter((fileRow) => {
+            if (fileRow.ownerId !== userId || fileRow.deletedAt !== null || fileRow.parentId === destinationFolderId) {
+                return false;
+            }
+
+            const parentFolderPath = parentFolderPathById.get(fileRow.parentId);
+            if (!parentFolderPath) {
+                return false;
+            }
+
+            // Files inside moved folder subtrees move with their parent folder hierarchy.
+            return !moveRootPaths.some((rootPath) => isFolderPathInSubtree(parentFolderPath, rootPath));
+        })
         .map((fileRow) => fileRow.id);
 
     await this.db.transaction(async (tx) => {
