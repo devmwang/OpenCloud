@@ -605,21 +605,26 @@ export async function batchMoveItemsHandler(
         }
     }
 
-    const movableFileIds = requestedFiles
-        .filter((fileRow) => {
-            if (fileRow.ownerId !== userId || fileRow.deletedAt !== null || fileRow.parentId === destinationFolderId) {
-                return false;
-            }
+    const movableFileIds: string[] = [];
+    let implicitlyMovedFileCount = 0;
+    for (const fileRow of requestedFiles) {
+        if (fileRow.ownerId !== userId || fileRow.deletedAt !== null || fileRow.parentId === destinationFolderId) {
+            continue;
+        }
 
-            const parentFolderPath = parentFolderPathById.get(fileRow.parentId);
-            if (!parentFolderPath) {
-                return false;
-            }
+        const parentFolderPath = parentFolderPathById.get(fileRow.parentId);
+        if (!parentFolderPath) {
+            continue;
+        }
 
-            // Files inside moved folder subtrees move with their parent folder hierarchy.
-            return !moveRootPaths.some((rootPath) => isFolderPathInSubtree(parentFolderPath, rootPath));
-        })
-        .map((fileRow) => fileRow.id);
+        // Files inside moved folder subtrees move with their parent folder hierarchy.
+        if (moveRootPaths.some((rootPath) => isFolderPathInSubtree(parentFolderPath, rootPath))) {
+            implicitlyMovedFileCount += 1;
+            continue;
+        }
+
+        movableFileIds.push(fileRow.id);
+    }
 
     await this.db.transaction(async (tx) => {
         if (moveRoots.length > 0) {
@@ -684,7 +689,7 @@ export async function batchMoveItemsHandler(
         }
     });
 
-    const summary = buildBatchSummary(total, movableFolders.length + movableFileIds.length);
+    const summary = buildBatchSummary(total, movableFolders.length + movableFileIds.length + implicitlyMovedFileCount);
     const status = resolveBatchStatus(summary);
 
     return reply.code(200).send({
