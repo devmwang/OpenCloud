@@ -73,8 +73,7 @@ const permanentlyDeleteResponseSchema = z.object({
     purgedFolders: z.number().int(),
 });
 
-const batchItemOutcomeSchema = z.enum(["SUCCESS", "FAILED", "SKIPPED"]);
-const batchOperationStatusSchema = z.enum(["success", "partial_success", "failed"]);
+const batchOperationStatusSchema = z.enum(["success", "failed"]);
 const batchItemIdArraySchema = z.array(z.string()).max(500);
 
 const batchItemIdsSchema = z
@@ -116,41 +115,18 @@ const batchOperationSummarySchema = z.object({
     total: z.number().int(),
     succeeded: z.number().int(),
     failed: z.number().int(),
-    skipped: z.number().int(),
-});
-
-const batchRestoreResultSchema = z.object({
-    itemType: recycleItemTypeSchema,
-    itemId: z.string(),
-    outcome: batchItemOutcomeSchema,
-    message: z.string(),
-    code: z.string().optional(),
-    parentFolderId: z.string().nullable().optional(),
-    restoredCount: z.number().int().optional(),
-});
-
-const batchPermanentlyDeleteResultSchema = z.object({
-    itemType: recycleItemTypeSchema,
-    itemId: z.string(),
-    outcome: batchItemOutcomeSchema,
-    message: z.string(),
-    code: z.string().optional(),
-    purgedFiles: z.number().int().optional(),
-    purgedFolders: z.number().int().optional(),
 });
 
 const batchRestoreResponseSchema = z.object({
     status: batchOperationStatusSchema,
     message: z.string(),
     summary: batchOperationSummarySchema,
-    results: z.array(batchRestoreResultSchema),
 });
 
 const batchPermanentlyDeleteResponseSchema = z.object({
     status: batchOperationStatusSchema,
     message: z.string(),
     summary: batchOperationSummarySchema,
-    results: z.array(batchPermanentlyDeleteResultSchema),
 });
 
 const emptyQuerySchema = z.object({

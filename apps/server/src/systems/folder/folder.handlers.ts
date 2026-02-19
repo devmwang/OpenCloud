@@ -16,91 +16,66 @@ import type {
 
 type ResolvedSortType = "NAME" | "DATE_CREATED" | "SIZE";
 type ResolvedSortOrder = "ASC" | "DESC";
-type BatchItemType = "FILE" | "FOLDER";
-type BatchItemOutcome = "SUCCESS" | "FAILED" | "SKIPPED";
-type BatchOperationStatus = "success" | "partial_success" | "failed";
+type BatchOperationStatus = "success" | "failed";
 
 type BatchOperationSummary = {
     total: number;
     succeeded: number;
     failed: number;
-    skipped: number;
-};
-
-type BatchMoveResult = {
-    itemType: BatchItemType;
-    itemId: string;
-    outcome: BatchItemOutcome;
-    message: string;
-    code?: string;
-    destinationFolderId?: string;
-};
-
-type BatchDeleteResult = {
-    itemType: BatchItemType;
-    itemId: string;
-    outcome: BatchItemOutcome;
-    message: string;
-    code?: string;
-    parentFolderId?: string | null;
 };
 
 const DEFAULT_SORT_TYPE: ResolvedSortType = "NAME";
 const DEFAULT_SORT_ORDER: ResolvedSortOrder = "ASC";
+const IN_CLAUSE_CHUNK_SIZE = 500;
 
 const dedupeIds = (ids: string[] | undefined) => {
     return Array.from(new Set(ids ?? []));
 };
 
-const summarizeBatchResults = <T extends { outcome: BatchItemOutcome }>(results: T[]): BatchOperationSummary => {
-    let succeeded = 0;
-    let failed = 0;
-    let skipped = 0;
-
-    for (const result of results) {
-        if (result.outcome === "SUCCESS") {
-            succeeded += 1;
-            continue;
-        }
-
-        if (result.outcome === "FAILED") {
-            failed += 1;
-            continue;
-        }
-
-        skipped += 1;
+const chunkIds = (ids: string[], chunkSize = IN_CLAUSE_CHUNK_SIZE) => {
+    if (ids.length === 0) {
+        return [] as string[][];
     }
 
+    const chunks: string[][] = [];
+    for (let index = 0; index < ids.length; index += chunkSize) {
+        chunks.push(ids.slice(index, index + chunkSize));
+    }
+
+    return chunks;
+};
+
+const chunkItems = <T>(items: T[], chunkSize = IN_CLAUSE_CHUNK_SIZE) => {
+    if (items.length === 0) {
+        return [] as T[][];
+    }
+
+    const chunks: T[][] = [];
+    for (let index = 0; index < items.length; index += chunkSize) {
+        chunks.push(items.slice(index, index + chunkSize));
+    }
+
+    return chunks;
+};
+
+const buildBatchSummary = (total: number, succeeded: number): BatchOperationSummary => {
     return {
-        total: results.length,
+        total,
         succeeded,
-        failed,
-        skipped,
+        failed: Math.max(total - succeeded, 0),
     };
 };
 
 const resolveBatchStatus = (summary: BatchOperationSummary): BatchOperationStatus => {
-    if (summary.failed === 0) {
-        return "success";
-    }
-
-    if (summary.succeeded === 0 && summary.skipped === 0) {
-        return "failed";
-    }
-
-    return "partial_success";
+    return summary.failed === 0 ? "success" : "failed";
 };
 
-const buildBatchMessage = (operationLabel: string, status: BatchOperationStatus, summary: BatchOperationSummary) => {
+const buildBatchMessage = (operationLabel: string, status: BatchOperationStatus) => {
     if (status === "success") {
         return `${operationLabel} completed successfully`;
     }
 
-    if (status === "failed") {
-        return `${operationLabel} failed`;
-    }
-
-    return `${operationLabel} completed with partial success (${summary.failed} failed)`;
+    return `${operationLabel} completed with failures`;
 };
 
 const getFolderOrderBy = (sortType: ResolvedSortType, sortOrder: ResolvedSortOrder) => {
@@ -160,6 +135,10 @@ const splitFolderPathIds = (folderPath: string) => {
 const buildFolderPath = (parentPath: string, folderId: string) => {
     const normalizedParent = parentPath.endsWith("/") ? parentPath.slice(0, -1) : parentPath;
     return `${normalizedParent}/${folderId}`;
+};
+
+const isFolderPathInSubtree = (folderPath: string, rootPath: string) => {
+    return folderPath === rootPath || folderPath.startsWith(`${rootPath}/`);
 };
 
 const collectFolderSubtreeIds = async (server: FastifyInstance, ownerId: string, rootFolderId: string) => {
@@ -507,7 +486,7 @@ export async function batchMoveItemsHandler(
     const destinationFolderId = request.body.destinationFolderId;
     const folderIds = dedupeIds(request.body.folderIds);
     const fileIds = dedupeIds(request.body.fileIds);
-    const results: BatchMoveResult[] = [];
+    const total = folderIds.length + fileIds.length;
 
     const [destinationFolder] = await this.db
         .select({ id: folders.id, ownerId: folders.ownerId, folderPath: folders.folderPath })
@@ -516,43 +495,27 @@ export async function batchMoveItemsHandler(
         .limit(1);
 
     if (!destinationFolder || destinationFolder.ownerId !== userId) {
-        const failureMessage = !destinationFolder
-            ? "Destination folder not found"
-            : "You do not have permission to move items to this location";
-        const failureCode = !destinationFolder ? "DESTINATION_FOLDER_NOT_FOUND" : "FORBIDDEN_DESTINATION_FOLDER";
-
-        for (const folderId of folderIds) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: failureMessage,
-                code: failureCode,
-            });
-        }
-
-        for (const fileId of fileIds) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "FAILED",
-                message: failureMessage,
-                code: failureCode,
-            });
-        }
-
-        const summary = summarizeBatchResults(results);
+        const summary = buildBatchSummary(total, 0);
         const status = resolveBatchStatus(summary);
         return reply.code(200).send({
             status,
-            message: buildBatchMessage("Batch move", status, summary),
+            message: !destinationFolder
+                ? "Destination folder not found"
+                : "You do not have permission to move items to this location",
             summary,
-            results,
         });
     }
 
-    for (const folderId of folderIds) {
-        const [sourceFolder] = await this.db
+    const requestedFolders: Array<{
+        id: string;
+        ownerId: string;
+        type: "ROOT" | "STANDARD";
+        parentFolderId: string | null;
+        folderPath: string;
+        deletedAt: Date | null;
+    }> = [];
+    for (const idChunk of chunkIds(folderIds)) {
+        const rows = await this.db
             .select({
                 id: folders.id,
                 ownerId: folders.ownerId,
@@ -562,113 +525,18 @@ export async function batchMoveItemsHandler(
                 deletedAt: folders.deletedAt,
             })
             .from(folders)
-            .where(eq(folders.id, folderId))
-            .limit(1);
-
-        if (!sourceFolder) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "Folder not found",
-                code: "FOLDER_NOT_FOUND",
-            });
-            continue;
-        }
-
-        if (sourceFolder.ownerId !== userId) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "You do not have permission to move this folder",
-                code: "FORBIDDEN_FOLDER",
-            });
-            continue;
-        }
-
-        if (sourceFolder.deletedAt !== null) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "SKIPPED",
-                message: "Folder is already in recycle bin",
-                code: "FOLDER_ALREADY_DELETED",
-            });
-            continue;
-        }
-
-        if (sourceFolder.type === "ROOT") {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "Root folder cannot be moved",
-                code: "ROOT_FOLDER_NOT_MOVABLE",
-            });
-            continue;
-        }
-
-        if (sourceFolder.parentFolderId === destinationFolderId) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "SKIPPED",
-                message: "Folder already in destination folder",
-                code: "ALREADY_IN_DESTINATION",
-                destinationFolderId,
-            });
-            continue;
-        }
-
-        if (folderId === destinationFolderId) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "Folder cannot be moved into itself",
-                code: "SAME_AS_DESTINATION",
-            });
-            continue;
-        }
-
-        if (
-            destinationFolder.folderPath === sourceFolder.folderPath ||
-            destinationFolder.folderPath.startsWith(`${sourceFolder.folderPath}/`)
-        ) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "Folder cannot be moved into its own descendant",
-                code: "DESTINATION_IS_DESCENDANT",
-            });
-            continue;
-        }
-
-        const newSourcePath = buildFolderPath(destinationFolder.folderPath, sourceFolder.id);
-
-        await this.db.transaction(async (tx) => {
-            await tx.update(folders).set({ parentFolderId: destinationFolderId }).where(eq(folders.id, folderId));
-            await tx.execute(sql`
-                update "Folders"
-                set "folderPath" = ${newSourcePath} || substring("folderPath" from ${sourceFolder.folderPath.length + 1})
-                where "ownerId" = ${userId}
-                  and ("folderPath" = ${sourceFolder.folderPath} or "folderPath" like ${`${sourceFolder.folderPath}/%`})
-            `);
-        });
-
-        results.push({
-            itemType: "FOLDER",
-            itemId: folderId,
-            outcome: "SUCCESS",
-            message: "Folder moved successfully",
-            destinationFolderId,
-        });
+            .where(inArray(folders.id, idChunk));
+        requestedFolders.push(...rows);
     }
 
-    for (const fileId of fileIds) {
-        const [fileDetails] = await this.db
+    const requestedFiles: Array<{
+        id: string;
+        ownerId: string;
+        parentId: string;
+        deletedAt: Date | null;
+    }> = [];
+    for (const idChunk of chunkIds(fileIds)) {
+        const rows = await this.db
             .select({
                 id: files.id,
                 ownerId: files.ownerId,
@@ -676,73 +544,127 @@ export async function batchMoveItemsHandler(
                 deletedAt: files.deletedAt,
             })
             .from(files)
-            .where(eq(files.id, fileId))
-            .limit(1);
+            .where(inArray(files.id, idChunk));
+        requestedFiles.push(...rows);
+    }
 
-        if (!fileDetails) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "FAILED",
-                message: "File not found",
-                code: "FILE_NOT_FOUND",
-            });
+    const movableFolders = requestedFolders.filter((folder) => {
+        if (folder.ownerId !== userId) {
+            return false;
+        }
+        if (folder.deletedAt !== null) {
+            return false;
+        }
+        if (folder.type === "ROOT") {
+            return false;
+        }
+        if (folder.parentFolderId === destinationFolderId) {
+            return false;
+        }
+        if (isFolderPathInSubtree(destinationFolder.folderPath, folder.folderPath)) {
+            return false;
+        }
+        return true;
+    });
+
+    const sortedMovableFolders = [...movableFolders].sort((left, right) => {
+        if (left.folderPath.length === right.folderPath.length) {
+            return left.folderPath.localeCompare(right.folderPath);
+        }
+        return left.folderPath.length - right.folderPath.length;
+    });
+
+    const moveRoots: Array<{ id: string; oldPath: string; newPath: string }> = [];
+    for (const folder of sortedMovableFolders) {
+        const isNestedSelectedFolder = moveRoots.some((root) => isFolderPathInSubtree(folder.folderPath, root.oldPath));
+        if (isNestedSelectedFolder) {
             continue;
         }
 
-        if (fileDetails.ownerId !== userId) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "FAILED",
-                message: "You do not have permission to move this file",
-                code: "FORBIDDEN_FILE",
-            });
-            continue;
-        }
-
-        if (fileDetails.deletedAt !== null) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "SKIPPED",
-                message: "File is already in recycle bin",
-                code: "FILE_ALREADY_DELETED",
-            });
-            continue;
-        }
-
-        if (fileDetails.parentId === destinationFolderId) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "SKIPPED",
-                message: "File already in destination folder",
-                code: "ALREADY_IN_DESTINATION",
-                destinationFolderId,
-            });
-            continue;
-        }
-
-        await this.db.update(files).set({ parentId: destinationFolderId }).where(eq(files.id, fileId));
-
-        results.push({
-            itemType: "FILE",
-            itemId: fileId,
-            outcome: "SUCCESS",
-            message: "File moved successfully",
-            destinationFolderId,
+        moveRoots.push({
+            id: folder.id,
+            oldPath: folder.folderPath,
+            newPath: buildFolderPath(destinationFolder.folderPath, folder.id),
         });
     }
 
-    const summary = summarizeBatchResults(results);
+    const movableFileIds = requestedFiles
+        .filter(
+            (fileRow) =>
+                fileRow.ownerId === userId && fileRow.deletedAt === null && fileRow.parentId !== destinationFolderId,
+        )
+        .map((fileRow) => fileRow.id);
+
+    await this.db.transaction(async (tx) => {
+        if (moveRoots.length > 0) {
+            for (const rootChunk of chunkItems(moveRoots)) {
+                const valuesSql = sql.join(
+                    rootChunk.map((root) => sql`(${root.id}, ${root.oldPath}, ${root.newPath})`),
+                    sql`, `,
+                );
+
+                await tx.execute(sql`
+                    with root_input ("id", "oldPath", "newPath") as (
+                        values ${valuesSql}
+                    )
+                    update "Folders" as folder_row
+                    set "parentFolderId" = ${destinationFolderId}
+                    from root_input
+                    where folder_row."id" = root_input."id"
+                      and folder_row."ownerId" = ${userId}
+                      and folder_row."deletedAt" is null
+                      and folder_row."folderPath" = root_input."oldPath"
+                `);
+
+                await tx.execute(sql`
+                    with recursive root_input ("id", "oldPath", "newPath") as (
+                        values ${valuesSql}
+                    ),
+                    root_updates ("id", "oldPath", "newPath") as (
+                        select folder_row."id", root_input."oldPath", root_input."newPath"
+                        from root_input
+                        inner join "Folders" as folder_row on folder_row."id" = root_input."id"
+                        where folder_row."ownerId" = ${userId}
+                          and folder_row."deletedAt" is null
+                          and folder_row."folderPath" = root_input."oldPath"
+                    ),
+                    subtree ("id", "oldPath", "newPath") as (
+                        select "id", "oldPath", "newPath"
+                        from root_updates
+                        union all
+                        select child_folder."id", subtree."oldPath", subtree."newPath"
+                        from "Folders" as child_folder
+                        inner join subtree on child_folder."parentFolderId" = subtree."id"
+                        where child_folder."ownerId" = ${userId}
+                    )
+                    update "Folders" as folder_row
+                    set "folderPath" = case
+                        when folder_row."folderPath" = subtree."oldPath" then subtree."newPath"
+                        when folder_row."folderPath" like subtree."oldPath" || '/%' then subtree."newPath" || substring(folder_row."folderPath" from char_length(subtree."oldPath") + 1)
+                        else folder_row."folderPath"
+                    end
+                    from subtree
+                    where folder_row."id" = subtree."id"
+                      and folder_row."ownerId" = ${userId}
+                `);
+            }
+        }
+
+        for (const fileChunk of chunkIds(movableFileIds)) {
+            await tx
+                .update(files)
+                .set({ parentId: destinationFolderId })
+                .where(and(eq(files.ownerId, userId), inArray(files.id, fileChunk), isNull(files.deletedAt)));
+        }
+    });
+
+    const summary = buildBatchSummary(total, movableFolders.length + movableFileIds.length);
     const status = resolveBatchStatus(summary);
 
     return reply.code(200).send({
         status,
-        message: buildBatchMessage("Batch move", status, summary),
+        message: buildBatchMessage("Batch move", status),
         summary,
-        results,
     });
 }
 
@@ -758,158 +680,157 @@ export async function batchDeleteItemsHandler(
 
     const folderIds = dedupeIds(request.body.folderIds);
     const fileIds = dedupeIds(request.body.fileIds);
-    const results: BatchDeleteResult[] = [];
+    const total = folderIds.length + fileIds.length;
 
-    for (const folderId of folderIds) {
-        const [folder] = await this.db
+    const requestedFolders: Array<{
+        id: string;
+        ownerId: string;
+        type: "ROOT" | "STANDARD";
+        folderPath: string;
+        deletedAt: Date | null;
+    }> = [];
+    for (const idChunk of chunkIds(folderIds)) {
+        const rows = await this.db
             .select({
                 id: folders.id,
                 ownerId: folders.ownerId,
                 type: folders.type,
-                parentFolderId: folders.parentFolderId,
+                folderPath: folders.folderPath,
                 deletedAt: folders.deletedAt,
             })
             .from(folders)
-            .where(eq(folders.id, folderId))
-            .limit(1);
+            .where(inArray(folders.id, idChunk));
+        requestedFolders.push(...rows);
+    }
 
-        if (!folder) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "Folder not found",
-                code: "FOLDER_NOT_FOUND",
-            });
+    const requestedFiles: Array<{
+        id: string;
+        ownerId: string;
+        deletedAt: Date | null;
+    }> = [];
+    for (const idChunk of chunkIds(fileIds)) {
+        const rows = await this.db
+            .select({
+                id: files.id,
+                ownerId: files.ownerId,
+                deletedAt: files.deletedAt,
+            })
+            .from(files)
+            .where(inArray(files.id, idChunk));
+        requestedFiles.push(...rows);
+    }
+
+    const deletableFolders = requestedFolders.filter(
+        (folder) => folder.ownerId === userId && folder.deletedAt === null && folder.type !== "ROOT",
+    );
+
+    const sortedDeletableFolders = [...deletableFolders].sort((left, right) => {
+        if (left.folderPath.length === right.folderPath.length) {
+            return left.folderPath.localeCompare(right.folderPath);
+        }
+        return left.folderPath.length - right.folderPath.length;
+    });
+
+    const deleteRoots: Array<{ id: string; folderPath: string }> = [];
+    for (const folder of sortedDeletableFolders) {
+        const isNestedSelectedFolder = deleteRoots.some((root) =>
+            isFolderPathInSubtree(folder.folderPath, root.folderPath),
+        );
+        if (isNestedSelectedFolder) {
             continue;
         }
 
-        if (folder.ownerId !== userId) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "You do not have permission to delete this folder",
-                code: "FORBIDDEN_FOLDER",
-            });
-            continue;
+        deleteRoots.push({
+            id: folder.id,
+            folderPath: folder.folderPath,
+        });
+    }
+
+    const deletableFileIds = requestedFiles
+        .filter((fileRow) => fileRow.ownerId === userId && fileRow.deletedAt === null)
+        .map((fileRow) => fileRow.id);
+
+    const deletedAt = new Date();
+    await this.db.transaction(async (tx) => {
+        for (const rootChunk of chunkIds(deleteRoots.map((root) => root.id))) {
+            const valuesSql = sql.join(
+                rootChunk.map((id) => sql`(${id})`),
+                sql`, `,
+            );
+
+            await tx.execute(sql`
+                with recursive root_ids ("id") as (
+                    values ${valuesSql}
+                ),
+                subtree ("id") as (
+                    select "id"
+                    from root_ids
+                    union all
+                    select child_folder."id"
+                    from "Folders" as child_folder
+                    inner join subtree on child_folder."parentFolderId" = subtree."id"
+                    where child_folder."ownerId" = ${userId}
+                )
+                update "Files" as file_row
+                set "deletedAt" = ${deletedAt}
+                where file_row."ownerId" = ${userId}
+                  and file_row."deletedAt" is null
+                  and file_row."parentId" in (select "id" from subtree)
+            `);
+
+            await tx.execute(sql`
+                with recursive root_ids ("id") as (
+                    values ${valuesSql}
+                ),
+                subtree ("id") as (
+                    select "id"
+                    from root_ids
+                    union all
+                    select child_folder."id"
+                    from "Folders" as child_folder
+                    inner join subtree on child_folder."parentFolderId" = subtree."id"
+                    where child_folder."ownerId" = ${userId}
+                )
+                update "Folders" as folder_row
+                set "deletedAt" = ${deletedAt}
+                where folder_row."ownerId" = ${userId}
+                  and folder_row."deletedAt" is null
+                  and folder_row."id" in (select "id" from subtree)
+            `);
+
+            await tx.execute(sql`
+                with recursive root_ids ("id") as (
+                    values ${valuesSql}
+                ),
+                subtree ("id") as (
+                    select "id"
+                    from root_ids
+                    union all
+                    select child_folder."id"
+                    from "Folders" as child_folder
+                    inner join subtree on child_folder."parentFolderId" = subtree."id"
+                    where child_folder."ownerId" = ${userId}
+                )
+                delete from "DisplayOrders" as display_order
+                where display_order."folderId" in (select "id" from subtree)
+            `);
         }
 
-        if (folder.deletedAt !== null) {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "SKIPPED",
-                message: "Folder is already in recycle bin",
-                code: "FOLDER_ALREADY_DELETED",
-                parentFolderId: folder.parentFolderId,
-            });
-            continue;
-        }
-
-        if (folder.type === "ROOT") {
-            results.push({
-                itemType: "FOLDER",
-                itemId: folderId,
-                outcome: "FAILED",
-                message: "Root folder cannot be deleted",
-                code: "ROOT_FOLDER_NOT_DELETABLE",
-                parentFolderId: folder.parentFolderId,
-            });
-            continue;
-        }
-
-        const deletedAt = new Date();
-        const subtreeFolderIds = await collectFolderSubtreeIds(this, userId, folderId);
-
-        await this.db.transaction(async (tx) => {
+        for (const fileChunk of chunkIds(deletableFileIds)) {
             await tx
                 .update(files)
                 .set({ deletedAt })
-                .where(
-                    and(eq(files.ownerId, userId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)),
-                );
-
-            await tx
-                .update(folders)
-                .set({ deletedAt })
-                .where(
-                    and(eq(folders.ownerId, userId), inArray(folders.id, subtreeFolderIds), isNull(folders.deletedAt)),
-                );
-
-            await tx.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
-        });
-
-        results.push({
-            itemType: "FOLDER",
-            itemId: folderId,
-            outcome: "SUCCESS",
-            message: "Folder moved to recycle bin",
-            parentFolderId: folder.parentFolderId,
-        });
-    }
-
-    for (const fileId of fileIds) {
-        const [fileDetails] = await this.db
-            .select({ id: files.id, ownerId: files.ownerId, parentId: files.parentId, deletedAt: files.deletedAt })
-            .from(files)
-            .where(eq(files.id, fileId))
-            .limit(1);
-
-        if (!fileDetails) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "FAILED",
-                message: "File not found",
-                code: "FILE_NOT_FOUND",
-            });
-            continue;
+                .where(and(eq(files.ownerId, userId), inArray(files.id, fileChunk), isNull(files.deletedAt)));
         }
+    });
 
-        if (fileDetails.ownerId !== userId) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "FAILED",
-                message: "You do not have permission to delete this file",
-                code: "FORBIDDEN_FILE",
-                parentFolderId: fileDetails.parentId,
-            });
-            continue;
-        }
-
-        if (fileDetails.deletedAt !== null) {
-            results.push({
-                itemType: "FILE",
-                itemId: fileId,
-                outcome: "SKIPPED",
-                message: "File is already in recycle bin",
-                code: "FILE_ALREADY_DELETED",
-                parentFolderId: fileDetails.parentId,
-            });
-            continue;
-        }
-
-        await this.db.update(files).set({ deletedAt: new Date() }).where(eq(files.id, fileId));
-
-        results.push({
-            itemType: "FILE",
-            itemId: fileId,
-            outcome: "SUCCESS",
-            message: "File moved to recycle bin",
-            parentFolderId: fileDetails.parentId,
-        });
-    }
-
-    const summary = summarizeBatchResults(results);
+    const summary = buildBatchSummary(total, deletableFolders.length + deletableFileIds.length);
     const status = resolveBatchStatus(summary);
 
     return reply.code(200).send({
         status,
-        message: buildBatchMessage("Batch delete", status, summary),
+        message: buildBatchMessage("Batch delete", status),
         summary,
-        results,
     });
 }
 

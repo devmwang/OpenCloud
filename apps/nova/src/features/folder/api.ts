@@ -100,9 +100,7 @@ const mutateFolderResponseSchema = z.object({
     parentFolderId: z.string().nullable(),
 });
 
-const batchItemTypeSchema = z.enum(["FILE", "FOLDER"]);
-const batchItemOutcomeSchema = z.enum(["SUCCESS", "FAILED", "SKIPPED"]);
-const batchOperationStatusSchema = z.enum(["success", "partial_success", "failed"]);
+const batchOperationStatusSchema = z.enum(["success", "failed"]);
 
 const batchItemIdsInputSchema = z
     .object({
@@ -128,39 +126,18 @@ const batchOperationSummarySchema = z.object({
     total: z.number().int(),
     succeeded: z.number().int(),
     failed: z.number().int(),
-    skipped: z.number().int(),
-});
-
-const batchMoveResultSchema = z.object({
-    itemType: batchItemTypeSchema,
-    itemId: z.string(),
-    outcome: batchItemOutcomeSchema,
-    message: z.string(),
-    code: z.string().optional(),
-    destinationFolderId: z.string().optional(),
-});
-
-const batchDeleteResultSchema = z.object({
-    itemType: batchItemTypeSchema,
-    itemId: z.string(),
-    outcome: batchItemOutcomeSchema,
-    message: z.string(),
-    code: z.string().optional(),
-    parentFolderId: z.string().nullable().optional(),
 });
 
 const batchMoveItemsResponseSchema = z.object({
     status: batchOperationStatusSchema,
     message: z.string(),
     summary: batchOperationSummarySchema,
-    results: z.array(batchMoveResultSchema),
 });
 
 const batchDeleteItemsResponseSchema = z.object({
     status: batchOperationStatusSchema,
     message: z.string(),
     summary: batchOperationSummarySchema,
-    results: z.array(batchDeleteResultSchema),
 });
 
 const moveFolderInputSchema = z.object({
