@@ -4,6 +4,20 @@ OpenCloud is a free, open-source, and self-hosted cloud file server and manageme
 
 ## Hosting
 
+### Linux: Run as a user service (systemd, no root)
+
+On Linux you can install OpenCloud as a **systemd user service** so it starts automatically and runs in the background without root or a process manager. Choose server only, Nova only, or both.
+
+From the repo root (after [configuring `.env`](docs/agents/ENVIRONMENT.md) and running DB migrations if using the server):
+
+```bash
+./scripts/linux/opencloud-user-service.sh install
+```
+
+Or clone and install in one go: `./scripts/linux/opencloud-user-service.sh install --clone=https://github.com/devmwang/OpenCloud.git`
+
+See [Linux user services (systemd)](docs/deployment/linux-user-services.md) for full commands, install options (`--repo`, `--clone`), and troubleshooting.
+
 ### Server and Nova on the Same Server
 
 Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Run the database migrations with `pnpm --filter server db:migrate`. Then, run the server and Nova using `pnpm run start`. You can also use a process manager like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run both services in the background (for example: `pm2 start "pnpm run start"`). The server will be available at `localhost:8080`. Nova will be available at `localhost:3000`.

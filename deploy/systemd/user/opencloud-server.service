@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenCloud API server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/opencloud/opencloud-service.env
+ExecStart=/bin/bash -lc 'cd "$OPENCLOUD_REPO_DIR" && pnpm run start --filter=server'
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=opencloud-server
+
+[Install]
+WantedBy=default.target
