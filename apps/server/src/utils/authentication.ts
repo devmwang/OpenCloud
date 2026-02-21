@@ -49,32 +49,14 @@ const buildHeaders = (request: FastifyRequest) => {
     return headers;
 };
 
-type SetCookieHeaderSource = Headers | Record<string, string | string[] | undefined>;
+type SetCookieHeaderSource = Headers;
 type SessionResolvedRequest = FastifyRequest & {
     _authSessionResolved?: boolean;
     _authConfigurationError?: boolean;
 };
 
 const extractSetCookies = (headers: SetCookieHeaderSource) => {
-    const headerApi = headers as { getSetCookie?: () => string[]; get?: (name: string) => string | null };
-    if (typeof headerApi.getSetCookie === "function") {
-        const setCookies = headerApi.getSetCookie();
-        if (setCookies.length > 0) {
-            return setCookies;
-        }
-    }
-    if (typeof headerApi.get === "function") {
-        const setCookie = headerApi.get("set-cookie");
-        if (setCookie) {
-            return [setCookie];
-        }
-    }
-
-    const raw = (headers as Record<string, string | string[] | undefined>)["set-cookie"];
-    if (!raw) {
-        return [];
-    }
-    return Array.isArray(raw) ? raw : [raw];
+    return headers.getSetCookie();
 };
 
 const appendSetCookies = (reply: FastifyReply, setCookies: string[]) => {
