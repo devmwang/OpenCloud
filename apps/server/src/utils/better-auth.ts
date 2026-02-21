@@ -58,16 +58,7 @@ const buildAuthRequest = (request: FastifyRequest) => {
 };
 
 const extractResponseSetCookies = (headers: Headers) => {
-    const headerApi = headers as { getSetCookie?: () => string[]; get?: (name: string) => string | null };
-    if (typeof headerApi.getSetCookie === "function") {
-        const setCookies = headerApi.getSetCookie();
-        if (setCookies.length > 0) {
-            return setCookies;
-        }
-    }
-
-    const fallback = headerApi.get ? headerApi.get("set-cookie") : headers.get("set-cookie");
-    return fallback ? [fallback] : [];
+    return headers.getSetCookie();
 };
 
 const appendSetCookies = (reply: FastifyReply, setCookies: string[]) => {
