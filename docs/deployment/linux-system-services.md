@@ -125,7 +125,11 @@ sudo journalctl -u opencloud-server -u opencloud-nova -f
 
 ### pnpm or node not found when the service runs
 
-System units load `nvm` from `%h/.nvm` (for the configured service user) and run with `nvm`'s `default` alias when available. Ensure the service user's default nvm version has both `node` and `pnpm` available.
+System units load `nvm` from `%h/.nvm` (for the configured service user) and run with `nvm`'s `default` alias when available. For `pnpm`, units try:
+
+1. `pnpm` on `PATH` (with `PNPM_HOME=%h/.local/share/pnpm` prepended)
+2. `corepack pnpm`
+3. `PNPM_BIN` from `/etc/opencloud/opencloud-service.env` (installer-resolved fallback)
 
 If needed, set the default alias and enable pnpm via corepack:
 

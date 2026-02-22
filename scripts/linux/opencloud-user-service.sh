@@ -123,8 +123,8 @@ run_as_user_shell() {
 run_as_user_with_nvm_shell() {
     local user="$1"
     local shell_cmd="$2"
-    local nvm_prefix='export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"; if [[ -s "$NVM_DIR/nvm.sh" ]]; then . "$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; fi'
-    run_as_user_shell "$user" "$nvm_prefix; $shell_cmd"
+    local shell_prefix='export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"; if [[ -s "$NVM_DIR/nvm.sh" ]]; then . "$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; fi; export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"; export PATH="$PNPM_HOME:$PATH"'
+    run_as_user_shell "$user" "$shell_prefix; $shell_cmd"
 }
 
 ensure_user_exists() {

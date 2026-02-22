@@ -7,8 +7,9 @@ Wants=network-online.target
 Type=simple
 User=__OPENCLOUD_SERVICE_USER__
 Environment="NVM_DIR=%h/.nvm"
+Environment="PNPM_HOME=%h/.local/share/pnpm"
 EnvironmentFile=__OPENCLOUD_SERVICE_ENV__
-ExecStart=/bin/bash -lc 'set -e; if [ -s "$$NVM_DIR/nvm.sh" ]; then . "$$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; fi; cd "$$OPENCLOUD_REPO_DIR" && pnpm run start --filter=nova'
+ExecStart=/bin/bash -lc 'set -euo pipefail; if [ -s "$$NVM_DIR/nvm.sh" ]; then . "$$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; fi; export PATH="$$PNPM_HOME:$$PATH"; run_pnpm() { if command -v pnpm >/dev/null 2>&1; then pnpm "$$@"; elif command -v corepack >/dev/null 2>&1; then corepack pnpm "$$@"; elif [ -n "$${PNPM_BIN:-}" ] && [ -x "$$PNPM_BIN" ]; then "$$PNPM_BIN" "$$@"; else echo "pnpm not found for service user $$USER (checked PATH, corepack, PNPM_BIN)." >&2; return 127; fi; }; cd "$$OPENCLOUD_REPO_DIR"; run_pnpm run start --filter=nova'
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
