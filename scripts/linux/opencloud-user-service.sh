@@ -115,6 +115,33 @@ check_systemd_user() {
     return 0
 }
 
+# Resolve pnpm binary path used by systemd units.
+resolve_pnpm_bin() {
+    local candidate="${PNPM_BIN:-pnpm}"
+    local resolved
+    resolved="$(command -v "$candidate" 2>/dev/null || true)"
+    if [[ -z "$resolved" ]]; then
+        die "Could not resolve pnpm binary from PNPM_BIN=${candidate}. Ensure pnpm is installed and on PATH."
+    fi
+    echo "$resolved"
+}
+
+# Write environment file consumed by systemd user units.
+write_service_env() {
+    local repo_dir="$1"
+    local repo_dir_escaped="${repo_dir//\\/\\\\}"
+    repo_dir_escaped="${repo_dir_escaped//\"/\\\"}"
+
+    local pnpm_bin
+    pnpm_bin="$(resolve_pnpm_bin)"
+    local pnpm_bin_escaped="${pnpm_bin//\\/\\\\}"
+    pnpm_bin_escaped="${pnpm_bin_escaped//\"/\\\"}"
+
+    mkdir -p "$OPENCLOUD_CONFIG_DIR"
+    printf 'OPENCLOUD_REPO_DIR="%s"\nPNPM_BIN="%s"\n' "$repo_dir_escaped" "$pnpm_bin_escaped" > "$OPENCLOUD_SERVICE_ENV"
+    echo "Wrote $OPENCLOUD_SERVICE_ENV"
+}
+
 # Check Linux (optional but warn on other OS)
 check_linux() {
     local os
@@ -265,11 +292,7 @@ cmd_install() {
     esac
 
     # Write env file for systemd units
-    mkdir -p "$OPENCLOUD_CONFIG_DIR"
-    local repo_dir_escaped="${repo_dir//\\/\\\\}"
-    repo_dir_escaped="${repo_dir_escaped//\"/\\\"}"
-    printf 'OPENCLOUD_REPO_DIR="%s"\n' "$repo_dir_escaped" > "$OPENCLOUD_SERVICE_ENV"
-    echo "Wrote $OPENCLOUD_SERVICE_ENV"
+    write_service_env "$repo_dir"
 
     # Copy unit files from repo into user systemd directory and reload daemon.
     sync_user_units_from_repo "$repo_dir"
@@ -322,6 +345,7 @@ cmd_update() {
         nova)   (cd "$repo_dir" && pnpm run build --filter=nova) ;;
         both)   (cd "$repo_dir" && pnpm run build) ;;
     esac
+    write_service_env "$repo_dir"
     sync_user_units_from_repo "$repo_dir"
     echo "Restarting $mode..."
     systemctl_user_units restart "$mode"
@@ -359,6 +383,7 @@ cmd_rebuild() {
         nova)   (cd "$repo_dir" && pnpm run build --filter=nova) ;;
         both)   (cd "$repo_dir" && pnpm run build) ;;
     esac
+    write_service_env "$repo_dir"
     sync_user_units_from_repo "$repo_dir"
     echo "Restarting $mode..."
     systemctl_user_units restart "$mode"

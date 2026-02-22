@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=%h/.config/opencloud/opencloud-service.env
-ExecStart=/bin/bash -lc 'cd "$OPENCLOUD_REPO_DIR" && pnpm run start --filter=server'
+ExecStart=/bin/bash -lc 'cd "$OPENCLOUD_REPO_DIR" && "$${PNPM_BIN:-pnpm}" run start --filter=server'
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
