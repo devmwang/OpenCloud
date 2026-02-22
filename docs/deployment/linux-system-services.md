@@ -108,7 +108,11 @@ If you omit both `--repo` and `--clone`, the script uses the current directory i
 
 ### Node version check fails
 
-OpenCloud requires Node.js `>= 22.12.0`. Upgrade Node.js for the configured service user, then rerun install/update/rebuild.
+OpenCloud requires Node.js `>= 22.12.0`. If you use nvm, set the service user's default alias to a supported version, then rerun install/update/rebuild:
+
+```bash
+nvm alias default 22
+```
 
 ### Services do not start after install
 
@@ -121,7 +125,15 @@ sudo journalctl -u opencloud-server -u opencloud-nova -f
 
 ### pnpm or node not found when the service runs
 
-The script stores an absolute `PNPM_BIN` path in `/etc/opencloud/opencloud-service.env`. Ensure `pnpm` and `node` are installed for the service user and are available in that user's shell path.
+System units load `nvm` from `%h/.nvm` (for the configured service user) and run with `nvm`'s `default` alias when available. Ensure the service user's default nvm version has both `node` and `pnpm` available.
+
+If needed, set the default alias and enable pnpm via corepack:
+
+```bash
+nvm alias default 22
+corepack enable
+corepack prepare pnpm@latest --activate
+```
 
 ### Migrating from older user-level units
 

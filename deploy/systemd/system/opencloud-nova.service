@@ -6,8 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=__OPENCLOUD_SERVICE_USER__
+Environment="NVM_DIR=%h/.nvm"
 EnvironmentFile=__OPENCLOUD_SERVICE_ENV__
-ExecStart=/bin/bash -lc 'cd "$$OPENCLOUD_REPO_DIR" && "$${PNPM_BIN:-pnpm}" run start --filter=nova'
+ExecStart=/bin/bash -lc 'set -e; if [ -s "$$NVM_DIR/nvm.sh" ]; then . "$$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; fi; cd "$$OPENCLOUD_REPO_DIR" && pnpm run start --filter=nova'
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

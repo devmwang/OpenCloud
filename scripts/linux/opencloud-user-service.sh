@@ -119,6 +119,14 @@ run_as_user_shell() {
     die "Cannot run command as user '$user' because sudo is not available."
 }
 
+# Run command as user after loading nvm and switching to nvm default (if nvm is installed).
+run_as_user_with_nvm_shell() {
+    local user="$1"
+    local shell_cmd="$2"
+    local nvm_prefix='export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"; if [[ -s "$NVM_DIR/nvm.sh" ]]; then . "$NVM_DIR/nvm.sh"; nvm use --silent default >/dev/null; fi'
+    run_as_user_shell "$user" "$nvm_prefix; $shell_cmd"
+}
+
 ensure_user_exists() {
     local user="$1"
     if ! id -u -- "$user" &>/dev/null; then
@@ -276,7 +284,7 @@ check_tools_for_user() {
     for cmd in "${required_tools[@]}"; do
         local cmd_q
         cmd_q="$(shell_quote "$cmd")"
-        if ! run_as_user_shell "$user" "command -v $cmd_q >/dev/null 2>&1"; then
+        if ! run_as_user_with_nvm_shell "$user" "command -v $cmd_q >/dev/null 2>&1"; then
             missing+=("$cmd")
         fi
     done
@@ -325,7 +333,7 @@ check_node_version_for_user() {
     local user="$1"
     local node_version
 
-    if ! node_version="$(run_as_user_shell "$user" "node -p 'process.versions.node'")"; then
+    if ! node_version="$(run_as_user_with_nvm_shell "$user" "node -p 'process.versions.node'")"; then
         die "Unable to determine Node.js version for user '$user'."
     fi
 
@@ -342,7 +350,7 @@ resolve_pnpm_bin_for_user() {
     local candidate_q
     candidate_q="$(shell_quote "$candidate")"
 
-    resolved="$(run_as_user_shell "$user" "command -v $candidate_q" 2>/dev/null || true)"
+    resolved="$(run_as_user_with_nvm_shell "$user" "command -v $candidate_q" 2>/dev/null || true)"
     if [[ -z "$resolved" ]]; then
         die "Could not resolve pnpm binary from PNPM_BIN=$candidate for user '$user'. Ensure pnpm is installed and on PATH."
     fi
@@ -589,13 +597,13 @@ cmd_install() {
     echo "Installing dependencies (pnpm install) ..."
     local repo_dir_q
     repo_dir_q="$(shell_quote "$repo_dir")"
-    run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
 
     echo "Building selected targets ..."
     case "$mode" in
-        server) run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
+        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
+        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
+        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
 
     # Write env file for systemd units and install unit files.
@@ -666,16 +674,16 @@ cmd_update() {
     repo_dir_q="$(shell_quote "$repo_dir")"
 
     echo "Pulling latest ..."
-    run_as_user_shell "$service_user" "cd $repo_dir_q && git pull"
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && git pull"
 
     echo "Installing dependencies (pnpm install) ..."
-    run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
 
     echo "Building ..."
     case "$mode" in
-        server) run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
+        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
+        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
+        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
 
     write_service_env "$repo_dir" "$service_user"
@@ -721,13 +729,13 @@ cmd_rebuild() {
     repo_dir_q="$(shell_quote "$repo_dir")"
 
     echo "Installing dependencies (pnpm install) ..."
-    run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
 
     echo "Building ..."
     case "$mode" in
-        server) run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
+        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
+        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
+        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
 
     write_service_env "$repo_dir" "$service_user"
