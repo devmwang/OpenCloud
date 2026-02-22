@@ -4,19 +4,19 @@ OpenCloud is a free, open-source, and self-hosted cloud file server and manageme
 
 ## Hosting
 
-### Linux: Run as a user service (systemd, no root)
+### Linux: Run as a system service (systemd)
 
-On Linux you can install OpenCloud as a **systemd user service** so it starts automatically and runs in the background without root or a process manager. Choose server only, Nova only, or both.
+On Linux you can install OpenCloud as a **systemd system service** so it starts automatically on boot and runs in the background. Choose server only, Nova only, or both.
 
 From the repo root (after [configuring `.env`](docs/agents/ENVIRONMENT.md) and running DB migrations if using the server):
 
 ```bash
-./scripts/linux/opencloud-user-service.sh install
+sudo ./scripts/linux/opencloud-user-service.sh install
 ```
 
-Or clone and install in one go: `./scripts/linux/opencloud-user-service.sh install --clone=https://github.com/devmwang/OpenCloud.git`
+Or clone and install in one go: `sudo ./scripts/linux/opencloud-user-service.sh install --clone=https://github.com/devmwang/OpenCloud.git`
 
-See [Linux user services (systemd)](docs/deployment/linux-user-services.md) for full commands, install options (`--repo`, `--clone`), and troubleshooting.
+See [Linux system services (systemd)](docs/deployment/linux-system-services.md) for full commands, install options (`--repo`, `--clone`, `--service-user`), and troubleshooting.
 
 ### Server and Nova on the Same Server
 

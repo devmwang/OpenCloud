@@ -5,8 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=%h/.config/opencloud/opencloud-service.env
-ExecStart=/bin/bash -lc 'cd "$OPENCLOUD_REPO_DIR" && "$${PNPM_BIN:-pnpm}" run start --filter=server'
+User=__OPENCLOUD_SERVICE_USER__
+EnvironmentFile=__OPENCLOUD_SERVICE_ENV__
+ExecStart=/bin/bash -lc 'cd "$$OPENCLOUD_REPO_DIR" && "$${PNPM_BIN:-pnpm}" run start --filter=server'
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -14,4 +15,4 @@ StandardError=journal
 SyslogIdentifier=opencloud-server
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
