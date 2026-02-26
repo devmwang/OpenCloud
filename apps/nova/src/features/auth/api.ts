@@ -17,13 +17,9 @@ const userSchema = z.object({
     rootFolderId: z.string(),
 });
 
-const sessionExpiresAtSchema = z.union([z.date(), z.string().datetime()]).transform((value) => {
-    return value instanceof Date ? value.toISOString() : value;
-});
-
 const authSessionSchema = z.object({
     session: z.object({
-        expiresAt: sessionExpiresAtSchema,
+        expiresAt: z.string().datetime(),
     }),
     user: userSchema,
 });

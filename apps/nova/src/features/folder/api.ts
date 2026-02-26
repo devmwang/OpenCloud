@@ -33,38 +33,28 @@ const folderDetailsSchema = z
     }));
 
 const folderContentsPayloadSchema = z.object({
-    id: z.union([z.string(), z.number()]).transform((value) => String(value)),
+    id: z.string(),
     folders: z
         .array(
             z.object({
-                id: z.union([z.string(), z.number()]).transform((value) => String(value)),
+                id: z.string(),
                 name: z.string(),
-                createdAt: z
-                    .union([z.string().datetime(), z.date()])
-                    .transform((value) => (value instanceof Date ? value.toISOString() : value)),
+                createdAt: z.string().datetime(),
             }),
         )
         .default([]),
     files: z
         .array(
             z.object({
-                id: z.union([z.string(), z.number()]).transform((value) => String(value)),
+                id: z.string(),
                 name: z.string(),
-                sizeBytes: z.union([z.number().int(), z.string().regex(/^\d+$/), z.null()]).transform((value) => {
-                    if (value === null) {
-                        return null;
-                    }
-
-                    return typeof value === "string" ? Number(value) : value;
-                }),
-                createdAt: z
-                    .union([z.string().datetime(), z.date()])
-                    .transform((value) => (value instanceof Date ? value.toISOString() : value)),
+                sizeBytes: z.number().int().nullable(),
+                createdAt: z.string().datetime(),
             }),
         )
         .default([]),
-    limit: z.coerce.number().int().optional(),
-    offset: z.coerce.number().int().optional(),
+    limit: z.number().int().optional(),
+    offset: z.number().int().optional(),
 });
 
 const folderContentsSchema = folderContentsPayloadSchema.transform((value) => ({

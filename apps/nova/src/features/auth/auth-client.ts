@@ -6,7 +6,16 @@ import { env } from "@/env";
 export const authClient = createAuthClient({
     baseURL: env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL,
     basePath: "/api/auth",
-    fetchOptions: { credentials: "include" },
+    fetchOptions: {
+        credentials: "include",
+        jsonParser: (text) => {
+            if (!text) {
+                return null;
+            }
+
+            return JSON.parse(text) as unknown;
+        },
+    },
     plugins: [
         usernameClient(),
         inferAdditionalFields({
