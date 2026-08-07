@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
 import { createAuth, type AuthInstance } from "@/auth";
+import { env } from "@/env/env";
 
 declare module "fastify" {
     interface FastifyInstance {
@@ -9,18 +10,19 @@ declare module "fastify" {
     }
 }
 
-const getHeaderValue = (value: string | string[] | undefined) => {
-    if (!value) {
-        return undefined;
-    }
-    return Array.isArray(value) ? value[0] : value;
+const authBaseUrl = new URL(env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL);
+
+const buildCanonicalAuthUrl = (requestUrl: string) => {
+    const incomingUrl = new URL(requestUrl, "http://opencloud.invalid");
+    const authUrl = new URL(authBaseUrl);
+    authUrl.pathname = incomingUrl.pathname;
+    authUrl.search = incomingUrl.search;
+    authUrl.hash = "";
+    return authUrl;
 };
 
 const buildAuthRequest = (request: FastifyRequest) => {
-    const host = getHeaderValue(request.headers.host) ?? "localhost";
-    const forwardedProto = getHeaderValue(request.headers["x-forwarded-proto"]);
-    const protocol = forwardedProto ?? request.protocol ?? "http";
-    const url = new URL(request.url, `${protocol}://${host}`);
+    const url = buildCanonicalAuthUrl(request.url);
 
     const headers = new Headers();
     for (const [key, value] of Object.entries(request.headers)) {
@@ -35,6 +37,15 @@ const buildAuthRequest = (request: FastifyRequest) => {
             headers.set(key, value);
         }
     }
+
+    headers.set("host", authBaseUrl.host);
+    headers.set("x-forwarded-host", authBaseUrl.host);
+    headers.set("x-forwarded-proto", authBaseUrl.protocol.slice(0, -1));
+    headers.set("x-forwarded-for", request.ip);
+    headers.set("x-real-ip", request.ip);
+    headers.set("cf-connecting-ip", request.ip);
+    headers.delete("forwarded");
+    headers.delete("x-forwarded-port");
 
     let body: RequestInit["body"];
     if (!["GET", "HEAD"].includes(request.method) && request.body !== undefined) {

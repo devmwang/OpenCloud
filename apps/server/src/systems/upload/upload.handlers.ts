@@ -17,6 +17,43 @@ import { env } from "@/env/env";
 import type { UploadFileQuerystring } from "./upload.schemas";
 
 const pump = util.promisify(pipeline);
+const MAX_ACTIVE_UPLOADS = 8;
+const MAX_ACTIVE_UPLOADS_PER_OWNER = 2;
+
+let activeUploads = 0;
+const activeUploadsByOwner = new Map<string, number>();
+
+const reserveUploadSlot = (ownerId: string) => {
+    const ownerActiveUploads = activeUploadsByOwner.get(ownerId) ?? 0;
+    if (activeUploads >= MAX_ACTIVE_UPLOADS || ownerActiveUploads >= MAX_ACTIVE_UPLOADS_PER_OWNER) {
+        return null;
+    }
+
+    activeUploads += 1;
+    activeUploadsByOwner.set(ownerId, ownerActiveUploads + 1);
+    let released = false;
+
+    return () => {
+        if (released) {
+            return;
+        }
+        released = true;
+        activeUploads -= 1;
+        const remainingOwnerUploads = (activeUploadsByOwner.get(ownerId) ?? 1) - 1;
+        if (remainingOwnerUploads === 0) {
+            activeUploadsByOwner.delete(ownerId);
+        } else {
+            activeUploadsByOwner.set(ownerId, remainingOwnerUploads);
+        }
+    };
+};
+
+class UploadFileTooLargeError extends Error {
+    constructor() {
+        super("UPLOAD_FILE_TOO_LARGE");
+        this.name = "UploadFileTooLargeError";
+    }
+}
 
 type UploadContext = {
     ownerId: string;
@@ -154,20 +191,14 @@ export async function uploadFileHandler(
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
     reply: FastifyReply,
 ) {
-    const fileData = await request.file();
-
-    if (!fileData) {
-        return reply.code(400).send({ message: "No file provided" });
-    }
-
-    const uploadTokenField = fileData.fields["uploadToken"];
-    const uploadTokenValue =
-        uploadTokenField && "value" in uploadTokenField ? (uploadTokenField.value as string) : null;
+    const uploadTokenHeader = request.headers["x-opencloud-upload-token"];
+    const uploadTokenValue = typeof uploadTokenHeader === "string" ? uploadTokenHeader : null;
 
     let uploadContext: UploadContext;
     try {
         uploadContext = await resolveUploadContext(this, request, uploadTokenValue);
     } catch (error) {
+        void reply.header("Connection", "close");
         const message = error instanceof Error ? error.message : "UPLOAD_CONTEXT_ERROR";
         switch (message) {
             case "MISSING_FOLDER_ID":
@@ -190,17 +221,50 @@ export async function uploadFileHandler(
         }
     }
 
-    try {
-        const fileRecord = await createFileDetails(
-            this.db,
-            fileData.filename,
-            fileData.mimetype,
-            uploadContext.ownerId,
-            uploadContext.folderId,
-            uploadContext.fileAccess,
-        );
+    const releaseUploadSlot = reserveUploadSlot(uploadContext.ownerId);
+    if (!releaseUploadSlot) {
+        void reply.header("Retry-After", "5");
+        void reply.header("Connection", "close");
+        return reply.code(503).send({ message: "Upload capacity is currently full" });
+    }
+    reply.raw.once("finish", releaseUploadSlot);
+    reply.raw.once("close", releaseUploadSlot);
 
-        await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file);
+    const fileData = await request.file();
+
+    if (!fileData) {
+        return reply.code(400).send({ message: "No file provided" });
+    }
+
+    try {
+        const uploadLockResult = await this.tryWithOwnerHierarchySharedLock(uploadContext.ownerId, async () => {
+            const fileRecord = await createFileDetails(
+                this.db,
+                fileData.filename,
+                fileData.mimetype,
+                uploadContext.ownerId,
+                uploadContext.folderId,
+                uploadContext.fileAccess,
+            );
+            if (!fileRecord) {
+                return null;
+            }
+
+            await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file);
+            return fileRecord;
+        });
+        if (!uploadLockResult.locked) {
+            fileData.file.destroy();
+            void reply.header("Connection", "close");
+            return reply.code(409).send({ message: "Another folder operation is already in progress" });
+        }
+
+        const fileRecord = uploadLockResult.result;
+        if (!fileRecord) {
+            fileData.file.destroy();
+            void reply.header("Connection", "close");
+            return reply.code(404).send({ message: "Parent folder not found" });
+        }
 
         return reply.code(201).send({
             id: fileRecord.id,
@@ -208,6 +272,12 @@ export async function uploadFileHandler(
             storageState: "READY",
         });
     } catch (error) {
+        fileData.file.destroy();
+        void reply.header("Connection", "close");
+        if (error instanceof UploadFileTooLargeError) {
+            return reply.code(413).send({ message: "File exceeds the upload size limit" });
+        }
+
         request.log.error({ err: error }, "Upload failed");
         return reply.code(500).send({ message: "Upload failed" });
     }
@@ -221,6 +291,15 @@ async function createFileDetails(
     parentFolderId: string,
     fileAccess: FileAccess,
 ) {
+    const [parentFolder] = await db
+        .select({ id: folders.id })
+        .from(folders)
+        .where(and(eq(folders.id, parentFolderId), eq(folders.ownerId, ownerId), isNull(folders.deletedAt)))
+        .limit(1);
+    if (!parentFolder) {
+        return null;
+    }
+
     const [fileDetails] = await db
         .insert(files)
         .values({
@@ -244,10 +323,27 @@ async function createFileDetails(
 async function coreUploadHandler(db: Database, ownerId: string, fileId: string, file: BusboyFileStream) {
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
     const filePath = path.join(folderPath, fileId);
+    let destinationCreated = false;
 
     try {
-        await fs.promises.mkdir(folderPath, { recursive: true });
-        await pump(file, fs.createWriteStream(filePath));
+        await fs.promises.mkdir(folderPath, { recursive: true, mode: 0o700 });
+
+        const folderStats = await fs.promises.lstat(folderPath);
+        if (!folderStats.isDirectory() || folderStats.isSymbolicLink()) {
+            throw new Error("Invalid file owner storage directory");
+        }
+        await fs.promises.chmod(folderPath, 0o700);
+
+        const destination = fs.createWriteStream(filePath, { flags: "wx", mode: 0o600 });
+        destination.once("open", () => {
+            destinationCreated = true;
+        });
+
+        await pump(file, destination);
+        if (file.truncated) {
+            throw new UploadFileTooLargeError();
+        }
+
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
 
         await db
@@ -260,11 +356,27 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
             })
             .where(eq(files.id, fileId));
     } catch (error) {
-        try {
-            await fs.promises.unlink(filePath);
-        } catch {}
+        const cleanupErrors: unknown[] = [];
+        if (destinationCreated) {
+            try {
+                await fs.promises.unlink(filePath);
+            } catch (cleanupError) {
+                const err = cleanupError as NodeJS.ErrnoException;
+                if (err.code !== "ENOENT") {
+                    cleanupErrors.push(cleanupError);
+                }
+            }
+        }
 
-        await db.delete(files).where(eq(files.id, fileId));
+        try {
+            await db.delete(files).where(eq(files.id, fileId));
+        } catch (cleanupError) {
+            cleanupErrors.push(cleanupError);
+        }
+
+        if (cleanupErrors.length > 0) {
+            throw new AggregateError([error, ...cleanupErrors], "Upload failed and cleanup was incomplete");
+        }
 
         throw error;
     }

@@ -1,7 +1,9 @@
+import fs from "fs";
 import path from "path";
 
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { fileTypeFromBuffer } from "file-type";
 import sharp from "sharp";
 
 import { fileReadTokens } from "@/db/schema/auth";
@@ -9,6 +11,130 @@ import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
 
 import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
+
+const FILE_TYPE_SAMPLE_BYTES = 64 * 1024;
+const MAX_THUMBNAIL_SOURCE_BYTES = 50 * 1024 * 1024;
+const MAX_THUMBNAIL_INPUT_PIXELS = 40_000_000;
+const MAX_CONCURRENT_THUMBNAILS = 4;
+const FILE_ROBOTS_POLICY = "noindex, nofollow, noarchive, nosnippet, noimageindex";
+
+const INLINE_MEDIA_MIME_TYPES = new Set([
+    "image/avif",
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/vnd.microsoft.icon",
+    "image/webp",
+    "audio/mp4",
+    "audio/mpeg",
+    "audio/ogg",
+    "audio/wav",
+    "video/mp4",
+    "video/ogg",
+    "video/quicktime",
+    "video/webm",
+    "video/x-msvideo",
+]);
+
+const THUMBNAIL_SOURCE_MIME_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+const THUMBNAIL_SOURCE_FORMATS = new Set(["avif", "gif", "jpeg", "png", "webp"]);
+type StoredFileAccess = (typeof files.$inferSelect)["fileAccess"];
+
+let activeThumbnailJobs = 0;
+
+class ThumbnailSourceTooLargeError extends Error {
+    constructor() {
+        super("THUMBNAIL_SOURCE_TOO_LARGE");
+        this.name = "ThumbnailSourceTooLargeError";
+    }
+}
+
+const toRfc5987Value = (value: string) =>
+    encodeURIComponent(value).replace(/[!'()*]/g, (character) => {
+        return `%${character.charCodeAt(0).toString(16).toUpperCase()}`;
+    });
+
+const buildContentDisposition = (fileName: string, type: "attachment" | "inline") => {
+    const leafName = fileName.replace(/\\/g, "/").split("/").pop() ?? "download";
+    const boundedName = Array.from(leafName).slice(0, 180).join("").normalize("NFC");
+    const safeName =
+        Array.from(boundedName, (character) => {
+            const codePoint = character.codePointAt(0) ?? 0;
+            return codePoint < 32 || codePoint === 127 ? "_" : character;
+        }).join("") || "download";
+    const asciiFallback =
+        Array.from(safeName.normalize("NFKD"), (character) => {
+            const codePoint = character.codePointAt(0) ?? 0;
+            if (codePoint < 32 || codePoint > 126 || character === '"' || character === "\\") {
+                return "_";
+            }
+            return character;
+        }).join("") || "download";
+
+    return `${type}; filename="${asciiFallback}"; filename*=UTF-8''${toRfc5987Value(safeName)}`;
+};
+
+const getFileCacheControl = (fileAccess: StoredFileAccess) =>
+    fileAccess === "PUBLIC" ? "public, max-age=300" : "private, no-store";
+
+const applyFileResponseHeaders = (
+    reply: FastifyReply,
+    options: {
+        contentType: string;
+        disposition: "attachment" | "inline";
+        fileName: string;
+        fileAccess: StoredFileAccess;
+    },
+) => {
+    void reply.header("Content-Type", options.contentType);
+    void reply.header("Content-Disposition", buildContentDisposition(options.fileName, options.disposition));
+    void reply.header("Cache-Control", getFileCacheControl(options.fileAccess));
+    void reply.header("X-Content-Type-Options", "nosniff");
+    void reply.header("X-Robots-Tag", FILE_ROBOTS_POLICY);
+};
+
+const readFilePrefix = async (filePath: string, maxBytes: number) => {
+    const fileHandle = await fs.promises.open(filePath, "r");
+    try {
+        const stats = await fileHandle.stat();
+        if (!stats.isFile()) {
+            throw new Error("Stored file is not a regular file");
+        }
+
+        const buffer = Buffer.alloc(Math.min(stats.size, maxBytes));
+        const { bytesRead } = await fileHandle.read(buffer, 0, buffer.length, 0);
+        return buffer.subarray(0, bytesRead);
+    } finally {
+        await fileHandle.close();
+    }
+};
+
+const readBoundedFile = async (filePath: string, maxBytes: number) => {
+    const fileHandle = await fs.promises.open(filePath, "r");
+    try {
+        const stats = await fileHandle.stat();
+        if (!stats.isFile()) {
+            throw new Error("Stored file is not a regular file");
+        }
+        if (stats.size > maxBytes) {
+            throw new ThumbnailSourceTooLargeError();
+        }
+
+        const buffer = Buffer.alloc(stats.size);
+        let offset = 0;
+        while (offset < buffer.length) {
+            const { bytesRead } = await fileHandle.read(buffer, offset, buffer.length - offset, offset);
+            if (bytesRead === 0) {
+                break;
+            }
+            offset += bytesRead;
+        }
+        return buffer.subarray(0, offset);
+    } finally {
+        await fileHandle.close();
+    }
+};
 
 const getReadToken = (request: FastifyRequest<{ Querystring: FileReadQuery }>) => {
     const readToken = request.query.readToken;
@@ -139,6 +265,9 @@ export async function getDetailsHandler(
         return reply;
     }
 
+    void reply.header("Cache-Control", getFileCacheControl(file.fileAccess));
+    void reply.header("X-Robots-Tag", FILE_ROBOTS_POLICY);
+
     return reply.code(200).send({
         id: file.id,
         name: file.fileName,
@@ -182,10 +311,30 @@ export async function getFileHandler(
         return reply;
     }
 
-    void reply.header("Content-Type", fileDetails.fileType);
-    void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
+    const relativeFilePath = fileDetails.ownerId + "/" + fileDetails.id;
+    const fullFilePath = path.join(env.FILE_STORE_PATH, relativeFilePath);
+    let detectedMime: string | undefined;
+    try {
+        const sample = await readFilePrefix(fullFilePath, FILE_TYPE_SAMPLE_BYTES);
+        detectedMime = (await fileTypeFromBuffer(sample))?.mime;
+    } catch (error) {
+        if (isMissingFileError(error)) {
+            return reply.code(404).send({ message: "File not found" });
+        }
+        throw error;
+    }
 
-    return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id);
+    const inlineMime = detectedMime && INLINE_MEDIA_MIME_TYPES.has(detectedMime) ? detectedMime : undefined;
+    applyFileResponseHeaders(reply, {
+        contentType: inlineMime ?? "application/octet-stream",
+        disposition: inlineMime ? "inline" : "attachment",
+        fileName: fileDetails.fileName,
+        fileAccess: fileDetails.fileAccess,
+    });
+    void reply.header("Content-Security-Policy", "sandbox; default-src 'none'");
+    void reply.header("Referrer-Policy", "no-referrer");
+
+    return reply.sendFile(relativeFilePath, { cacheControl: false, contentType: false });
 }
 
 export async function getThumbnailHandler(
@@ -217,23 +366,58 @@ export async function getThumbnailHandler(
         return reply;
     }
 
-    if (!fileDetails.fileType.startsWith("image/")) {
-        return reply.code(415).send({ message: "Unsupported media type" });
+    if (activeThumbnailJobs >= MAX_CONCURRENT_THUMBNAILS) {
+        void reply.header("Retry-After", "1");
+        return reply.code(503).send({ message: "Thumbnail service is busy" });
     }
 
-    void reply.header("Content-Type", fileDetails.fileType);
-    void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
-
     const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
+    activeThumbnailJobs += 1;
     try {
-        const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).toBuffer();
+        const sourceBuffer = await readBoundedFile(fullFilePath, MAX_THUMBNAIL_SOURCE_BYTES);
+        const detectedType = await fileTypeFromBuffer(sourceBuffer);
+        if (!detectedType || !THUMBNAIL_SOURCE_MIME_TYPES.has(detectedType.mime)) {
+            return reply.code(415).send({ message: "Unsupported media type" });
+        }
+
+        const image = sharp(sourceBuffer, {
+            animated: false,
+            failOn: "error",
+            limitInputPixels: MAX_THUMBNAIL_INPUT_PIXELS,
+            sequentialRead: true,
+        });
+        const metadata = await image.metadata();
+        if (!metadata.format || !THUMBNAIL_SOURCE_FORMATS.has(metadata.format)) {
+            return reply.code(415).send({ message: "Unsupported media type" });
+        }
+
+        const thumbnailBuffer = await image
+            .rotate()
+            .resize({ width: 300, height: 200, fit: "inside", withoutEnlargement: true })
+            .png()
+            .timeout({ seconds: 5 })
+            .toBuffer();
+        applyFileResponseHeaders(reply, {
+            contentType: "image/png",
+            disposition: "inline",
+            fileName: `${fileDetails.fileName}.png`,
+            fileAccess: fileDetails.fileAccess,
+        });
+        void reply.header("Content-Security-Policy", "sandbox; default-src 'none'");
+        void reply.header("Referrer-Policy", "no-referrer");
         return reply.send(thumbnailBuffer);
     } catch (error) {
         if (isMissingFileError(error)) {
             return reply.code(404).send({ message: "File not found" });
         }
 
+        if (error instanceof ThumbnailSourceTooLargeError) {
+            return reply.code(413).send({ message: "Image is too large for thumbnail generation" });
+        }
+
         return reply.code(500).send({ message: "Thumbnail generation failed" });
+    } finally {
+        activeThumbnailJobs -= 1;
     }
 }
 

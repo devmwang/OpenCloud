@@ -16,7 +16,7 @@ import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components
 import { useToast } from "@/components/ui/toast";
 import { env } from "@/env";
 import type { SelectionItem } from "@/features/folder/hooks/use-selection";
-import { toFileRouteId } from "@/lib/file-id";
+import { buildFilePagePath, buildFilePageUrl, toFileRouteId } from "@/lib/file-id";
 
 type FileContextMenuProps = {
     fileId: string;
@@ -64,7 +64,7 @@ export function FileContextMenu({
     };
 
     const handleOpenNewTab = () => {
-        window.open(`/file/${fileRouteId}`, "_blank");
+        window.open(buildFilePagePath(fileRouteId), "_blank");
     };
 
     const handleCopyId = async () => {
@@ -73,7 +73,7 @@ export function FileContextMenu({
     };
 
     const handleCopyLink = async () => {
-        const url = `${window.location.origin}/file/${fileRouteId}`;
+        const url = buildFilePageUrl(window.location.origin, fileRouteId);
         await navigator.clipboard.writeText(url);
         addToast("File URL copied to clipboard", "success");
     };

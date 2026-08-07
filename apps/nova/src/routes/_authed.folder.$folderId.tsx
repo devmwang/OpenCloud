@@ -511,7 +511,7 @@ function FolderPageContent({
             } catch (error) {
                 const message = getErrorMessage(error);
                 addToast(message, "error");
-                throw new Error(message);
+                throw new Error(message, { cause: error });
             }
         },
         [renameTarget, onRenameFile, onRenameFolder, queryClient, folderId, addToast],

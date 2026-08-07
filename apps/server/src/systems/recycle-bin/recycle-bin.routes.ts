@@ -45,7 +45,9 @@ async function recycleBinRouter(server: FastifyInstance) {
         url: "/items/:itemType/:itemId/restore",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onResponse: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("itemParamsSchema"),
             body: $ref("restoreBodySchema"),
@@ -59,7 +61,9 @@ async function recycleBinRouter(server: FastifyInstance) {
         url: "/items/batch/restore",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onResponse: [server.releaseOwnerHierarchyLock],
         schema: {
             body: $ref("batchRestoreBodySchema"),
             response: { 200: $ref("batchRestoreResponseSchema") },
@@ -72,7 +76,9 @@ async function recycleBinRouter(server: FastifyInstance) {
         url: "/items/:itemType/:itemId",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onResponse: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("itemParamsSchema"),
             response: { 200: $ref("permanentlyDeleteResponseSchema") },
@@ -85,7 +91,9 @@ async function recycleBinRouter(server: FastifyInstance) {
         url: "/items/batch/permanently-delete",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onResponse: [server.releaseOwnerHierarchyLock],
         schema: {
             body: $ref("batchItemIdsSchema"),
             response: { 200: $ref("batchPermanentlyDeleteResponseSchema") },
@@ -98,7 +106,9 @@ async function recycleBinRouter(server: FastifyInstance) {
         url: "/items",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onResponse: [server.releaseOwnerHierarchyLock],
         schema: {
             querystring: $ref("emptyQuerySchema"),
             response: { 200: $ref("emptyResponseSchema") },
@@ -122,7 +132,7 @@ async function recycleBinRouter(server: FastifyInstance) {
     const interval = setInterval(() => {
         void runPurgeExpired(server)
             .then((result) => {
-                if (result.skipped || (result.purgedFiles === 0 && result.purgedFolders === 0)) {
+                if (!result.skipped && result.purgedFiles === 0 && result.purgedFolders === 0) {
                     return;
                 }
 
@@ -131,8 +141,11 @@ async function recycleBinRouter(server: FastifyInstance) {
                         purgedFiles: result.purgedFiles,
                         purgedFolders: result.purgedFolders,
                         olderThanDays: result.olderThanDays,
+                        skipped: result.skipped,
                     },
-                    "Automatic recycle-bin purge completed",
+                    result.skipped
+                        ? "Automatic recycle-bin purge deferred or partially completed"
+                        : "Automatic recycle-bin purge completed",
                 );
             })
             .catch((error) => {

@@ -19,3 +19,9 @@ export const getFileExtension = (filename: string) => {
 export const toFileRouteId = (fileId: string, filename: string) => {
     return `${fileId}${getFileExtension(filename)}`;
 };
+
+export const buildFilePagePath = (fileRouteId: string) => `/file/${encodeURIComponent(fileRouteId)}`;
+
+export const buildFilePageUrl = (origin: string, fileRouteId: string) => {
+    return new URL(buildFilePagePath(fileRouteId), origin).toString();
+};

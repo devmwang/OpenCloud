@@ -10,8 +10,9 @@
         "moduleResolution": "bundler",
         "allowImportingTsExtensions": true,
         "verbatimModuleSyntax": false,
+        "declaration": false,
+        "declarationMap": false,
         "noEmit": true,
-        "baseUrl": ".",
         "paths": {
             "@/*": ["./src/*"]
         }

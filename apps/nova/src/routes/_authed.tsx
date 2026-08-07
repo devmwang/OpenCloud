@@ -5,7 +5,6 @@ import { AppShell, Sidebar } from "@/components/layout/app-shell";
 import { useToast } from "@/components/ui/toast";
 import { getSessionSafeCached, signOut } from "@/features/auth/api";
 import { getErrorMessage } from "@/lib/errors";
-import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_authed")({
     ssr: false,
@@ -13,6 +12,7 @@ export const Route = createFileRoute("/_authed")({
         const session = await getSessionSafeCached(context.queryClient);
 
         if (!session?.user.rootFolderId) {
+            context.queryClient.clear();
             throw redirect({
                 to: "/login",
                 search: {
@@ -36,7 +36,7 @@ function AuthedLayout() {
     const handleSignOut = async () => {
         try {
             await signOut();
-            await queryClient.invalidateQueries({ queryKey: queryKeys.session });
+            queryClient.clear();
             router.history.push("/login");
         } catch (error) {
             addToast(getErrorMessage(error), "error");

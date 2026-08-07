@@ -1,11 +1,10 @@
 {
     "extends": "tsconfig/server.json",
     "compilerOptions": {
-        "baseUrl": ".",
         "module": "esnext",
         "moduleResolution": "bundler",
         "paths": {
-            "@/*": ["src/*"]
+            "@/*": ["./src/*"]
         },
         "outDir": "dist"
     },

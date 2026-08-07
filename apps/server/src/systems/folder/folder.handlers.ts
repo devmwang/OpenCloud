@@ -662,7 +662,7 @@ export async function batchMoveItemsHandler(
                     subtree ("id", "oldPath", "newPath") as (
                         select "id", "oldPath", "newPath"
                         from root_updates
-                        union all
+                        union
                         select child_folder."id", subtree."oldPath", subtree."newPath"
                         from "Folders" as child_folder
                         inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -796,7 +796,7 @@ export async function batchDeleteItemsHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -816,7 +816,7 @@ export async function batchDeleteItemsHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -836,7 +836,7 @@ export async function batchDeleteItemsHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"

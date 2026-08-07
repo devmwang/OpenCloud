@@ -763,16 +763,25 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
             purgedFiles: 0,
             purgedFolders: 0,
         };
+        let skipped = false;
 
         for (const ownerId of ownerIds) {
-            const ownerSummary = await purgeDeletedRowsForOwner(server, ownerId, threshold);
+            const ownerLockResult = await server.tryWithOwnerHierarchyLock(ownerId, () =>
+                purgeDeletedRowsForOwner(server, ownerId, threshold),
+            );
+            if (!ownerLockResult.locked) {
+                skipped = true;
+                continue;
+            }
+
+            const ownerSummary = ownerLockResult.result;
             summary = {
                 purgedFiles: summary.purgedFiles + ownerSummary.purgedFiles,
                 purgedFolders: summary.purgedFolders + ownerSummary.purgedFolders,
             };
         }
 
-        return summary;
+        return { ...summary, skipped };
     });
 
     if (!lockResult.locked || !lockResult.result) {
@@ -788,7 +797,7 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
         olderThanDays: retentionDays,
         purgedFiles: lockResult.result.purgedFiles,
         purgedFolders: lockResult.result.purgedFolders,
-        skipped: false,
+        skipped: lockResult.result.skipped,
     };
 }
 
@@ -1563,7 +1572,7 @@ export async function batchRestoreHandler(
                     subtree ("id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         select "id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt"
                         from root_updates
-                        union all
+                        union
                         select
                             child_folder."id",
                             subtree."rootId",
@@ -1666,7 +1675,7 @@ export async function batchRestoreHandler(
                     subtree ("id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         select "id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt"
                         from root_updates
-                        union all
+                        union
                         select
                             child_folder."id",
                             subtree."rootId",
@@ -1861,7 +1870,7 @@ export async function batchPermanentlyDeleteHandler(
             subtree ("rootId", "id") as (
                 select "rootId", "id"
                 from selected_roots
-                union all
+                union
                 select subtree."rootId", child_folder."id"
                 from "Folders" as child_folder
                 inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -1933,7 +1942,7 @@ export async function batchPermanentlyDeleteHandler(
             subtree ("id") as (
                 select "id"
                 from root_ids
-                union all
+                union
                 select child_folder."id"
                 from "Folders" as child_folder
                 inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -1984,7 +1993,7 @@ export async function batchPermanentlyDeleteHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -2001,7 +2010,7 @@ export async function batchPermanentlyDeleteHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -2096,7 +2105,9 @@ export async function purgeExpiredHandler(
 
     return reply.code(200).send({
         status: "success",
-        message: purgeResult.skipped ? "Purge already in progress" : "Expired recycle-bin items purged",
+        message: purgeResult.skipped
+            ? "Purge deferred because another file operation is in progress"
+            : "Expired recycle-bin items purged",
         olderThanDays: purgeResult.olderThanDays,
         purgedFiles: purgeResult.purgedFiles,
         purgedFolders: purgeResult.purgedFolders,

@@ -2,9 +2,23 @@ packages:
   - common/*
   - apps/*
 
+overrides:
+  "@esbuild-kit/core-utils>esbuild": 0.25.12
+  "@tanstack/start-server-core": 1.167.30
+  brace-expansion: 5.0.6
+  "minimatch@3.1.5>brace-expansion": 1.1.12
+  fast-uri: 3.1.2
+  js-yaml: 4.3.0
+  kysely: 0.28.17
+  "tsx>esbuild": 0.28.1
+  undici: 7.28.0
+
 onlyBuiltDependencies:
   - argon2
-  - core-js-pure
   - esbuild
   - sharp
-  - unrs-resolver
+
+allowBuilds:
+  argon2: true
+  esbuild: true
+  sharp: true

@@ -1,5 +1,6 @@
 import * as argon2 from "argon2";
 import { eq } from "drizzle-orm";
+import { emitKeypressEvents } from "node:readline";
 
 import { createDatabase } from "@/db";
 import { users } from "@/db/schema/users";
@@ -7,20 +8,21 @@ import { createUserWithRootFolder } from "@/systems/auth/auth.utils";
 
 type ProvisionArgs = {
     username: string;
-    password: string;
+    password?: string;
     firstName?: string;
     lastName?: string;
     email?: string;
 };
 
 const printUsage = () => {
-    console.log("Usage: pnpm --filter server admin:provision -- --username <user> --password <pass> [options]");
+    console.log("Usage: pnpm --filter server admin:provision -- --username <user> [options]");
     console.log("Options:");
     console.log("  --first-name <value>  Optional first name");
     console.log("  --last-name <value>   Optional last name");
     console.log("  --email <value>       Optional email (defaults to <id>@opencloud.local)");
     console.log("  --help                Show this help");
     console.log("");
+    console.log("The password is read from a hidden interactive prompt or ADMIN_PASSWORD.");
     console.log("Env fallbacks: ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_FIRST_NAME, ADMIN_LAST_NAME, ADMIN_EMAIL");
 };
 
@@ -57,10 +59,6 @@ const parseArgs = (): ProvisionArgs | "help" | null => {
                 output.username = value;
                 i += 1;
                 break;
-            case "--password":
-                output.password = value;
-                i += 1;
-                break;
             case "--first-name":
                 output.firstName = value;
                 i += 1;
@@ -78,12 +76,68 @@ const parseArgs = (): ProvisionArgs | "help" | null => {
         }
     }
 
-    if (!output.username || !output.password) {
+    if (!output.username) {
         printUsage();
         return null;
     }
 
     return output as ProvisionArgs;
+};
+
+type Keypress = {
+    name?: string;
+    ctrl?: boolean;
+    meta?: boolean;
+};
+
+const promptForPassword = async () => {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        throw new Error("ADMIN_PASSWORD is required when no interactive terminal is available");
+    }
+
+    emitKeypressEvents(process.stdin);
+    const previousRawMode = process.stdin.isRaw;
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdout.write("Admin password: ");
+
+    return new Promise<string>((resolve, reject) => {
+        let password = "";
+
+        const cleanup = () => {
+            process.stdin.removeListener("keypress", onKeypress);
+            process.stdin.setRawMode(previousRawMode ?? false);
+            if (!previousRawMode) {
+                process.stdin.pause();
+            }
+            process.stdout.write("\n");
+        };
+
+        const onKeypress = (input: string | undefined, key: Keypress) => {
+            if (key.ctrl && key.name === "c") {
+                cleanup();
+                reject(new Error("Admin provisioning cancelled"));
+                return;
+            }
+
+            if (key.name === "return" || key.name === "enter") {
+                cleanup();
+                resolve(password);
+                return;
+            }
+
+            if (key.name === "backspace") {
+                password = Array.from(password).slice(0, -1).join("");
+                return;
+            }
+
+            if (!key.ctrl && !key.meta && input) {
+                password += input;
+            }
+        };
+
+        process.stdin.on("keypress", onKeypress);
+    });
 };
 
 const run = async () => {
@@ -93,6 +147,13 @@ const run = async () => {
     }
 
     if (!parsed) {
+        process.exitCode = 1;
+        return;
+    }
+
+    const password = parsed.password ?? (await promptForPassword());
+    if (password.length < 8 || password.length > 128) {
+        console.error("Password must be between 8 and 128 characters.");
         process.exitCode = 1;
         return;
     }
@@ -118,7 +179,7 @@ const run = async () => {
             return;
         }
 
-        const hashedPassword = await argon2.hash(parsed.password);
+        const hashedPassword = await argon2.hash(password);
 
         await createUserWithRootFolder(db, {
             username: parsed.username,

@@ -51,9 +51,21 @@ export const createAuth = (db: Database) =>
                 verify: async ({ hash, password }) => argon2.verify(hash, password),
             },
         },
+        rateLimit: {
+            enabled: true,
+            customRules: {
+                "/sign-in/username": {
+                    window: 60,
+                    max: 5,
+                },
+            },
+        },
         plugins: [usernamePlugin],
-        disabledPaths: ["/sign-up/email", "/sign-in/email"],
+        disabledPaths: ["/sign-up/email", "/sign-in/email", "/is-username-available"],
         advanced: {
+            ipAddress: {
+                ipAddressHeaders: ["x-forwarded-for"],
+            },
             crossSubDomainCookies: {
                 enabled: true,
                 domain: env.COOKIE_URL,
