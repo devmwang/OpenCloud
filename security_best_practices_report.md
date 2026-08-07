@@ -60,21 +60,19 @@ Fixed with fail-fast 32-character secret validation, an empty generation-guided 
 
 ### OC-SEC-009 — Vulnerable dependency graph (Critical to Low)
 
-The initial production audit reported 27 advisories, including critical/high Better Auth, Vite, Kysely, fast-uri, and Undici issues. Direct dependencies and safe transitive overrides were updated, including Better Auth `>=1.6.13`, Vite `>=8.0.16`, and patched esbuild routing. The final completed registry scan before the last esbuild override reported only two low development-tool advisories; the esbuild path is now pinned to patched `0.28.1`. The `brace-expansion` override is scoped so legacy `minimatch@3.1.5` retains compatible patched `1.1.12`, while modern consumers use `5.0.6`.
-
-One low `@babel/core <=7.29.0` advisory remains because the audit's stated patched `7.29.1` was not available from the registry at review time. A final network rescan after the esbuild override was blocked by the account quota, so the lockfile should be rescanned when access is available.
+The initial production audit reported 27 advisories, including critical/high Better Auth, Vite, Kysely, fast-uri, and Undici issues. Direct dependencies and scoped transitive overrides were updated. A new production audit on 2026-08-07 then found newer advisories in Seroval, Sharp, Fastify Static, Find My Way, and several forced overrides. Those packages were updated to patched versions. The final `pnpm audit --prod` reported no known vulnerabilities. The `brace-expansion` override remains scoped so legacy `minimatch@3.1.5` uses compatible patched `1.1.12`, while modern consumers use patched `5.0.9`.
 
 ## Residual risks and follow-up
 
 1. **Linux maintenance trust chain (High, deployment-dependent):** the runtime user owns the checkout, while documentation tells administrators to execute its update script with `sudo` and install unit templates from it. A service compromise could become root at the next maintenance run. Move the privileged manager/templates to a root-owned immutable location and require a dedicated non-root service account.
-2. **Very large purge jobs (Medium/High availability):** deletion still chunks large folder subtrees and the scheduled global purge is not fully isolated per owner. Convert subtree deletion to one cycle-safe statement (or deepest-first transaction), add per-owner error isolation, and add a durable blob-cleanup outbox.
+2. **Blob/database purge atomicity (Medium availability):** large folder subtrees now use one cycle-safe folder delete statement, and scheduled purges isolate owner hierarchy operations. Blob deletion and database deletion still cannot share one transaction. Add a durable blob-cleanup outbox so database failures after an unlink can be repaired.
 3. **Edge-level slow transfer controls (Medium):** application concurrency and time bounds are now finite, but production should still enforce connection counts, minimum upload/download rates, body limits, and response-idle timeouts at a reverse proxy.
 4. **Nova CSP (Medium hardening):** anti-framing, `nosniff`, referrer, permissions, and sensitive-page cache headers are present. A strict CSP was intentionally not shipped until TanStack hydration scripts are wired to a verified per-request nonce; adding an unconnected nonce would break the application.
 5. **Infrastructure assurance:** TLS termination, firewalling, live database roles, backups, external log redaction, reverse-proxy behavior, and hosted repository controls were outside the repository-only review.
 
 ## Deployment action required
 
-Run the database migration before relying on the FK fixes:
+The Linux service update and rebuild commands stop the server and run database migrations automatically. For other deployment methods, run the migration before relying on the FK fixes:
 
 ```powershell
 pnpm --filter server db:migrate

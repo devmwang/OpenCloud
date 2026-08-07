@@ -17,6 +17,14 @@ async function uploadRouter(server: FastifyInstance) {
                 }
             },
         ],
+        onSend: [
+            async (request, reply, payload) => {
+                if (!request.raw.complete) {
+                    void reply.header("Connection", "close");
+                }
+                return payload;
+            },
+        ],
         schema: {
             querystring: $ref("uploadFileQuerySchema"),
             response: { 201: $ref("uploadFileResponseSchema") },

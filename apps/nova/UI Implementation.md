@@ -233,7 +233,8 @@ Required actions:
 
 - Create upload token (`/v1/upload-tokens`).
 - Create read token (`/v1/files/:fileId/read-tokens`).
-- Token-based upload utility (`/v1/files` with `uploadToken` form field).
+- Token-based upload utility (`/v1/files` with one file part and the token in the `x-opencloud-upload-token` header).
+- Existing ShareX and custom uploader configurations must move `uploadToken` from the multipart form to the `x-opencloud-upload-token` request header before this server version is deployed.
 - List owned upload tokens (`/v1/upload-tokens`).
 
 ### Root Error + Not Found

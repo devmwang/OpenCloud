@@ -73,7 +73,7 @@ Option 1: script does everything.
 sudo ./scripts/linux/opencloud-user-service.sh update
 ```
 
-This pulls the latest code from git (using the repo path saved at install time), runs `pnpm install`, builds, and restarts the service(s). Add a mode to limit to one app: `update server` or `update nova`.
+This pulls the latest code from git (using the repo path saved at install time), runs `pnpm install`, builds, applies server database migrations while the server is stopped, and restarts the service(s). Add a mode to limit to one app: `update server` or `update nova`. A Nova-only update does not run server migrations.
 
 Option 2: pull manually, then rebuild.
 
@@ -83,7 +83,7 @@ git pull
 sudo ./scripts/linux/opencloud-user-service.sh rebuild
 ```
 
-`rebuild` uses the repo path from `/etc/opencloud/opencloud-service.env`. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component.
+`rebuild` uses the repo path from `/etc/opencloud/opencloud-service.env`. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component. Server and combined rebuilds also apply pending database migrations while the server is stopped.
 
 ## Install options
 

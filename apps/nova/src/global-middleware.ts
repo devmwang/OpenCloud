@@ -24,8 +24,6 @@ const getFileRouteIdFromPath = (pathname: string) => {
     }
 };
 
-const forwardedHeaderNames = ["accept", "range", "if-none-match", "if-modified-since", "cookie", "user-agent"];
-
 const appendVary = (headers: Headers, value: string) => {
     const values = (headers.get("vary") ?? "")
         .split(",")
@@ -74,7 +72,7 @@ export const requestContextMiddleware = createMiddleware().server(async ({ reque
     return applySecurityHeaders(result.response, requestUrl.pathname.startsWith("/file/"));
 });
 
-export const botFileProxyMiddleware = createMiddleware().server(async ({ request, next }) => {
+export const agentFileRedirectMiddleware = createMiddleware().server(async ({ request, next }) => {
     const requestUrl = new URL(request.url);
     const requestPathname = requestUrl.pathname;
 
@@ -103,28 +101,13 @@ export const botFileProxyMiddleware = createMiddleware().server(async ({ request
     const targetUrl = new URL(`/v1/files/${encodeURIComponent(fileId)}/content`, env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL);
     targetUrl.search = requestUrl.search;
 
-    const headers = new Headers();
-    for (const headerName of forwardedHeaderNames) {
-        const headerValue = request.headers.get(headerName);
-        if (headerValue) {
-            headers.set(headerName, headerValue);
-        }
-    }
-
-    const response = await fetch(targetUrl.toString(), {
-        method: request.method,
-        headers,
-        signal: request.signal,
-    });
-
-    const responseHeaders = new Headers(response.headers);
+    const responseHeaders = new Headers({ location: targetUrl.toString() });
     responseHeaders.set("cache-control", "private, no-store");
     responseHeaders.set("pragma", "no-cache");
     appendVary(responseHeaders, "User-Agent");
 
-    return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
+    return new Response(null, {
+        status: 307,
         headers: responseHeaders,
     });
 });

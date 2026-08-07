@@ -639,6 +639,21 @@ cmd_install() {
     echo "  sudo $SCRIPT_NAME logs -f"
 }
 
+migrate_server_database() {
+    local mode="$1"
+    local repo_dir_q="$2"
+    local service_user="$3"
+
+    if [[ "$mode" == "nova" ]]; then
+        return
+    fi
+
+    echo "Stopping the server for database migrations ..."
+    systemctl_system_units stop server
+    echo "Applying database migrations ..."
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm --filter server db:migrate"
+}
+
 cmd_update() {
     local mode="both"
     local mode_set=0
@@ -685,6 +700,8 @@ cmd_update() {
         nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
         both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
+
+    migrate_server_database "$mode" "$repo_dir_q" "$service_user"
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
@@ -737,6 +754,8 @@ cmd_rebuild() {
         nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
         both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
+
+    migrate_server_database "$mode" "$repo_dir_q" "$service_user"
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"

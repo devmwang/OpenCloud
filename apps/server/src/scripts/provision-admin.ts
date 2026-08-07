@@ -90,7 +90,7 @@ type Keypress = {
     meta?: boolean;
 };
 
-const promptForPassword = async () => {
+const promptForPassword = async (prompt: string) => {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
         throw new Error("ADMIN_PASSWORD is required when no interactive terminal is available");
     }
@@ -99,7 +99,7 @@ const promptForPassword = async () => {
     const previousRawMode = process.stdin.isRaw;
     process.stdin.setRawMode(true);
     process.stdin.resume();
-    process.stdout.write("Admin password: ");
+    process.stdout.write(prompt);
 
     return new Promise<string>((resolve, reject) => {
         let password = "";
@@ -151,11 +151,19 @@ const run = async () => {
         return;
     }
 
-    const password = parsed.password ?? (await promptForPassword());
+    const password = parsed.password ?? (await promptForPassword("Admin password: "));
     if (password.length < 8 || password.length > 128) {
         console.error("Password must be between 8 and 128 characters.");
         process.exitCode = 1;
         return;
+    }
+    if (parsed.password === undefined) {
+        const confirmedPassword = await promptForPassword("Confirm admin password: ");
+        if (password !== confirmedPassword) {
+            console.error("Passwords do not match.");
+            process.exitCode = 1;
+            return;
+        }
     }
 
     const { db, pool } = createDatabase();
@@ -200,4 +208,7 @@ const run = async () => {
     }
 };
 
-void run();
+void run().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : "Admin provisioning failed");
+    process.exitCode = 1;
+});

@@ -47,7 +47,7 @@ async function recycleBinRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("itemParamsSchema"),
             body: $ref("restoreBodySchema"),
@@ -63,7 +63,7 @@ async function recycleBinRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             body: $ref("batchRestoreBodySchema"),
             response: { 200: $ref("batchRestoreResponseSchema") },
@@ -78,7 +78,7 @@ async function recycleBinRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("itemParamsSchema"),
             response: { 200: $ref("permanentlyDeleteResponseSchema") },
@@ -93,7 +93,7 @@ async function recycleBinRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             body: $ref("batchItemIdsSchema"),
             response: { 200: $ref("batchPermanentlyDeleteResponseSchema") },
@@ -108,7 +108,7 @@ async function recycleBinRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             querystring: $ref("emptyQuerySchema"),
             response: { 200: $ref("emptyResponseSchema") },

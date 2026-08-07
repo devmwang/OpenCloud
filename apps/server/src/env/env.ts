@@ -63,6 +63,8 @@ export const env = createEnv({
                 message: "AUTH_SECRET must be a unique, high-entropy secret",
             }),
         DATABASE_URL: z.string().url(),
+        DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+        HIERARCHY_LOCK_POOL_MAX: z.coerce.number().int().min(1).default(10),
         FILE_STORE_PATH: z.string().trim().min(1),
         SERVER_HOST: z.string().default("0.0.0.0"),
         SERVER_PORT: z.coerce.number().int().min(1).max(65535).default(8080),

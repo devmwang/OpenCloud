@@ -7,6 +7,7 @@ import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { fileTypeFromFile } from "file-type";
 
 import type { Database } from "@/db";
 import { uploadTokenRules, uploadTokens } from "@/db/schema/auth";
@@ -54,6 +55,25 @@ class UploadFileTooLargeError extends Error {
         this.name = "UploadFileTooLargeError";
     }
 }
+
+const getClientUploadErrorStatus = (error: unknown) => {
+    if (typeof error !== "object" || error === null || !("statusCode" in error)) {
+        return null;
+    }
+
+    const statusCode = error.statusCode;
+    return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500 ? statusCode : null;
+};
+
+const isUploadFileTooLargeError = (error: unknown) => {
+    if (error instanceof UploadFileTooLargeError) {
+        return true;
+    }
+    if (typeof error !== "object" || error === null) {
+        return false;
+    }
+    return "code" in error && error.code === "FST_REQ_FILE_TOO_LARGE";
+};
 
 type UploadContext = {
     ownerId: string;
@@ -227,21 +247,30 @@ export async function uploadFileHandler(
         void reply.header("Connection", "close");
         return reply.code(503).send({ message: "Upload capacity is currently full" });
     }
-    reply.raw.once("finish", releaseUploadSlot);
-    reply.raw.once("close", releaseUploadSlot);
-
-    const fileData = await request.file();
-
-    if (!fileData) {
-        return reply.code(400).send({ message: "No file provided" });
-    }
-
+    let fileStream: BusboyFileStream | null = null;
     try {
+        const parts = request.parts();
+        const firstPart = await parts.next();
+        if (firstPart.done || firstPart.value.type !== "file") {
+            return reply.code(400).send({ message: "Exactly one file is required" });
+        }
+
+        const fileData = firstPart.value;
+        fileStream = fileData.file;
+        const verifyMultipartComplete = async () => {
+            const trailingPart = await parts.next();
+            if (!trailingPart.done) {
+                if (trailingPart.value.type === "file") {
+                    trailingPart.value.file.destroy();
+                }
+                throw new Error("UNEXPECTED_MULTIPART_PART");
+            }
+        };
+
         const uploadLockResult = await this.tryWithOwnerHierarchySharedLock(uploadContext.ownerId, async () => {
             const fileRecord = await createFileDetails(
                 this.db,
                 fileData.filename,
-                fileData.mimetype,
                 uploadContext.ownerId,
                 uploadContext.folderId,
                 uploadContext.fileAccess,
@@ -250,7 +279,13 @@ export async function uploadFileHandler(
                 return null;
             }
 
-            await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file);
+            await coreUploadHandler(
+                this.db,
+                uploadContext.ownerId,
+                fileRecord.id,
+                fileData.file,
+                verifyMultipartComplete,
+            );
             return fileRecord;
         });
         if (!uploadLockResult.locked) {
@@ -272,21 +307,26 @@ export async function uploadFileHandler(
             storageState: "READY",
         });
     } catch (error) {
-        fileData.file.destroy();
+        fileStream?.destroy();
         void reply.header("Connection", "close");
-        if (error instanceof UploadFileTooLargeError) {
+        const clientStatus = getClientUploadErrorStatus(error);
+        if (isUploadFileTooLargeError(error)) {
             return reply.code(413).send({ message: "File exceeds the upload size limit" });
+        }
+        if (clientStatus !== null || (error instanceof Error && error.message === "UNEXPECTED_MULTIPART_PART")) {
+            return reply.code(clientStatus ?? 400).send({ message: "Invalid multipart upload" });
         }
 
         request.log.error({ err: error }, "Upload failed");
         return reply.code(500).send({ message: "Upload failed" });
+    } finally {
+        releaseUploadSlot();
     }
 }
 
 async function createFileDetails(
     db: Database,
     fileName: string,
-    fileType: string,
     ownerId: string,
     parentFolderId: string,
     fileAccess: FileAccess,
@@ -304,7 +344,7 @@ async function createFileDetails(
         .insert(files)
         .values({
             fileName,
-            fileType,
+            fileType: "application/octet-stream",
             ownerId,
             fileAccess,
             parentId: parentFolderId,
@@ -320,7 +360,13 @@ async function createFileDetails(
     return fileDetails;
 }
 
-async function coreUploadHandler(db: Database, ownerId: string, fileId: string, file: BusboyFileStream) {
+async function coreUploadHandler(
+    db: Database,
+    ownerId: string,
+    fileId: string,
+    file: BusboyFileStream,
+    verifyMultipartComplete: () => Promise<void>,
+) {
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
     const filePath = path.join(folderPath, fileId);
     let destinationCreated = false;
@@ -343,13 +389,16 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
         if (file.truncated) {
             throw new UploadFileTooLargeError();
         }
+        await verifyMultipartComplete();
 
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
+        const detectedMime = (await fileTypeFromFile(filePath))?.mime ?? "application/octet-stream";
 
         await db
             .update(files)
             .set({
                 fileSize: sizeInBytes,
+                fileType: detectedMime,
                 storageState: "READY",
                 storageError: null,
                 storageVerifiedAt: new Date(),

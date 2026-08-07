@@ -637,15 +637,26 @@ const permanentlyDeleteFolderSubtree = async (
 
     await server.db.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
 
-    let purgedFolders = 0;
-    for (const folderIdChunk of chunk(subtreeFolderIds, 500)) {
-        const deletedFolders = await server.db
-            .delete(folders)
-            .where(and(eq(folders.ownerId, ownerId), inArray(folders.id, folderIdChunk), isNotNull(folders.deletedAt)))
-            .returning({ id: folders.id });
-
-        purgedFolders += deletedFolders.length;
-    }
+    const deletedFoldersResult = (await server.db.execute(sql`
+        with recursive subtree ("id") as (
+            select folder_row."id"
+            from "Folders" as folder_row
+            where folder_row."id" = ${rootFolderId}
+              and folder_row."ownerId" = ${ownerId}
+              and folder_row."deletedAt" is not null
+            union
+            select child_folder."id"
+            from "Folders" as child_folder
+            inner join subtree on child_folder."parentFolderId" = subtree."id"
+            where child_folder."ownerId" = ${ownerId}
+              and child_folder."deletedAt" is not null
+        )
+        delete from "Folders" as folder_row
+        where folder_row."ownerId" = ${ownerId}
+          and folder_row."id" in (select "id" from subtree)
+        returning folder_row."id"
+    `)) as { rows?: Array<{ id?: unknown }> };
+    const purgedFolders = (deletedFoldersResult.rows ?? []).filter((row) => typeof row.id === "string").length;
 
     return {
         purgedFiles,
@@ -2104,10 +2115,11 @@ export async function purgeExpiredHandler(
     const purgeResult = await runPurgeExpired(this, request.body?.olderThanDays);
 
     return reply.code(200).send({
-        status: "success",
+        status: purgeResult.skipped ? "partial" : "success",
         message: purgeResult.skipped
-            ? "Purge deferred because another file operation is in progress"
+            ? "Purge did not process all eligible owners because another operation was active"
             : "Expired recycle-bin items purged",
+        deferred: purgeResult.skipped,
         olderThanDays: purgeResult.olderThanDays,
         purgedFiles: purgeResult.purgedFiles,
         purgedFolders: purgeResult.purgedFolders,

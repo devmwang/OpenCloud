@@ -60,7 +60,7 @@ async function folderRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             body: $ref("createFolderSchema"),
             response: { 201: $ref("createFolderResponseSchema") },
@@ -75,7 +75,7 @@ async function folderRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             body: $ref("batchMoveItemsSchema"),
             response: { 200: $ref("batchMoveItemsResponseSchema") },
@@ -90,7 +90,7 @@ async function folderRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             body: $ref("batchItemIdsSchema"),
             response: { 200: $ref("batchDeleteItemsResponseSchema") },
@@ -105,7 +105,7 @@ async function folderRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("folderParamsSchema"),
             body: $ref("patchFolderBodySchema"),
@@ -121,7 +121,7 @@ async function folderRouter(server: FastifyInstance) {
         preValidation: [server.authenticate],
         preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
         onError: [server.releaseOwnerHierarchyLock],
-        onResponse: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("folderParamsSchema"),
             response: { 200: $ref("mutateFolderResponseSchema") },
@@ -146,7 +146,9 @@ async function folderRouter(server: FastifyInstance) {
         url: "/folders/:folderId/display-preferences",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("folderParamsSchema"),
             body: $ref("putDisplayPreferencesSchema"),

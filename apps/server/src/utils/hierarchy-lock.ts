@@ -3,9 +3,9 @@ import fp from "fastify-plugin";
 import type { PoolClient } from "pg";
 
 import { createPostgresPool } from "@/db";
+import { env } from "@/env/env";
 
 const HIERARCHY_LOCK_NAMESPACE = 820_514_138;
-const HIERARCHY_LOCK_POOL_MAX = 10;
 
 type HierarchyLockMode = "exclusive" | "shared";
 
@@ -40,7 +40,7 @@ declare module "fastify" {
 
 const hierarchyLockPlugin: FastifyPluginAsync = fp(async (server) => {
     const lockPool = createPostgresPool({
-        max: HIERARCHY_LOCK_POOL_MAX,
+        max: env.HIERARCHY_LOCK_POOL_MAX,
         onPoolError: (error) => {
             server.log.error({ err: error }, "Postgres hierarchy-lock pool client error");
         },
@@ -50,12 +50,16 @@ const hierarchyLockPlugin: FastifyPluginAsync = fp(async (server) => {
     server.decorateRequest("hierarchyLockOwnerId", null);
 
     const tryAcquireOwnerHierarchyLock = async (ownerId: string, mode: HierarchyLockMode) => {
+        if (lockPool.idleCount === 0 && lockPool.totalCount >= env.HIERARCHY_LOCK_POOL_MAX) {
+            return null;
+        }
+
         const client = await lockPool.connect();
         try {
             const lockFunction = mode === "shared" ? "pg_try_advisory_lock_shared" : "pg_try_advisory_lock";
             const result = await client.query<{ locked: boolean }>(
-                `select ${lockFunction}($1, hashtext($2)) as locked`,
-                [HIERARCHY_LOCK_NAMESPACE, ownerId],
+                `select ${lockFunction}(hashtextextended($1, $2)) as locked`,
+                [ownerId, HIERARCHY_LOCK_NAMESPACE],
             );
             if (!result.rows[0]?.locked) {
                 client.release();
@@ -63,7 +67,7 @@ const hierarchyLockPlugin: FastifyPluginAsync = fp(async (server) => {
             }
             return client;
         } catch (error) {
-            client.release();
+            client.release(error instanceof Error ? error : new Error("Hierarchy lock acquisition failed"));
             throw error;
         }
     };
@@ -71,9 +75,14 @@ const hierarchyLockPlugin: FastifyPluginAsync = fp(async (server) => {
     const releaseOwnerHierarchyLock = async (client: PoolClient, ownerId: string, mode: HierarchyLockMode) => {
         try {
             const unlockFunction = mode === "shared" ? "pg_advisory_unlock_shared" : "pg_advisory_unlock";
-            await client.query(`select ${unlockFunction}($1, hashtext($2))`, [HIERARCHY_LOCK_NAMESPACE, ownerId]);
-        } finally {
+            await client.query(`select ${unlockFunction}(hashtextextended($1, $2))`, [
+                ownerId,
+                HIERARCHY_LOCK_NAMESPACE,
+            ]);
             client.release();
+        } catch (error) {
+            client.release(error instanceof Error ? error : new Error("Hierarchy lock release failed"));
+            throw error;
         }
     };
 

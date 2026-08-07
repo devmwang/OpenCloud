@@ -6,7 +6,18 @@ const DEVELOPMENT_OPENCLOUD_SERVER_URL = "http://localhost:8080";
 const openCloudServerUrlSchema = z
     .string()
     .url()
-    .regex(/^https?:\/\//i, "NEXT_PUBLIC_OPENCLOUD_SERVER_URL must use http:// or https://");
+    .transform((value, context) => {
+        const url = new URL(value);
+        if (!["http:", "https:"].includes(url.protocol)) {
+            context.addIssue({ code: "custom", message: "URL must use http or https" });
+            return z.NEVER;
+        }
+        if (url.username || url.password) {
+            context.addIssue({ code: "custom", message: "URL must not contain credentials" });
+            return z.NEVER;
+        }
+        return url.origin;
+    });
 
 const clientEnvSchema = z.object({
     NEXT_PUBLIC_OPENCLOUD_SERVER_URL: openCloudServerUrlSchema,
@@ -22,7 +33,7 @@ const openCloudServerUrl =
     (import.meta.env.DEV ? DEVELOPMENT_OPENCLOUD_SERVER_URL : undefined);
 
 const serverEnvSchema = z.object({
-    OPENCLOUD_WEBUI_URL: z.string().url().optional(),
+    OPENCLOUD_WEBUI_URL: openCloudServerUrlSchema.optional(),
 });
 
 const clientRuntimeEnv = clientEnvSchema.parse({

@@ -155,7 +155,7 @@ const parseSessionPayload = (payload: unknown) => {
 
     const parsed = authSessionSchema.safeParse(unwrapped);
     if (!parsed.success) {
-        return null;
+        throw new Error("Invalid session response");
     }
 
     return parsed.data;
@@ -199,10 +199,10 @@ export const getSessionSafe = async () => {
     }
 };
 
-export const getSessionSafeCached = (queryClient: QueryClient) => {
+export const getSessionCached = (queryClient: QueryClient) => {
     return queryClient.fetchQuery({
         queryKey: queryKeys.session,
-        queryFn: getSessionSafe,
+        queryFn: getSession,
         staleTime: SESSION_QUERY_STALE_TIME_MS,
     });
 };

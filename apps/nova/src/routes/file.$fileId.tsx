@@ -74,6 +74,7 @@ export const Route = createFileRoute("/file/$fileId")({
         const publicFile =
             loaderData?.kind === "ok" && loaderData.file.access === "PUBLIC" ? loaderData.file : undefined;
         const contentUrl = publicFile ? buildFileContentUrl(params.fileId) : undefined;
+        const secureContentUrl = contentUrl && new URL(contentUrl).protocol === "https:" ? contentUrl : undefined;
         const contentType = publicFile?.mimeType;
         const mediaKind = contentType?.split("/", 1)[0];
         const description =
@@ -99,7 +100,7 @@ export const Route = createFileRoute("/file/$fileId")({
                 ...(contentUrl && contentType && mediaKind === "image"
                     ? [
                           { property: "og:image", content: contentUrl },
-                          { property: "og:image:secure_url", content: contentUrl },
+                          ...(secureContentUrl ? [{ property: "og:image:secure_url", content: secureContentUrl }] : []),
                           { property: "og:image:type", content: contentType },
                           { property: "og:image:alt", content: publicFile.name },
                           { name: "twitter:image", content: contentUrl },
@@ -109,14 +110,14 @@ export const Route = createFileRoute("/file/$fileId")({
                 ...(contentUrl && contentType && mediaKind === "video"
                     ? [
                           { property: "og:video", content: contentUrl },
-                          { property: "og:video:secure_url", content: contentUrl },
+                          ...(secureContentUrl ? [{ property: "og:video:secure_url", content: secureContentUrl }] : []),
                           { property: "og:video:type", content: contentType },
                       ]
                     : []),
                 ...(contentUrl && contentType && mediaKind === "audio"
                     ? [
                           { property: "og:audio", content: contentUrl },
-                          { property: "og:audio:secure_url", content: contentUrl },
+                          ...(secureContentUrl ? [{ property: "og:audio:secure_url", content: secureContentUrl }] : []),
                           { property: "og:audio:type", content: contentType },
                       ]
                     : []),

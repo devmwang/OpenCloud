@@ -24,6 +24,7 @@ const INLINE_MEDIA_MIME_TYPES = new Set([
     "image/gif",
     "image/jpeg",
     "image/png",
+    "image/x-icon",
     "image/vnd.microsoft.icon",
     "image/webp",
     "audio/mp4",
@@ -33,7 +34,9 @@ const INLINE_MEDIA_MIME_TYPES = new Set([
     "video/mp4",
     "video/ogg",
     "video/quicktime",
+    "video/vnd.avi",
     "video/webm",
+    "video/x-m4v",
     "video/x-msvideo",
 ]);
 
@@ -78,6 +81,8 @@ const buildContentDisposition = (fileName: string, type: "attachment" | "inline"
 const getFileCacheControl = (fileAccess: StoredFileAccess) =>
     fileAccess === "PUBLIC" ? "public, max-age=300" : "private, no-store";
 
+const getBaseMimeType = (mimeType: string) => mimeType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+
 const applyFileResponseHeaders = (
     reply: FastifyReply,
     options: {
@@ -108,6 +113,11 @@ const readFilePrefix = async (filePath: string, maxBytes: number) => {
     } finally {
         await fileHandle.close();
     }
+};
+
+const detectStoredFileMime = async (filePath: string) => {
+    const sample = await readFilePrefix(filePath, FILE_TYPE_SAMPLE_BYTES);
+    return (await fileTypeFromBuffer(sample))?.mime ?? "application/octet-stream";
 };
 
 const readBoundedFile = async (filePath: string, maxBytes: number) => {
@@ -244,7 +254,6 @@ export async function getDetailsHandler(
         .select({
             id: files.id,
             fileName: files.fileName,
-            fileType: files.fileType,
             fileSize: files.fileSize,
             ownerId: files.ownerId,
             parentId: files.parentId,
@@ -265,13 +274,26 @@ export async function getDetailsHandler(
         return reply;
     }
 
+    let verifiedMime = "application/octet-stream";
+    if (file.storageState === "READY") {
+        const fullFilePath = path.join(env.FILE_STORE_PATH, file.ownerId, file.id);
+        try {
+            verifiedMime = await detectStoredFileMime(fullFilePath);
+        } catch (error) {
+            if (isMissingFileError(error)) {
+                return reply.code(404).send({ message: "File not found" });
+            }
+            throw error;
+        }
+    }
+
     void reply.header("Cache-Control", getFileCacheControl(file.fileAccess));
     void reply.header("X-Robots-Tag", FILE_ROBOTS_POLICY);
 
     return reply.code(200).send({
         id: file.id,
         name: file.fileName,
-        mimeType: file.fileType,
+        mimeType: verifiedMime,
         sizeBytes: file.fileSize,
         ownerId: file.ownerId,
         folderId: file.parentId,
@@ -313,10 +335,9 @@ export async function getFileHandler(
 
     const relativeFilePath = fileDetails.ownerId + "/" + fileDetails.id;
     const fullFilePath = path.join(env.FILE_STORE_PATH, relativeFilePath);
-    let detectedMime: string | undefined;
+    let detectedMime: string;
     try {
-        const sample = await readFilePrefix(fullFilePath, FILE_TYPE_SAMPLE_BYTES);
-        detectedMime = (await fileTypeFromBuffer(sample))?.mime;
+        detectedMime = await detectStoredFileMime(fullFilePath);
     } catch (error) {
         if (isMissingFileError(error)) {
             return reply.code(404).send({ message: "File not found" });
@@ -324,7 +345,7 @@ export async function getFileHandler(
         throw error;
     }
 
-    const inlineMime = detectedMime && INLINE_MEDIA_MIME_TYPES.has(detectedMime) ? detectedMime : undefined;
+    const inlineMime = INLINE_MEDIA_MIME_TYPES.has(getBaseMimeType(detectedMime)) ? detectedMime : undefined;
     applyFileResponseHeaders(reply, {
         contentType: inlineMime ?? "application/octet-stream",
         disposition: inlineMime ? "inline" : "attachment",
