@@ -18,11 +18,11 @@ const fileDetailsResponseSchema = z.object({
     name: z.string(),
     mimeType: z.string(),
     sizeBytes: z.number().int().nullable(),
-    ownerId: z.string(),
-    folderId: z.string(),
+    folderId: z.string().nullable(),
+    canDelete: z.boolean(),
     access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: z.string().datetime().nullable(),
+    updatedAt: z.string().datetime().nullable(),
     storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
 

@@ -17,8 +17,10 @@ const MAX_THUMBNAIL_SOURCE_BYTES = 50 * 1024 * 1024;
 const MAX_THUMBNAIL_INPUT_PIXELS = 40_000_000;
 const MAX_CONCURRENT_THUMBNAILS = 4;
 const FILE_ROBOTS_POLICY = "noindex, nofollow, noarchive, nosnippet, noimageindex";
+const FILE_CACHE_CONTROL = "private, no-store";
 
 const INLINE_MEDIA_MIME_TYPES = new Set([
+    "image/apng",
     "image/avif",
     "image/bmp",
     "image/gif",
@@ -40,7 +42,14 @@ const INLINE_MEDIA_MIME_TYPES = new Set([
     "video/x-msvideo",
 ]);
 
-const THUMBNAIL_SOURCE_MIME_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+const THUMBNAIL_SOURCE_MIME_TYPES = new Set([
+    "image/apng",
+    "image/avif",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+]);
 const THUMBNAIL_SOURCE_FORMATS = new Set(["avif", "gif", "jpeg", "png", "webp"]);
 type StoredFileAccess = (typeof files.$inferSelect)["fileAccess"];
 
@@ -78,9 +87,6 @@ const buildContentDisposition = (fileName: string, type: "attachment" | "inline"
     return `${type}; filename="${asciiFallback}"; filename*=UTF-8''${toRfc5987Value(safeName)}`;
 };
 
-const getFileCacheControl = (fileAccess: StoredFileAccess) =>
-    fileAccess === "PUBLIC" ? "public, max-age=300" : "private, no-store";
-
 const getBaseMimeType = (mimeType: string) => mimeType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
 
 const applyFileResponseHeaders = (
@@ -94,7 +100,7 @@ const applyFileResponseHeaders = (
 ) => {
     void reply.header("Content-Type", options.contentType);
     void reply.header("Content-Disposition", buildContentDisposition(options.fileName, options.disposition));
-    void reply.header("Cache-Control", getFileCacheControl(options.fileAccess));
+    void reply.header("Cache-Control", FILE_CACHE_CONTROL);
     void reply.header("X-Content-Type-Options", "nosniff");
     void reply.header("X-Robots-Tag", FILE_ROBOTS_POLICY);
 };
@@ -274,6 +280,8 @@ export async function getDetailsHandler(
         return reply;
     }
 
+    const canDelete = request.authenticated && request.user?.id === file.ownerId;
+
     let verifiedMime = "application/octet-stream";
     if (file.storageState === "READY") {
         const fullFilePath = path.join(env.FILE_STORE_PATH, file.ownerId, file.id);
@@ -287,7 +295,7 @@ export async function getDetailsHandler(
         }
     }
 
-    void reply.header("Cache-Control", getFileCacheControl(file.fileAccess));
+    void reply.header("Cache-Control", FILE_CACHE_CONTROL);
     void reply.header("X-Robots-Tag", FILE_ROBOTS_POLICY);
 
     return reply.code(200).send({
@@ -295,11 +303,11 @@ export async function getDetailsHandler(
         name: file.fileName,
         mimeType: verifiedMime,
         sizeBytes: file.fileSize,
-        ownerId: file.ownerId,
-        folderId: file.parentId,
+        folderId: canDelete ? file.parentId : null,
+        canDelete,
         access: file.fileAccess,
-        createdAt: file.createdAt.toISOString(),
-        updatedAt: file.updatedAt.toISOString(),
+        createdAt: canDelete ? file.createdAt.toISOString() : null,
+        updatedAt: canDelete ? file.updatedAt.toISOString() : null,
         storageState: file.storageState,
     });
 }
@@ -347,7 +355,7 @@ export async function getFileHandler(
 
     const inlineMime = INLINE_MEDIA_MIME_TYPES.has(getBaseMimeType(detectedMime)) ? detectedMime : undefined;
     applyFileResponseHeaders(reply, {
-        contentType: inlineMime ?? "application/octet-stream",
+        contentType: detectedMime,
         disposition: inlineMime ? "inline" : "attachment",
         fileName: fileDetails.fileName,
         fileAccess: fileDetails.fileAccess,
@@ -385,6 +393,29 @@ export async function getThumbnailHandler(
 
     if (!ensureFileReadable(reply, fileDetails, "thumbnail generation")) {
         return reply;
+    }
+
+    if (request.method === "HEAD") {
+        const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
+        try {
+            const detectedMime = await detectStoredFileMime(fullFilePath);
+            if (!THUMBNAIL_SOURCE_MIME_TYPES.has(getBaseMimeType(detectedMime))) {
+                return reply.code(415).send({ message: "Unsupported media type" });
+            }
+        } catch (error) {
+            if (isMissingFileError(error)) {
+                return reply.code(404).send({ message: "File not found" });
+            }
+            throw error;
+        }
+
+        applyFileResponseHeaders(reply, {
+            contentType: "image/png",
+            disposition: "inline",
+            fileName: `${fileDetails.fileName}.png`,
+            fileAccess: fileDetails.fileAccess,
+        });
+        return reply.code(200).send();
     }
 
     if (activeThumbnailJobs >= MAX_CONCURRENT_THUMBNAILS) {

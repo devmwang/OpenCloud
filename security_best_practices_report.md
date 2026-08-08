@@ -32,7 +32,7 @@ Fixed in `apps/server/src/systems/fs/fs.handlers.ts`: bounded buffer input, magi
 
 Bearer read tokens appeared in request URLs and were therefore logged. Private/protected file responses inherited public cache semantics. Nova repeated tokens in canonical/social metadata and could retain prior-account query data.
 
-Fixed across `apps/server/src/index.ts`, `apps/server/src/systems/fs/fs.handlers.ts`, and Nova routes: query strings are omitted from request logs; private responses are `private, no-store`; content uses safe dispositions and byte-derived types; tokenized/protected pages are no-index and omit bearer URLs from metadata; login/logout/session loss clears the whole query cache; `/file` proxy responses are no-store and vary by user agent.
+Fixed across `apps/server/src/index.ts`, `apps/server/src/systems/fs/fs.handlers.ts`, and Nova routes: query strings are omitted from request logs; file responses are `private, no-store`; content uses safe dispositions and byte-derived types; tokenized/protected pages are no-index and omit bearer URLs from metadata; login/logout/session loss clears the whole query cache; `/file` agent redirects are no-store and vary by user agent.
 
 ### OC-SEC-005 — Folder-cycle race and unbounded recursive traversal (High)
 
@@ -60,7 +60,7 @@ Fixed with fail-fast 32-character secret validation, an empty generation-guided 
 
 ### OC-SEC-009 — Vulnerable dependency graph (Critical to Low)
 
-The initial production audit reported 27 advisories, including critical/high Better Auth, Vite, Kysely, fast-uri, and Undici issues. Direct dependencies and scoped transitive overrides were updated. A new production audit on 2026-08-07 then found newer advisories in Seroval, Sharp, Fastify Static, Find My Way, and several forced overrides. Those packages were updated to patched versions. The final `pnpm audit --prod` reported no known vulnerabilities. The `brace-expansion` override remains scoped so legacy `minimatch@3.1.5` uses compatible patched `1.1.12`, while modern consumers use patched `5.0.9`.
+The initial production audit reported 27 advisories, including critical/high Better Auth, Vite, Kysely, fast-uri, and Undici issues. Direct dependencies and scoped transitive overrides were updated. A later review found newer advisories in Seroval, Sharp, Fastify Static, Find My Way, and `npm-run-all`. Those packages were updated or removed. The final full `pnpm audit` reported no known vulnerabilities.
 
 ## Residual risks and follow-up
 
@@ -69,6 +69,8 @@ The initial production audit reported 27 advisories, including critical/high Bet
 3. **Edge-level slow transfer controls (Medium):** application concurrency and time bounds are now finite, but production should still enforce connection counts, minimum upload/download rates, body limits, and response-idle timeouts at a reverse proxy.
 4. **Nova CSP (Medium hardening):** anti-framing, `nosniff`, referrer, permissions, and sensitive-page cache headers are present. A strict CSP was intentionally not shipped until TanStack hydration scripts are wired to a verified per-request nonce; adding an unconnected nonce would break the application.
 5. **Infrastructure assurance:** TLS termination, firewalling, live database roles, backups, external log redaction, reverse-proxy behavior, and hosted repository controls were outside the repository-only review.
+6. **Database schema parity (Low maintainability):** `Users_rootFolderId_id_fkey` exists in SQL migrations but is not represented in the Drizzle TypeScript schema or snapshot. Reconcile this relationship before a future schema generation or `db:push` workflow.
+7. **Production crawler policy (Deployment-dependent):** the repository blocks training and AI search crawlers and sends `X-Robots-Tag` on file responses. The production Cloudflare configuration currently replaces the API `robots.txt`. Configure the edge to preserve or reproduce the repository rules before deployment verification.
 
 ## Deployment action required
 

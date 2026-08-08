@@ -7,7 +7,7 @@ export type RateLimitBucket = "auth" | "asset_read" | "read" | "mutation";
 const ONE_MINUTE_MS = 60 * 1000;
 const READ_METHODS = new Set(["GET", "HEAD"]);
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const ASSET_READ_PATH_PATTERN = /^\/v1\/files\/[^/]+\/(content|thumbnail)$/;
+const ASSET_READ_PATH_PATTERN = /^\/v1\/files\/[^/]+(?:\/(?:content|thumbnail))?$/;
 
 const RATE_LIMIT_MAX_BY_BUCKET: Record<RateLimitBucket, number> = {
     auth: env.RATE_LIMIT_AUTH_MAX_PER_MINUTE,
@@ -38,7 +38,11 @@ const isAssetReadRequest = (routePath: string, pathname: string, method: string)
         return false;
     }
 
-    if (routePath.endsWith("/files/:fileId/content") || routePath.endsWith("/files/:fileId/thumbnail")) {
+    if (
+        routePath.endsWith("/files/:fileId") ||
+        routePath.endsWith("/files/:fileId/content") ||
+        routePath.endsWith("/files/:fileId/thumbnail")
+    ) {
         return true;
     }
 

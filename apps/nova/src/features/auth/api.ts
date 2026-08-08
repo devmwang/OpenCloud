@@ -140,8 +140,13 @@ const unwrapBetterAuthData = (input: unknown) => {
         return input;
     }
 
-    if ("data" in input) {
-        return (input as BetterAuthResult).data;
+    const result = input as BetterAuthResult;
+    if (result.error) {
+        throw new Error(result.error.message ?? "Session request failed");
+    }
+
+    if ("data" in result) {
+        return result.data;
     }
 
     return input;
@@ -149,7 +154,7 @@ const unwrapBetterAuthData = (input: unknown) => {
 
 const parseSessionPayload = (payload: unknown) => {
     const unwrapped = unwrapBetterAuthData(payload);
-    if (!unwrapped) {
+    if (unwrapped === null || unwrapped === undefined) {
         return null;
     }
 

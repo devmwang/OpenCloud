@@ -49,12 +49,39 @@ const hierarchyLockPlugin: FastifyPluginAsync = fp(async (server) => {
     server.decorateRequest("hierarchyLockClient", null);
     server.decorateRequest("hierarchyLockOwnerId", null);
 
+    let pendingLockCheckouts = 0;
+    const checkedOutClientErrors = new WeakMap<PoolClient, Error>();
+    const checkedOutClientErrorHandlers = new WeakMap<PoolClient, (error: Error) => void>();
+
+    const detachClientErrorHandler = (client: PoolClient) => {
+        const errorHandler = checkedOutClientErrorHandlers.get(client);
+        if (errorHandler) {
+            client.off("error", errorHandler);
+            checkedOutClientErrorHandlers.delete(client);
+        }
+    };
+
     const tryAcquireOwnerHierarchyLock = async (ownerId: string, mode: HierarchyLockMode) => {
-        if (lockPool.idleCount === 0 && lockPool.totalCount >= env.HIERARCHY_LOCK_POOL_MAX) {
+        const availableCheckouts = lockPool.idleCount + Math.max(0, env.HIERARCHY_LOCK_POOL_MAX - lockPool.totalCount);
+        if (pendingLockCheckouts >= availableCheckouts) {
             return null;
         }
 
-        const client = await lockPool.connect();
+        pendingLockCheckouts += 1;
+        let client: PoolClient;
+        try {
+            client = await lockPool.connect();
+        } finally {
+            pendingLockCheckouts -= 1;
+        }
+
+        const clientErrorHandler = (error: Error) => {
+            checkedOutClientErrors.set(client, error);
+            server.log.error({ err: error, ownerId, mode }, "Checked-out hierarchy-lock client failed");
+        };
+        checkedOutClientErrorHandlers.set(client, clientErrorHandler);
+        client.on("error", clientErrorHandler);
+
         try {
             const lockFunction = mode === "shared" ? "pg_try_advisory_lock_shared" : "pg_try_advisory_lock";
             const result = await client.query<{ locked: boolean }>(
@@ -62,17 +89,30 @@ const hierarchyLockPlugin: FastifyPluginAsync = fp(async (server) => {
                 [ownerId, HIERARCHY_LOCK_NAMESPACE],
             );
             if (!result.rows[0]?.locked) {
+                detachClientErrorHandler(client);
+                checkedOutClientErrors.delete(client);
                 client.release();
                 return null;
             }
             return client;
         } catch (error) {
+            detachClientErrorHandler(client);
+            checkedOutClientErrors.delete(client);
             client.release(error instanceof Error ? error : new Error("Hierarchy lock acquisition failed"));
             throw error;
         }
     };
 
     const releaseOwnerHierarchyLock = async (client: PoolClient, ownerId: string, mode: HierarchyLockMode) => {
+        const checkedOutClientError = checkedOutClientErrors.get(client);
+        checkedOutClientErrors.delete(client);
+        detachClientErrorHandler(client);
+
+        if (checkedOutClientError) {
+            client.release(checkedOutClientError);
+            return;
+        }
+
         try {
             const unlockFunction = mode === "shared" ? "pg_advisory_unlock_shared" : "pg_advisory_unlock";
             await client.query(`select ${unlockFunction}(hashtextextended($1, $2))`, [
@@ -81,8 +121,9 @@ const hierarchyLockPlugin: FastifyPluginAsync = fp(async (server) => {
             ]);
             client.release();
         } catch (error) {
-            client.release(error instanceof Error ? error : new Error("Hierarchy lock release failed"));
-            throw error;
+            const releaseError = error instanceof Error ? error : new Error("Hierarchy lock release failed");
+            client.release(releaseError);
+            server.log.error({ err: releaseError, ownerId, mode }, "Failed to release hierarchy lock cleanly");
         }
     };
 

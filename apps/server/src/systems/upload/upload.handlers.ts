@@ -75,6 +75,14 @@ const isUploadFileTooLargeError = (error: unknown) => {
     return "code" in error && error.code === "FST_REQ_FILE_TOO_LARGE";
 };
 
+const isMalformedMultipartError = (error: unknown) => {
+    if (typeof error !== "object" || error === null || !("code" in error)) {
+        return false;
+    }
+
+    return error.code === "ERR_STREAM_PREMATURE_CLOSE";
+};
+
 type UploadContext = {
     ownerId: string;
     folderId: string;
@@ -313,7 +321,11 @@ export async function uploadFileHandler(
         if (isUploadFileTooLargeError(error)) {
             return reply.code(413).send({ message: "File exceeds the upload size limit" });
         }
-        if (clientStatus !== null || (error instanceof Error && error.message === "UNEXPECTED_MULTIPART_PART")) {
+        if (
+            clientStatus !== null ||
+            isMalformedMultipartError(error) ||
+            (error instanceof Error && error.message === "UNEXPECTED_MULTIPART_PART")
+        ) {
             return reply.code(clientStatus ?? 400).send({ message: "Invalid multipart upload" });
         }
 

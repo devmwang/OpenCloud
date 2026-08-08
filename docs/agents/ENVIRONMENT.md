@@ -17,14 +17,14 @@ Server:
 - `COOKIE_URL`: cookie domain
 - `AUTH_SECRET`: signing secret
 - `DATABASE_URL`: Postgres connection string
-- `DATABASE_POOL_MAX`: maximum regular database connections per server process (default `10`)
+- `DATABASE_POOL_MAX`: maximum regular database connections per server process (minimum `2`, default `10`)
 - `HIERARCHY_LOCK_POOL_MAX`: maximum advisory-lock connections per server process (default `10`)
 - `FILE_STORE_PATH`: directory for stored files
 - `SERVER_HOST`: host interface for the API server (default `0.0.0.0`)
 - `SERVER_PORT`: port for the API server (default `8080`)
 - `TRUST_PROXY_HOPS`: number of trusted proxy hops (default `0`)
 - `CONNECTION_TIMEOUT_MS`: idle socket timeout before the request starts (default `120000`)
-- `REQUEST_TIMEOUT_MS`: complete request timeout, including uploads (default `1800000`)
+- `REQUEST_TIMEOUT_MS`: maximum time to receive the full HTTP request, including upload bytes (default `1800000`)
 - `MAX_UPLOAD_SIZE_BYTES`: maximum file upload size (default `1073741824`)
 - `FILE_PURGE_RETENTION_DAYS`: recycle-bin retention window before permanent purge (default `30`)
 - `RATE_LIMIT_AUTH_MAX_PER_MINUTE`: max requests per minute for `/api/auth/*` routes (default `240`)

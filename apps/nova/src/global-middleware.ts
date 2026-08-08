@@ -99,7 +99,10 @@ export const agentFileRedirectMiddleware = createMiddleware().server(async ({ re
     }
 
     const targetUrl = new URL(`/v1/files/${encodeURIComponent(fileId)}/content`, env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL);
-    targetUrl.search = requestUrl.search;
+    const readToken = requestUrl.searchParams.get("readToken");
+    if (readToken) {
+        targetUrl.searchParams.set("readToken", readToken);
+    }
 
     const responseHeaders = new Headers({ location: targetUrl.toString() });
     responseHeaders.set("cache-control", "private, no-store");

@@ -147,7 +147,7 @@ server.get(
             .type("text/plain; charset=utf-8")
             .header("Cache-Control", "public, max-age=86400")
             .send(
-                "User-agent: GPTBot\nDisallow: /v1/files/\n\nUser-agent: ClaudeBot\nDisallow: /v1/files/\n\nUser-agent: *\nAllow: /v1/files/\n",
+                "User-agent: GPTBot\nDisallow: /v1/files/\n\nUser-agent: ClaudeBot\nDisallow: /v1/files/\n\nUser-agent: OAI-SearchBot\nDisallow: /v1/files/\n\nUser-agent: Claude-SearchBot\nDisallow: /v1/files/\n\nUser-agent: *\nAllow: /v1/files/\n",
             );
     },
 );
@@ -166,11 +166,25 @@ server.get(
 );
 
 server.setErrorHandler((error, request, reply) => {
+    const errorObject = typeof error === "object" && error !== null ? error : null;
     const statusCode =
-        typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number"
-            ? error.statusCode
+        errorObject && "statusCode" in errorObject && typeof errorObject.statusCode === "number"
+            ? errorObject.statusCode
             : undefined;
     if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
+        const errorHeaders =
+            errorObject &&
+            "headers" in errorObject &&
+            typeof errorObject.headers === "object" &&
+            errorObject.headers !== null
+                ? (errorObject.headers as Record<string, unknown>)
+                : undefined;
+        const contentRange = errorHeaders?.["content-range"] ?? errorHeaders?.["Content-Range"];
+        if (typeof contentRange === "string") {
+            void reply.header("Content-Range", contentRange);
+        }
+        void reply.header("Cache-Control", "private, no-store");
+        void reply.header("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, noimageindex");
         return reply.code(statusCode).send({
             error: error instanceof Error ? error.name : "Bad Request",
             message: error instanceof Error ? error.message : "The request could not be processed",
