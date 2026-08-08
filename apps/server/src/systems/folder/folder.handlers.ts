@@ -141,32 +141,6 @@ const isFolderPathInSubtree = (folderPath: string, rootPath: string) => {
     return folderPath === rootPath || folderPath.startsWith(`${rootPath}/`);
 };
 
-const collectFolderSubtreeIds = async (server: FastifyInstance, ownerId: string, rootFolderId: string) => {
-    const discovered = new Set<string>([rootFolderId]);
-    let frontier: string[] = [rootFolderId];
-
-    while (frontier.length > 0) {
-        const nextRows = await server.db
-            .select({ id: folders.id })
-            .from(folders)
-            .where(and(eq(folders.ownerId, ownerId), inArray(folders.parentFolderId, frontier)));
-
-        const nextFrontier: string[] = [];
-        for (const row of nextRows) {
-            if (discovered.has(row.id)) {
-                continue;
-            }
-
-            discovered.add(row.id);
-            nextFrontier.push(row.id);
-        }
-
-        frontier = nextFrontier;
-    }
-
-    return Array.from(discovered);
-};
-
 export async function getDetailsHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Params: FolderParams }>,
@@ -796,7 +770,7 @@ export async function batchDeleteItemsHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -816,14 +790,21 @@ export async function batchDeleteItemsHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
                     where child_folder."ownerId" = ${userId}
                 )
                 update "Folders" as folder_row
-                set "deletedAt" = ${deletedAt}
+                set
+                    "deletedAt" = ${deletedAt},
+                    "parentFolderId" = case
+                        when folder_row."id" in (select "id" from root_ids)
+                         and folder_row."parentFolderId" in (select "id" from subtree)
+                        then null
+                        else folder_row."parentFolderId"
+                    end
                 where folder_row."ownerId" = ${userId}
                   and folder_row."deletedAt" is null
                   and folder_row."id" in (select "id" from subtree)
@@ -836,7 +817,7 @@ export async function batchDeleteItemsHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -1019,21 +1000,40 @@ export async function deleteFolderHandler(
     }
 
     const deletedAt = new Date();
-    const subtreeFolderIds = await collectFolderSubtreeIds(this, userId, folderId);
 
-    await this.db.transaction(async (tx) => {
-        await tx
-            .update(files)
-            .set({ deletedAt })
-            .where(and(eq(files.ownerId, userId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)));
-
-        await tx
-            .update(folders)
-            .set({ deletedAt })
-            .where(and(eq(folders.ownerId, userId), inArray(folders.id, subtreeFolderIds), isNull(folders.deletedAt)));
-
-        await tx.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
-    });
+    await this.db.execute(sql`
+        with recursive subtree ("id") as (
+            values (${folderId})
+            union
+            select child_folder."id"
+            from "Folders" as child_folder
+            inner join subtree on child_folder."parentFolderId" = subtree."id"
+            where child_folder."ownerId" = ${userId}
+        ),
+        deleted_files as (
+            update "Files" as file_row
+            set "deletedAt" = ${deletedAt}
+            where file_row."ownerId" = ${userId}
+              and file_row."deletedAt" is null
+              and file_row."parentId" in (select "id" from subtree)
+        ),
+        deleted_folders as (
+            update "Folders" as folder_row
+            set
+                "deletedAt" = ${deletedAt},
+                "parentFolderId" = case
+                    when folder_row."id" = ${folderId}
+                     and folder_row."parentFolderId" in (select "id" from subtree)
+                    then null
+                    else folder_row."parentFolderId"
+                end
+            where folder_row."ownerId" = ${userId}
+              and folder_row."deletedAt" is null
+              and folder_row."id" in (select "id" from subtree)
+        )
+        delete from "DisplayOrders" as display_order
+        where display_order."folderId" in (select "id" from subtree)
+    `);
 
     return reply.code(200).send({
         status: "success",

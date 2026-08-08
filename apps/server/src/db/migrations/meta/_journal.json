@@ -64,6 +64,13 @@
       "when": 1786178551308,
       "tag": "0008_preserve_file_timestamp_on_mime_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786178954400,
+      "tag": "0009_harden_folder_delete_foreign_keys",
+      "breakpoints": true
     }
   ]
 }

@@ -81,7 +81,15 @@ function AdminToolsPage() {
                 olderThanDays: olderThanDaysValue ? Number(olderThanDaysValue) : undefined,
             });
 
-            setPurgeResult(`Purged ${result.purgedFiles} file(s) and ${result.purgedFolders} folder(s).`);
+            if (result.skipped) {
+                setPurgeResult(result.message);
+            } else {
+                const failedOwnerMessage =
+                    result.failedOwners > 0 ? ` Could not purge ${result.failedOwners} owner(s).` : "";
+                setPurgeResult(
+                    `Purged ${result.purgedFiles} file(s) and ${result.purgedFolders} folder(s).${failedOwnerMessage}`,
+                );
+            }
             event.currentTarget.reset();
         } catch (error) {
             setPurgeResult(getErrorMessage(error));
