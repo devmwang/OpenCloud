@@ -109,6 +109,8 @@ export async function getDetailsHandler(
     request: FastifyRequest<{ Params: FileParams; Querystring: FileReadQuery }>,
     reply: FastifyReply,
 ) {
+    void reply.header("Cache-Control", "private, no-store");
+
     const cleanedFileId = request.params.fileId.split(".")[0];
     if (!cleanedFileId) {
         return reply.code(404).send({ message: "File not found" });
@@ -139,17 +141,27 @@ export async function getDetailsHandler(
         return reply;
     }
 
-    return reply.code(200).send({
+    const details = {
         id: file.id,
         name: file.fileName,
         mimeType: file.fileType,
         sizeBytes: file.fileSize,
-        ownerId: file.ownerId,
-        folderId: file.parentId,
-        access: file.fileAccess,
-        createdAt: file.createdAt.toISOString(),
-        updatedAt: file.updatedAt.toISOString(),
-        storageState: file.storageState,
+    };
+
+    if (!request.authenticated || request.user?.id !== file.ownerId) {
+        return reply.code(200).send(details);
+    }
+
+    return reply.code(200).send({
+        ...details,
+        management: {
+            ownerId: file.ownerId,
+            folderId: file.parentId,
+            access: file.fileAccess,
+            createdAt: file.createdAt.toISOString(),
+            updatedAt: file.updatedAt.toISOString(),
+            storageState: file.storageState,
+        },
     });
 }
 

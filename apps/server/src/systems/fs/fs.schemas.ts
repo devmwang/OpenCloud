@@ -18,12 +18,16 @@ const fileDetailsResponseSchema = z.object({
     name: z.string(),
     mimeType: z.string(),
     sizeBytes: z.number().int().nullable(),
-    ownerId: z.string(),
-    folderId: z.string(),
-    access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-    storageState: z.enum(["PENDING", "READY", "FAILED"]),
+    management: z
+        .object({
+            ownerId: z.string(),
+            folderId: z.string(),
+            access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+            createdAt: z.string().datetime(),
+            updatedAt: z.string().datetime(),
+            storageState: z.enum(["PENDING", "READY", "FAILED"]),
+        })
+        .optional(),
 });
 
 const patchFileMoveBodySchema = z

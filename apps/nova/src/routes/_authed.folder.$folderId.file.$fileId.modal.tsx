@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef } from "react";
 
-import { getFileDetails, normalizeFileId } from "@/features/files/api";
+import { getOwnedFileDetails, normalizeFileId } from "@/features/files/api";
 import { PreviewPane } from "@/features/files/components/preview-pane";
 import { getErrorMessage } from "@/lib/errors";
 import { queryKeys } from "@/lib/query-keys";
@@ -40,7 +40,7 @@ function FileModalRoute() {
 
     const detailsQuery = useQuery({
         queryKey: queryKeys.fileDetails(normalizedFileId),
-        queryFn: () => getFileDetails(normalizedFileId),
+        queryFn: () => getOwnedFileDetails(normalizedFileId),
     });
 
     const closeModal = useCallback(async () => {
@@ -182,7 +182,7 @@ function FileModalRoute() {
                                 fileRouteId={fileId}
                                 fileName={detailsQuery.data.name}
                                 fileType={detailsQuery.data.mimeType}
-                                fileAccess={detailsQuery.data.access}
+                                fileAccess={detailsQuery.data.management.access}
                             />
                         </div>
                     ) : null}

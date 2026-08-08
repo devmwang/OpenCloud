@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { getFileDetails } from "@/features/files/api";
+import { getOwnedFileDetails } from "@/features/files/api";
 import { getFolderDetails } from "@/features/folder/api";
 import type { SelectionItem } from "@/features/folder/hooks/use-selection";
 import { queryKeys } from "@/lib/query-keys";
@@ -43,7 +43,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function FileInfoContent({ fileId }: { fileId: string }) {
     const query = useQuery({
         queryKey: queryKeys.fileDetails(fileId),
-        queryFn: () => getFileDetails(fileId),
+        queryFn: () => getOwnedFileDetails(fileId),
     });
 
     if (query.isPending) {
@@ -55,15 +55,16 @@ function FileInfoContent({ fileId }: { fileId: string }) {
     }
 
     const file = query.data;
+    const management = file.management;
 
     return (
         <div className="divide-border divide-y">
             <InfoRow label="Name" value={file.name} />
             <InfoRow label="Type" value={file.mimeType} />
             <InfoRow label="Size" value={formatBytes(file.sizeBytes)} />
-            <InfoRow label="Access" value={file.access} />
-            <InfoRow label="Created" value={formatDate(file.createdAt)} />
-            <InfoRow label="Updated" value={formatDate(file.updatedAt)} />
+            <InfoRow label="Access" value={management.access} />
+            <InfoRow label="Created" value={formatDate(management.createdAt)} />
+            <InfoRow label="Updated" value={formatDate(management.updatedAt)} />
         </div>
     );
 }

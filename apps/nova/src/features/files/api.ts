@@ -4,17 +4,28 @@ import { createCsrfHeaders } from "@/lib/csrf";
 import { stripFileRouteExtension } from "@/lib/file-id";
 import { buildApiUrl, getJson, patchJson } from "@/lib/http";
 
-const fileDetailsSchema = z.object({
+const fileDetailsBaseSchema = z.object({
     id: z.string(),
     name: z.string(),
     mimeType: z.string(),
     sizeBytes: z.number().int().nullable(),
+});
+
+const fileManagementSchema = z.object({
     ownerId: z.string(),
     folderId: z.string(),
     access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     storageState: z.enum(["PENDING", "READY", "FAILED"]),
+});
+
+const fileDetailsSchema = fileDetailsBaseSchema.extend({
+    management: fileManagementSchema.optional(),
+});
+
+const ownedFileDetailsSchema = fileDetailsBaseSchema.extend({
+    management: fileManagementSchema,
 });
 
 const mutateFileResponseSchema = z.object({
@@ -49,6 +60,10 @@ export const getFileDetails = async (
         query: { readToken },
         forwardServerCookies: options?.forwardServerCookies,
     });
+};
+
+export const getOwnedFileDetails = async (fileId: string) => {
+    return getJson(`/v1/files/${encodeURIComponent(fileId)}`, ownedFileDetailsSchema);
 };
 
 export const buildFileContentUrl = (fileRouteId: string, readToken?: string) => {
