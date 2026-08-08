@@ -27,9 +27,9 @@ usage() {
 Usage: $SCRIPT_NAME <command> [options] [mode]
 
 Commands:
-  install     Set up OpenCloud repo, install system units, and start selected mode
-  update      Pull latest from git, pnpm install, build, and restart (uses repo from install)
-  rebuild     pnpm install, build, and restart (no git pull; use after manual git pull)
+  install     Set up repo, frozen install, build, migrate, and start selected mode
+  update      Fast-forward, frozen install, build, migrate, and restart
+  rebuild     Frozen install, build, migrate, and restart (no git pull)
   start       Start the service(s)
   stop        Stop the service(s)
   restart     Restart the service(s)
@@ -290,7 +290,7 @@ check_tools_for_user() {
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
-        die "Missing required tools for user '$user': ${missing[*]}. Install git (if needed), Node.js (>=$MIN_NODE_VERSION), and pnpm (e.g. corepack enable && corepack prepare pnpm@latest --activate)."
+        die "Missing required tools for user '$user': ${missing[*]}. Install git (if needed), Node.js (>=$MIN_NODE_VERSION), and the pnpm version pinned in package.json."
     fi
 }
 
@@ -356,6 +356,50 @@ resolve_pnpm_bin_for_user() {
     fi
 
     echo "$resolved"
+}
+
+run_pnpm_for_user() {
+    local user="$1"
+    local repo_dir="$2"
+    shift 2
+
+    local pnpm_bin repo_dir_q command arg
+    pnpm_bin="$(resolve_pnpm_bin_for_user "$user")"
+    repo_dir_q="$(shell_quote "$repo_dir")"
+    command="$(shell_quote "$pnpm_bin")"
+
+    for arg in "$@"; do
+        command+=" $(shell_quote "$arg")"
+    done
+
+    run_as_user_with_nvm_shell "$user" "cd $repo_dir_q && $command"
+}
+
+check_pnpm_version_for_user() {
+    local user="$1"
+    local repo_dir="$2"
+    local repo_dir_q package_manager expected_version current_version
+
+    repo_dir_q="$(shell_quote "$repo_dir")"
+    if ! package_manager="$(run_as_user_with_nvm_shell "$user" "cd $repo_dir_q && node -p \"require('./package.json').packageManager\"")"; then
+        die "Unable to read packageManager from $repo_dir/package.json."
+    fi
+    if [[ "$package_manager" != pnpm@* ]]; then
+        die "Invalid packageManager in $repo_dir/package.json: $package_manager"
+    fi
+
+    expected_version="${package_manager#pnpm@}"
+    expected_version="${expected_version%%+*}"
+    if [[ -z "$expected_version" ]]; then
+        die "Invalid packageManager in $repo_dir/package.json: $package_manager"
+    fi
+    if ! current_version="$(run_pnpm_for_user "$user" "$repo_dir" --version)"; then
+        die "Unable to determine the pnpm version for user '$user'."
+    fi
+
+    if [[ "$current_version" != "$expected_version" ]]; then
+        die "pnpm $current_version is unsupported for this checkout. Install pnpm $expected_version for user '$user' (for example: corepack prepare pnpm@$expected_version --activate) and rerun."
+    fi
 }
 
 # Write environment file consumed by systemd system units.
@@ -425,7 +469,24 @@ systemctl_system_units() {
     shift
     local units
     units=($(units_for_mode "${1:-both}"))
-    run_root systemctl "$action" "${units[@]}"
+    if ! run_root systemctl "$action" "${units[@]}"; then
+        die "Failed to $action OpenCloud service(s): ${units[*]}. Check: sudo systemctl status ${units[*]}"
+    fi
+}
+
+run_server_migrations() {
+    local repo_dir="$1"
+    local service_user="$2"
+    local pnpm_bin
+
+    echo "Stopping $SERVER_UNIT for database migrations ..."
+    systemctl_system_units stop server
+
+    pnpm_bin="$(resolve_pnpm_bin_for_user "$service_user")"
+    echo "Running server database migrations ..."
+    if ! run_pnpm_for_user "$service_user" "$repo_dir" exec dotenvx run --convention=nextjs -- "$pnpm_bin" --filter server db:migrate; then
+        die "Server database migration failed. $SERVER_UNIT remains stopped."
+    fi
 }
 
 # Install OpenCloud unit files from a repo and reload systemd daemon.
@@ -546,7 +607,7 @@ cmd_install() {
         clone_dir="$PWD/$clone_dir"
     fi
 
-    local required_tools=(node pnpm)
+    local required_tools=(node)
     if [[ -n "$clone_url" ]]; then
         required_tools+=(git)
     fi
@@ -576,7 +637,9 @@ cmd_install() {
             echo "Pulling existing OpenCloud clone at $clone_dir ..."
             local clone_dir_q
             clone_dir_q="$(shell_quote "$clone_dir")"
-            run_as_user_shell "$service_user" "cd $clone_dir_q && git pull"
+            if ! run_as_user_shell "$service_user" "cd $clone_dir_q && git pull --ff-only"; then
+                die "Failed to update the existing OpenCloud clone at $clone_dir. Resolve its Git state and rerun."
+            fi
         else
             echo "Cloning OpenCloud into $clone_dir ..."
             local clone_url_q clone_dir_q
@@ -593,22 +656,29 @@ cmd_install() {
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
 
+    check_tools_for_user "$service_user" pnpm
+    check_pnpm_version_for_user "$service_user" "$repo_dir"
+
     # Install dependencies and build selected targets as the service user.
-    echo "Installing dependencies (pnpm install) ..."
-    local repo_dir_q
-    repo_dir_q="$(shell_quote "$repo_dir")"
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    echo "Installing dependencies (pnpm install --frozen-lockfile) ..."
+    if ! run_pnpm_for_user "$service_user" "$repo_dir" install --frozen-lockfile; then
+        die "Dependency installation failed for $repo_dir."
+    fi
 
     echo "Building selected targets ..."
     case "$mode" in
-        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
+        server) run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=server ;;
+        nova)   run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=nova ;;
+        both)   run_pnpm_for_user "$service_user" "$repo_dir" run build ;;
     esac
 
     # Write env file for systemd units and install unit files.
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
+
+    if [[ "$mode" != "nova" ]]; then
+        run_server_migrations "$repo_dir" "$service_user"
+    fi
 
     # Ensure install mode is authoritative: disable units not selected.
     local other_units=()
@@ -626,7 +696,7 @@ cmd_install() {
     local units
     units=($(units_for_mode "$mode"))
     run_root systemctl enable "${units[@]}"
-    run_root systemctl start "${units[@]}"
+    systemctl_system_units start "$mode"
     echo "Enabled and started: ${units[*]}"
 
     warn_if_legacy_user_units "$service_user"
@@ -674,20 +744,29 @@ cmd_update() {
     repo_dir_q="$(shell_quote "$repo_dir")"
 
     echo "Pulling latest ..."
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && git pull"
+    if ! run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && git pull --ff-only"; then
+        die "Failed to update the OpenCloud repo at $repo_dir. Resolve its Git state and rerun."
+    fi
+    check_pnpm_version_for_user "$service_user" "$repo_dir"
 
-    echo "Installing dependencies (pnpm install) ..."
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    echo "Installing dependencies (pnpm install --frozen-lockfile) ..."
+    if ! run_pnpm_for_user "$service_user" "$repo_dir" install --frozen-lockfile; then
+        die "Dependency installation failed for $repo_dir."
+    fi
 
     echo "Building ..."
     case "$mode" in
-        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
+        server) run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=server ;;
+        nova)   run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=nova ;;
+        both)   run_pnpm_for_user "$service_user" "$repo_dir" run build ;;
     esac
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
+
+    if [[ "$mode" != "nova" ]]; then
+        run_server_migrations "$repo_dir" "$service_user"
+    fi
 
     echo "Restarting $mode ..."
     systemctl_system_units restart "$mode"
@@ -722,24 +801,29 @@ cmd_rebuild() {
 
     check_tools_for_user "$service_user" node pnpm
     check_node_version_for_user "$service_user"
+    check_pnpm_version_for_user "$service_user" "$repo_dir"
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
-    local repo_dir_q
-    repo_dir_q="$(shell_quote "$repo_dir")"
 
-    echo "Installing dependencies (pnpm install) ..."
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    echo "Installing dependencies (pnpm install --frozen-lockfile) ..."
+    if ! run_pnpm_for_user "$service_user" "$repo_dir" install --frozen-lockfile; then
+        die "Dependency installation failed for $repo_dir."
+    fi
 
     echo "Building ..."
     case "$mode" in
-        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
+        server) run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=server ;;
+        nova)   run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=nova ;;
+        both)   run_pnpm_for_user "$service_user" "$repo_dir" run build ;;
     esac
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
+
+    if [[ "$mode" != "nova" ]]; then
+        run_server_migrations "$repo_dir" "$service_user"
+    fi
 
     echo "Restarting $mode ..."
     systemctl_system_units restart "$mode"

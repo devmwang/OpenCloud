@@ -8,7 +8,7 @@ Services are installed under `/etc/systemd/system` and can start at boot.
 - Linux with systemd
 - Root access (`sudo`) for service install/manage commands
 - Node.js `>= 22.12.0` for the service user account
-- [pnpm](https://pnpm.io/) (for example: `corepack enable && corepack prepare pnpm@latest --activate`)
+- [pnpm](https://pnpm.io/) `10.29.3`, as pinned in `package.json` (for example: `corepack enable && corepack prepare pnpm@10.29.3 --activate`)
 - Git (for clone-based install)
 - For **server**: PostgreSQL, `.env` with `DATABASE_URL`, `FILE_STORE_PATH`, and other required variables (see [Environment](../agents/ENVIRONMENT.md))
 
@@ -17,12 +17,11 @@ Services are installed under `/etc/systemd/system` and can start at boot.
 From the OpenCloud repo root (after cloning and configuring `.env`):
 
 ```bash
-# Optional: run database migrations first (server only)
-dotenvx run --convention=nextjs -- pnpm --filter server db:migrate
-
 # Install and start both server and Nova as system services
 sudo ./scripts/linux/opencloud-user-service.sh install
 ```
+
+The script installs from the frozen lockfile. For `server` and `both` modes, it stops the server, applies database migrations, and then starts the selected services.
 
 Or clone and install in one go:
 
@@ -34,17 +33,17 @@ Then open the API at **http://localhost:8080** and Nova at **http://localhost:30
 
 ## Commands
 
-| Command     | Description                                                                                                                                                      |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `install`   | Set up repo (clone or use current dir), install dependencies, build, install systemd system units, start selected mode, and disable non-selected OpenCloud units |
-| `update`    | Pull latest from git, `pnpm install`, build, and restart (uses repo path from install)                                                                           |
-| `rebuild`   | `pnpm install`, build, and restart without pulling (use after a manual `git pull`)                                                                               |
-| `start`     | Start the service(s)                                                                                                                                             |
-| `stop`      | Stop the service(s)                                                                                                                                              |
-| `restart`   | Restart the service(s)                                                                                                                                           |
-| `status`    | Show `systemctl status` for the service(s)                                                                                                                       |
-| `logs`      | Run `journalctl` for the service(s); pass flags like `-f` to follow                                                                                              |
-| `uninstall` | Stop, disable, and remove system units and config                                                                                                                |
+| Command     | Description                                                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install`   | Set up the repo, use the frozen lockfile, build, migrate the stopped server when selected, install units, and start the selected mode          |
+| `update`    | Fast-forward from Git, use the frozen lockfile, build, migrate the stopped server when selected, and restart (uses the repo path from install) |
+| `rebuild`   | Use the frozen lockfile, build, migrate the stopped server when selected, and restart without pulling (use after a manual `git pull`)          |
+| `start`     | Start the service(s)                                                                                                                           |
+| `stop`      | Stop the service(s)                                                                                                                            |
+| `restart`   | Restart the service(s)                                                                                                                         |
+| `status`    | Show `systemctl status` for the service(s)                                                                                                     |
+| `logs`      | Run `journalctl` for the service(s); pass flags like `-f` to follow                                                                            |
+| `uninstall` | Stop, disable, and remove system units and config                                                                                              |
 
 **Mode** (optional, default `both`): `server` | `nova` | `both`
 
@@ -73,7 +72,7 @@ Option 1: script does everything.
 sudo ./scripts/linux/opencloud-user-service.sh update
 ```
 
-This pulls the latest code from git (using the repo path saved at install time), runs `pnpm install`, builds, and restarts the service(s). Add a mode to limit to one app: `update server` or `update nova`.
+This fast-forwards to the latest code from Git (using the repo path saved at install time), runs `pnpm install --frozen-lockfile`, builds, and restarts the service(s). For `server` and `both`, it stops the server and applies migrations before restart. If a migration fails, the server remains stopped. Add a mode to limit the work to one app: `update server` or `update nova`.
 
 Option 2: pull manually, then rebuild.
 
@@ -127,16 +126,16 @@ sudo journalctl -u opencloud-server -u opencloud-nova -f
 
 System units load `nvm` from `%h/.nvm` (for the configured service user) and run with `nvm`'s `default` alias when available. For `pnpm`, units try:
 
-1. `pnpm` on `PATH` (with `PNPM_HOME=%h/.local/share/pnpm` prepended)
-2. `corepack pnpm`
-3. `PNPM_BIN` from `/etc/opencloud/opencloud-service.env` (installer-resolved fallback)
+1. `PNPM_BIN` from `/etc/opencloud/opencloud-service.env` (the installer-validated binary)
+2. `pnpm` on `PATH` (with `PNPM_HOME=%h/.local/share/pnpm` prepended)
+3. `corepack pnpm`
 
 If needed, set the default alias and enable pnpm via corepack:
 
 ```bash
 nvm alias default 22
 corepack enable
-corepack prepare pnpm@latest --activate
+corepack prepare pnpm@10.29.3 --activate
 ```
 
 ### Migrating from older user-level units
@@ -162,4 +161,6 @@ sudo ./scripts/linux/opencloud-user-service.sh install --repo=/new/path/to/OpenC
 The server reads `.env` / `.env.local` from the repo root at runtime. Ensure:
 
 - `OPENCLOUD_REPO_DIR` in `/etc/opencloud/opencloud-service.env` points at the repo that contains your `.env`.
-- You have run migrations: `dotenvx run --convention=nextjs -- pnpm --filter server db:migrate` (from repo root).
+- The database is reachable with the configured `DATABASE_URL`.
+
+The service script applies migrations automatically for `install`, `update`, and `rebuild` in `server` or `both` mode. For other deployment methods, run `dotenvx run --convention=nextjs -- pnpm --filter server db:migrate` from the repo root while the server is stopped.
