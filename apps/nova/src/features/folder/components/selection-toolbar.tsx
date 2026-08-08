@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { env } from "@/env";
-import { buildFileContentUrl } from "@/features/files/api";
+import { buildFileDownloadUrl } from "@/features/files/api";
 import { useSelectedItems, useSelectionActions, type SelectionItem } from "@/features/folder/hooks/use-selection";
 import { toFileRouteId } from "@/lib/file-id";
 
@@ -39,10 +39,9 @@ export function SelectionToolbar({ onDeleteSelection, onShowInfo, onRename, onMo
         const file = selectedFiles[0];
         if (!file) return;
         const fileRouteId = toFileRouteId(file.id, file.name);
-        const url = buildFileContentUrl(fileRouteId);
+        const url = buildFileDownloadUrl(fileRouteId);
         const link = document.createElement("a");
         link.href = url;
-        link.download = file.name;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

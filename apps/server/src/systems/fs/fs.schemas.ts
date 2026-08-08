@@ -11,6 +11,7 @@ const fileParamsSchema = z.object({
 
 const fileReadQuerySchema = z.object({
     readToken: z.string().optional(),
+    download: z.literal("1").optional(),
 });
 
 const fileDetailsResponseSchema = z.object({

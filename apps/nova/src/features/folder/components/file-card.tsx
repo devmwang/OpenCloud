@@ -11,12 +11,13 @@ import { useRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { buildFileThumbnailUrl } from "@/features/files/api";
+import { buildFileThumbnailUrl, canGenerateThumbnail } from "@/features/files/api";
 import { toFileRouteId } from "@/lib/file-id";
 
 type FileCardProps = {
     id: string;
     fileName: string;
+    mimeType: string;
     folderId: string;
     selected?: boolean;
     onClick?: (event: React.MouseEvent | React.KeyboardEvent) => void;
@@ -49,16 +50,11 @@ function getFileIcon(fileName: string): ReactNode {
     return <DocumentIcon className="h-8 w-8" />;
 }
 
-function isImageFile(fileName: string): boolean {
-    return imageExtensions.has(getFileExtensionLower(fileName));
-}
-
-export function FileCard({ id, fileName, folderId, selected, onClick, onContextMenu }: FileCardProps) {
+export function FileCard({ id, fileName, mimeType, folderId, selected, onClick, onContextMenu }: FileCardProps) {
     const router = useRouter();
     const fileRouteId = toFileRouteId(id, fileName);
     const ext = getFileExtension(fileName);
-    const isImage = isImageFile(fileName);
-    const thumbnailUrl = isImage ? buildFileThumbnailUrl(fileRouteId) : null;
+    const thumbnailUrl = canGenerateThumbnail(mimeType) ? buildFileThumbnailUrl(fileRouteId) : null;
 
     const openPreview = () => {
         void router.navigate({

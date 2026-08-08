@@ -49,6 +49,7 @@ const folderContentsPayloadSchema = z.object({
                 id: z.string(),
                 name: z.string(),
                 sizeBytes: z.number().int().nullable(),
+                mimeType: z.string(),
                 createdAt: z.string().datetime(),
             }),
         )
@@ -68,6 +69,7 @@ const folderContentsSchema = folderContentsPayloadSchema.transform((value) => ({
         id: file.id,
         fileName: file.name,
         fileSize: file.sizeBytes,
+        mimeType: file.mimeType,
         createdAt: file.createdAt,
     })),
     limit: value.limit,

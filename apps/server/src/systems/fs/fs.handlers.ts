@@ -1,5 +1,7 @@
+import { stat } from "fs/promises";
 import path from "path";
 
+import contentDisposition from "content-disposition";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import sharp from "sharp";
@@ -9,6 +11,48 @@ import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
 
 import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
+
+const INLINE_IMAGE_MIME_TYPES = new Set([
+    "image/apng",
+    "image/avif",
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/vnd.microsoft.icon",
+    "image/webp",
+    "image/x-icon",
+]);
+
+const THUMBNAIL_MIME_TYPES = new Set([
+    "image/apng",
+    "image/avif",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+]);
+
+const INLINE_MIME_TYPES = new Set([
+    ...INLINE_IMAGE_MIME_TYPES,
+    "application/pdf",
+    "audio/aac",
+    "audio/flac",
+    "audio/mp4",
+    "audio/mpeg",
+    "audio/ogg",
+    "audio/wav",
+    "audio/webm",
+    "audio/x-m4a",
+    "audio/x-wav",
+    "video/mp4",
+    "video/ogg",
+    "video/quicktime",
+    "video/webm",
+    "video/x-m4v",
+]);
+
+const normalizeMimeType = (mimeType: string) => mimeType.replace(/;.*$/u, "").trim().toLowerCase();
 
 const getReadToken = (request: FastifyRequest<{ Querystring: FileReadQuery }>) => {
     const readToken = request.query.readToken;
@@ -182,10 +226,18 @@ export async function getFileHandler(
         return reply;
     }
 
-    void reply.header("Content-Type", fileDetails.fileType);
-    void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
+    const mimeType = normalizeMimeType(fileDetails.fileType);
+    const dispositionType =
+        request.query.download === "1" || !INLINE_MIME_TYPES.has(mimeType) ? "attachment" : "inline";
 
-    return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id);
+    void reply.header("Cache-Control", "private, no-store");
+    void reply.header("Content-Type", mimeType);
+    void reply.header("Content-Disposition", contentDisposition(fileDetails.fileName, { type: dispositionType }));
+
+    return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id, {
+        cacheControl: false,
+        contentType: false,
+    });
 }
 
 export async function getThumbnailHandler(
@@ -217,16 +269,35 @@ export async function getThumbnailHandler(
         return reply;
     }
 
-    if (!fileDetails.fileType.startsWith("image/")) {
+    if (!THUMBNAIL_MIME_TYPES.has(normalizeMimeType(fileDetails.fileType))) {
         return reply.code(415).send({ message: "Unsupported media type" });
     }
 
-    void reply.header("Content-Type", fileDetails.fileType);
-    void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
-
     const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
+
+    if (request.method === "HEAD") {
+        try {
+            await stat(fullFilePath);
+        } catch (error) {
+            if (isMissingFileError(error)) {
+                return reply.code(404).send({ message: "File not found" });
+            }
+
+            throw error;
+        }
+
+        void reply.header("Cache-Control", "private, no-store");
+        void reply.header("Content-Type", "image/webp");
+        void reply.header("Content-Disposition", "inline");
+        return reply.code(200).send();
+    }
+
     try {
-        const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).toBuffer();
+        const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).webp().toBuffer();
+
+        void reply.header("Cache-Control", "private, no-store");
+        void reply.header("Content-Type", "image/webp");
+        void reply.header("Content-Disposition", "inline");
         return reply.send(thumbnailBuffer);
     } catch (error) {
         if (isMissingFileError(error)) {
