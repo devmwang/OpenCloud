@@ -7,11 +7,12 @@ import * as schema from "./schema";
 
 export type Database = NodePgDatabase<typeof schema>;
 
-type CreateDatabaseOptions = {
+type CreatePostgresPoolOptions = {
+    max?: number;
     onPoolError?: (error: Error) => void;
 };
 
-export const createDatabase = (options: CreateDatabaseOptions = {}) => {
+export const createPostgresPool = (options: CreatePostgresPoolOptions = {}) => {
     const pool = new Pool({
         connectionString: env.DATABASE_URL,
         // Remote development databases can silently drop idle sockets.
@@ -20,6 +21,7 @@ export const createDatabase = (options: CreateDatabaseOptions = {}) => {
         keepAliveInitialDelayMillis: 10_000,
         connectionTimeoutMillis: 10_000,
         idleTimeoutMillis: 30_000,
+        ...(options.max === undefined ? {} : { max: options.max }),
     });
 
     pool.on("error", (error: Error) => {
@@ -31,6 +33,12 @@ export const createDatabase = (options: CreateDatabaseOptions = {}) => {
         // Fall back to stderr for non-Fastify callers (scripts/tests).
         console.error("[db] Unhandled pool error", error);
     });
+
+    return pool;
+};
+
+export const createDatabase = (options: CreatePostgresPoolOptions = {}) => {
+    const pool = createPostgresPool(options);
 
     const db = drizzle(pool, { schema });
 

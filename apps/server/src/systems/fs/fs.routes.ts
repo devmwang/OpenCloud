@@ -50,7 +50,9 @@ async function fileSystemRouter(server: FastifyInstance) {
         url: "/files/:fileId",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("fileParamsSchema"),
             body: $ref("patchFileBodySchema"),
@@ -64,7 +66,9 @@ async function fileSystemRouter(server: FastifyInstance) {
         url: "/files/:fileId",
         onRequest: [server.optionalAuthenticate],
         preValidation: [server.authenticate],
-        preHandler: [server.requireCsrf],
+        preHandler: [server.requireCsrf, server.acquireOwnerHierarchyLock],
+        onError: [server.releaseOwnerHierarchyLock],
+        onSend: [server.releaseOwnerHierarchyLock],
         schema: {
             params: $ref("fileParamsSchema"),
             response: { 200: $ref("mutateFileResponseSchema") },

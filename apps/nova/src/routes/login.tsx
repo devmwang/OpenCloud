@@ -5,9 +5,8 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getSessionSafeCached, signInWithUsername } from "@/features/auth/api";
+import { getSessionCached, signInWithUsername } from "@/features/auth/api";
 import { getErrorMessage } from "@/lib/errors";
-import { queryKeys } from "@/lib/query-keys";
 
 const loginSearchSchema = z.object({
     next: z.string().optional(),
@@ -26,9 +25,10 @@ const sanitizeNextPath = (next: string | undefined) => {
 };
 
 export const Route = createFileRoute("/login")({
+    ssr: false,
     validateSearch: loginSearchSchema,
     beforeLoad: async ({ context }) => {
-        const session = await getSessionSafeCached(context.queryClient);
+        const session = await getSessionCached(context.queryClient);
 
         if (session?.user.rootFolderId) {
             throw redirect({
@@ -63,9 +63,8 @@ function LoginPage() {
                 return;
             }
 
-            await queryClient.invalidateQueries({ queryKey: queryKeys.session });
-
-            const session = await getSessionSafeCached(queryClient);
+            queryClient.clear();
+            const session = await getSessionCached(queryClient);
             if (!session?.user.rootFolderId) {
                 setError("Could not load session after login.");
                 return;

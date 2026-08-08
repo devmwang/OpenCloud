@@ -4,7 +4,7 @@ import path from "path";
 import { and, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { displayOrders, files, folders, users } from "@/db/schema";
+import { files, folders, users } from "@/db/schema";
 import { env } from "@/env/env";
 
 import type {
@@ -554,6 +554,48 @@ const getTopLevelDeletedRowsForOwner = async (
         return !deletedFolderIdSet.has(folder.parentFolderId);
     });
 
+    const deletedFoldersById = new Map(normalizedFolders.map((folder) => [folder.id, folder]));
+    const candidateFolderIds = new Set(candidateFolders.map((folder) => folder.id));
+    const cycleRepresentativeIds = new Set<string>();
+    const processedFolderIds = new Set<string>();
+    for (const candidateFolder of candidateFolders) {
+        if (processedFolderIds.has(candidateFolder.id)) {
+            continue;
+        }
+
+        const path: string[] = [];
+        const pathIndexes = new Map<string, number>();
+        let currentFolder: DeletedFolderRow | undefined = candidateFolder;
+
+        while (currentFolder && !processedFolderIds.has(currentFolder.id)) {
+            const cycleStart = pathIndexes.get(currentFolder.id);
+            if (cycleStart !== undefined) {
+                const cycleIds = path.slice(cycleStart);
+                if (cycleIds.every((id) => candidateFolderIds.has(id))) {
+                    cycleRepresentativeIds.add([...cycleIds].sort()[0] ?? currentFolder.id);
+                }
+                break;
+            }
+
+            pathIndexes.set(currentFolder.id, path.length);
+            path.push(currentFolder.id);
+            currentFolder = currentFolder.parentFolderId
+                ? deletedFoldersById.get(currentFolder.parentFolderId)
+                : undefined;
+        }
+
+        for (const folderId of path) {
+            processedFolderIds.add(folderId);
+        }
+    }
+
+    for (const cycleRepresentativeId of cycleRepresentativeIds) {
+        const cycleRepresentative = deletedFoldersById.get(cycleRepresentativeId);
+        if (cycleRepresentative) {
+            topLevelDeletedFolders.push(cycleRepresentative);
+        }
+    }
+
     const deletedFiles =
         options.itemType === "FOLDER"
             ? []
@@ -608,44 +650,68 @@ const permanentlyDeleteFolderSubtree = async (
         return null;
     }
 
-    const subtreeFolderIds = await collectFolderSubtreeIds(server, ownerId, rootFolderId);
+    const subtreeCte = sql`
+        with recursive subtree ("id") as (
+            select folder_row."id"
+            from "Folders" as folder_row
+            where folder_row."id" = ${rootFolderId}
+              and folder_row."ownerId" = ${ownerId}
+            union
+            select child_folder."id"
+            from "Folders" as child_folder
+            inner join subtree on child_folder."parentFolderId" = subtree."id"
+            where child_folder."ownerId" = ${ownerId}
+        )
+    `;
 
-    if (subtreeFolderIds.length === 0) {
-        return { purgedFiles: 0, purgedFolders: 0 };
-    }
-
-    const [activeFolderCount] = await server.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(folders)
-        .where(and(eq(folders.ownerId, ownerId), inArray(folders.id, subtreeFolderIds), isNull(folders.deletedAt)));
-
-    const [activeFileCount] = await server.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(files)
-        .where(and(eq(files.ownerId, ownerId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)));
-
-    if ((activeFolderCount?.count ?? 0) > 0 || (activeFileCount?.count ?? 0) > 0) {
+    const activeCountsResult = (await server.db.execute(sql`
+        ${subtreeCte}
+        select
+            (select count(*)::int
+             from "Folders" as folder_row
+             where folder_row."ownerId" = ${ownerId}
+               and folder_row."id" in (select "id" from subtree)
+               and folder_row."deletedAt" is null) as "activeFolderCount",
+            (select count(*)::int
+             from "Files" as file_row
+             where file_row."ownerId" = ${ownerId}
+               and file_row."parentId" in (select "id" from subtree)
+               and file_row."deletedAt" is null) as "activeFileCount"
+    `)) as { rows?: Array<{ activeFolderCount?: unknown; activeFileCount?: unknown }> };
+    const activeCounts = activeCountsResult.rows?.[0];
+    if (parsePgInteger(activeCounts?.activeFolderCount) > 0 || parsePgInteger(activeCounts?.activeFileCount) > 0) {
         throw new Error("ACTIVE_DESCENDANTS_PRESENT");
     }
 
-    const subtreeFiles = await server.db
-        .select({ id: files.id, ownerId: files.ownerId })
-        .from(files)
-        .where(and(eq(files.ownerId, ownerId), inArray(files.parentId, subtreeFolderIds), isNotNull(files.deletedAt)));
+    const subtreeFilesResult = (await server.db.execute(sql`
+        ${subtreeCte}
+        select file_row."id", file_row."ownerId"
+        from "Files" as file_row
+        where file_row."ownerId" = ${ownerId}
+          and file_row."parentId" in (select "id" from subtree)
+          and file_row."deletedAt" is not null
+    `)) as { rows?: Array<{ id?: unknown; ownerId?: unknown }> };
+    const subtreeFiles = (subtreeFilesResult.rows ?? []).flatMap((row) =>
+        typeof row.id === "string" && typeof row.ownerId === "string" ? [{ id: row.id, ownerId: row.ownerId }] : [],
+    );
 
     const purgedFiles = await hardDeleteFilesByRows(server, subtreeFiles);
 
-    await server.db.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
+    await server.db.execute(sql`
+        ${subtreeCte}
+        delete from "DisplayOrders" as display_order
+        where display_order."folderId" in (select "id" from subtree)
+    `);
 
-    let purgedFolders = 0;
-    for (const folderIdChunk of chunk(subtreeFolderIds, 500)) {
-        const deletedFolders = await server.db
-            .delete(folders)
-            .where(and(eq(folders.ownerId, ownerId), inArray(folders.id, folderIdChunk), isNotNull(folders.deletedAt)))
-            .returning({ id: folders.id });
-
-        purgedFolders += deletedFolders.length;
-    }
+    const deletedFoldersResult = (await server.db.execute(sql`
+        ${subtreeCte}
+        delete from "Folders" as folder_row
+        where folder_row."ownerId" = ${ownerId}
+          and folder_row."deletedAt" is not null
+          and folder_row."id" in (select "id" from subtree)
+        returning folder_row."id"
+    `)) as { rows?: Array<{ id?: unknown }> };
+    const purgedFolders = (deletedFoldersResult.rows ?? []).filter((row) => typeof row.id === "string").length;
 
     return {
         purgedFiles,
@@ -763,16 +829,25 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
             purgedFiles: 0,
             purgedFolders: 0,
         };
+        let skipped = false;
 
         for (const ownerId of ownerIds) {
-            const ownerSummary = await purgeDeletedRowsForOwner(server, ownerId, threshold);
+            const ownerLockResult = await server.tryWithOwnerHierarchyLock(ownerId, () =>
+                purgeDeletedRowsForOwner(server, ownerId, threshold),
+            );
+            if (!ownerLockResult.locked) {
+                skipped = true;
+                continue;
+            }
+
+            const ownerSummary = ownerLockResult.result;
             summary = {
                 purgedFiles: summary.purgedFiles + ownerSummary.purgedFiles,
                 purgedFolders: summary.purgedFolders + ownerSummary.purgedFolders,
             };
         }
 
-        return summary;
+        return { ...summary, skipped };
     });
 
     if (!lockResult.locked || !lockResult.result) {
@@ -788,7 +863,7 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
         olderThanDays: retentionDays,
         purgedFiles: lockResult.result.purgedFiles,
         purgedFolders: lockResult.result.purgedFolders,
-        skipped: false,
+        skipped: lockResult.result.skipped,
     };
 }
 
@@ -1563,7 +1638,7 @@ export async function batchRestoreHandler(
                     subtree ("id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         select "id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt"
                         from root_updates
-                        union all
+                        union
                         select
                             child_folder."id",
                             subtree."rootId",
@@ -1666,7 +1741,7 @@ export async function batchRestoreHandler(
                     subtree ("id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         select "id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt"
                         from root_updates
-                        union all
+                        union
                         select
                             child_folder."id",
                             subtree."rootId",
@@ -1861,7 +1936,7 @@ export async function batchPermanentlyDeleteHandler(
             subtree ("rootId", "id") as (
                 select "rootId", "id"
                 from selected_roots
-                union all
+                union
                 select subtree."rootId", child_folder."id"
                 from "Folders" as child_folder
                 inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -1933,7 +2008,7 @@ export async function batchPermanentlyDeleteHandler(
             subtree ("id") as (
                 select "id"
                 from root_ids
-                union all
+                union
                 select child_folder."id"
                 from "Folders" as child_folder
                 inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -1984,7 +2059,7 @@ export async function batchPermanentlyDeleteHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -2001,7 +2076,7 @@ export async function batchPermanentlyDeleteHandler(
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -2095,8 +2170,11 @@ export async function purgeExpiredHandler(
     const purgeResult = await runPurgeExpired(this, request.body?.olderThanDays);
 
     return reply.code(200).send({
-        status: "success",
-        message: purgeResult.skipped ? "Purge already in progress" : "Expired recycle-bin items purged",
+        status: purgeResult.skipped ? "partial" : "success",
+        message: purgeResult.skipped
+            ? "Purge did not process all eligible owners because another operation was active"
+            : "Expired recycle-bin items purged",
+        deferred: purgeResult.skipped,
         olderThanDays: purgeResult.olderThanDays,
         purgedFiles: purgeResult.purgedFiles,
         purgedFolders: purgeResult.purgedFolders,

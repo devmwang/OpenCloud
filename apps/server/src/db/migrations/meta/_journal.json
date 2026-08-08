@@ -57,6 +57,13 @@
       "when": 1770613200000,
       "tag": "0007_schema_api_refactor",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784275340169,
+      "tag": "0008_harden_folder_delete_foreign_keys",
+      "breakpoints": true
     }
   ]
 }

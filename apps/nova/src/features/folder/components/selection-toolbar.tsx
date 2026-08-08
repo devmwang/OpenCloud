@@ -15,7 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import { env } from "@/env";
 import { buildFileContentUrl } from "@/features/files/api";
 import { useSelectedItems, useSelectionActions, type SelectionItem } from "@/features/folder/hooks/use-selection";
-import { toFileRouteId } from "@/lib/file-id";
+import { buildFilePageUrl, toFileRouteId } from "@/lib/file-id";
 
 type SelectionToolbarProps = {
     onDeleteSelection: (input: { fileIds: string[]; folderIds: string[] }) => Promise<void>;
@@ -53,7 +53,7 @@ export function SelectionToolbar({ onDeleteSelection, onShowInfo, onRename, onMo
         const file = selectedFiles[0];
         if (!file) return;
         const fileRouteId = toFileRouteId(file.id, file.name);
-        const url = `${window.location.origin}/file/${fileRouteId}`;
+        const url = buildFilePageUrl(window.location.origin, fileRouteId);
         await navigator.clipboard.writeText(url);
         addToast("File URL copied to clipboard", "success");
     };

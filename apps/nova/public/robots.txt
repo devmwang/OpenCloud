@@ -1,0 +1,14 @@
+User-agent: GPTBot
+Disallow: /file/
+
+User-agent: ClaudeBot
+Disallow: /file/
+
+User-agent: OAI-SearchBot
+Disallow: /file/
+
+User-agent: Claude-SearchBot
+Disallow: /file/
+
+User-agent: *
+Allow: /file/

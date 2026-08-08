@@ -7,7 +7,7 @@ OpenCloud is a Turborepo monorepo for a self-hosted cloud file server (Fastify A
 - Package manager/workspaces: pnpm (`pnpm-lock.yaml`, `pnpm-workspace.yaml`)
 - Task runner: Turbo (`turbo.json`)
 - Env loader used by root scripts: dotenvx (`package.json` scripts)
-- Node: `>=22.12.0` (`package.json#engines`)
+- Node: `^22.13.0 || >=24.0.0` (`package.json#engines`)
 
 ## Golden path commands (run from repo root)
 

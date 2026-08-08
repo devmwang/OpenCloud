@@ -25,6 +25,7 @@ import authenticationPlugin from "@/utils/authentication";
 import betterAuthPlugin from "@/utils/better-auth";
 import csrfPlugin from "@/utils/csrf";
 import dbPlugin from "@/utils/db";
+import hierarchyLockPlugin from "@/utils/hierarchy-lock";
 import { getRateLimitKey, getRateLimitMax, getRateLimitTimeWindow } from "@/utils/rate-limit";
 
 export const SERVER_HOST = env.SERVER_HOST;
@@ -39,13 +40,29 @@ declare module "fastify" {
 
 // Initialize Fastify Instance
 const server = Fastify({
-    logger: true,
+    logger: {
+        serializers: {
+            req(request) {
+                const queryStart = request.url.indexOf("?");
+                return {
+                    method: request.method,
+                    url: queryStart >= 0 ? request.url.slice(0, queryStart) : request.url,
+                    host: request.hostname,
+                    remoteAddress: request.ip,
+                    ...(request.socket.remotePort !== undefined ? { remotePort: request.socket.remotePort } : {}),
+                };
+            },
+        },
+    },
     trustProxy: env.TRUST_PROXY_HOPS,
+    connectionTimeout: env.CONNECTION_TIMEOUT_MS,
+    requestTimeout: env.REQUEST_TIMEOUT_MS,
 });
 
 const ensureDirectoryExists = (directoryPath: string) => {
     try {
-        fs.mkdirSync(directoryPath, { recursive: true });
+        fs.mkdirSync(directoryPath, { recursive: true, mode: 0o700 });
+        fs.chmodSync(directoryPath, 0o700);
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
             throw error;
@@ -59,8 +76,9 @@ const ensureDirectoryExists = (directoryPath: string) => {
 
 // Register Utility Plugins
 void server.register(dbPlugin);
+void server.register(hierarchyLockPlugin);
 void server.register(FastifyCORS, {
-    origin: [/localhost(?::\d{1,5})?/, /127\.0\.0\.1(?::\d{1,5})?/, env.OPENCLOUD_WEBUI_URL],
+    origin: env.OPENCLOUD_WEBUI_URL,
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
@@ -89,7 +107,11 @@ void server.register(csrfPlugin);
 
 void server.register(FastifyMultipart, {
     limits: {
-        fileSize: 10 * 1024 * 1024 * 1024, // 10 GB
+        files: 1,
+        fields: 0,
+        parts: 1,
+        fieldSize: 16 * 1024,
+        fileSize: env.MAX_UPLOAD_SIZE_BYTES,
     },
 });
 
@@ -113,6 +135,23 @@ void server.register(fileSystemRouter, { prefix: "/v1" });
 void server.register(folderRouter, { prefix: "/v1" });
 void server.register(recycleBinRouter, { prefix: "/v1/recycle-bin" });
 
+server.get(
+    "/robots.txt",
+    {
+        config: {
+            rateLimit: false,
+        },
+    },
+    async (_request, reply) => {
+        return reply
+            .type("text/plain; charset=utf-8")
+            .header("Cache-Control", "public, max-age=86400")
+            .send(
+                "User-agent: GPTBot\nDisallow: /v1/files/\n\nUser-agent: ClaudeBot\nDisallow: /v1/files/\n\nUser-agent: OAI-SearchBot\nDisallow: /v1/files/\n\nUser-agent: Claude-SearchBot\nDisallow: /v1/files/\n\nUser-agent: *\nAllow: /v1/files/\n",
+            );
+    },
+);
+
 // Server Health Check
 server.get(
     "/v1/health",
@@ -125,6 +164,39 @@ server.get(
         return { status: "OK" };
     },
 );
+
+server.setErrorHandler((error, request, reply) => {
+    const errorObject = typeof error === "object" && error !== null ? error : null;
+    const statusCode =
+        errorObject && "statusCode" in errorObject && typeof errorObject.statusCode === "number"
+            ? errorObject.statusCode
+            : undefined;
+    if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
+        const errorHeaders =
+            errorObject &&
+            "headers" in errorObject &&
+            typeof errorObject.headers === "object" &&
+            errorObject.headers !== null
+                ? (errorObject.headers as Record<string, unknown>)
+                : undefined;
+        const contentRange = errorHeaders?.["content-range"] ?? errorHeaders?.["Content-Range"];
+        if (typeof contentRange === "string") {
+            void reply.header("Content-Range", contentRange);
+        }
+        void reply.header("Cache-Control", "private, no-store");
+        void reply.header("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, noimageindex");
+        return reply.code(statusCode).send({
+            error: error instanceof Error ? error.name : "Bad Request",
+            message: error instanceof Error ? error.message : "The request could not be processed",
+        });
+    }
+
+    request.log.error({ err: error }, "Unhandled request error");
+    return reply.code(500).send({
+        error: "Internal Server Error",
+        message: "An unexpected error occurred",
+    });
+});
 
 void (async () => {
     try {

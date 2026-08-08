@@ -147,8 +147,9 @@ const purgeBodySchema = z
     .optional();
 
 const purgeResponseSchema = z.object({
-    status: z.literal("success"),
+    status: z.enum(["success", "partial"]),
     message: z.string(),
+    deferred: z.boolean(),
     olderThanDays: z.number().int(),
     purgedFiles: z.number().int(),
     purgedFolders: z.number().int(),

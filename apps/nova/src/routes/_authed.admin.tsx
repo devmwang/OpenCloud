@@ -81,7 +81,8 @@ function AdminToolsPage() {
                 olderThanDays: olderThanDaysValue ? Number(olderThanDaysValue) : undefined,
             });
 
-            setPurgeResult(`Purged ${result.purgedFiles} file(s) and ${result.purgedFolders} folder(s).`);
+            const purgeSummary = `Purged ${result.purgedFiles} file(s) and ${result.purgedFolders} folder(s).`;
+            setPurgeResult(result.deferred ? `${purgeSummary} ${result.message}` : purgeSummary);
             event.currentTarget.reset();
         } catch (error) {
             setPurgeResult(getErrorMessage(error));

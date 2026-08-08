@@ -140,8 +140,13 @@ const unwrapBetterAuthData = (input: unknown) => {
         return input;
     }
 
-    if ("data" in input) {
-        return (input as BetterAuthResult).data;
+    const result = input as BetterAuthResult;
+    if (result.error) {
+        throw new Error(result.error.message ?? "Session request failed");
+    }
+
+    if ("data" in result) {
+        return result.data;
     }
 
     return input;
@@ -149,13 +154,13 @@ const unwrapBetterAuthData = (input: unknown) => {
 
 const parseSessionPayload = (payload: unknown) => {
     const unwrapped = unwrapBetterAuthData(payload);
-    if (!unwrapped) {
+    if (unwrapped === null || unwrapped === undefined) {
         return null;
     }
 
     const parsed = authSessionSchema.safeParse(unwrapped);
     if (!parsed.success) {
-        return null;
+        throw new Error("Invalid session response");
     }
 
     return parsed.data;
@@ -199,10 +204,10 @@ export const getSessionSafe = async () => {
     }
 };
 
-export const getSessionSafeCached = (queryClient: QueryClient) => {
+export const getSessionCached = (queryClient: QueryClient) => {
     return queryClient.fetchQuery({
         queryKey: queryKeys.session,
-        queryFn: getSessionSafe,
+        queryFn: getSession,
         staleTime: SESSION_QUERY_STALE_TIME_MS,
     });
 };

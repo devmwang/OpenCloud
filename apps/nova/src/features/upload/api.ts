@@ -24,11 +24,11 @@ export const uploadSingleFile = async (input: { parentFolderId: string; file: Fi
 
 export const uploadFileWithToken = async (input: { uploadToken: string; file: File }) => {
     const formData = new FormData();
-    formData.append("uploadToken", input.uploadToken);
     formData.append("file", input.file);
 
     return postMultipart("/v1/files", uploadResponseSchema, {
         body: formData,
         credentials: "omit",
+        headers: { "x-opencloud-upload-token": input.uploadToken },
     });
 };

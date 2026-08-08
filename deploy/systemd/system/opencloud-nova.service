@@ -6,6 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=__OPENCLOUD_SERVICE_USER__
+UMask=0077
+NoNewPrivileges=true
 Environment="NVM_DIR=%h/.nvm"
 Environment="PNPM_HOME=%h/.local/share/pnpm"
 EnvironmentFile=__OPENCLOUD_SERVICE_ENV__

@@ -22,7 +22,7 @@ function formatBytes(bytes: number | null | undefined): string {
     return `${value.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-function formatDate(dateStr: string | undefined): string {
+function formatDate(dateStr: string | null | undefined): string {
     if (!dateStr) return "Unknown";
     try {
         return new Date(dateStr).toLocaleString();

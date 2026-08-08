@@ -8,7 +8,8 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="${0##*/}"
-readonly MIN_NODE_VERSION="22.12.0"
+readonly MIN_NODE_22_VERSION="22.13.0"
+readonly PINNED_PNPM_VERSION="10.33.2"
 readonly DEFAULT_CLONE_URL="https://github.com/devmwang/OpenCloud.git"
 
 readonly OPENCLOUD_SERVICE_ENV="${OPENCLOUD_SERVICE_ENV:-/etc/opencloud/opencloud-service.env}"
@@ -290,7 +291,7 @@ check_tools_for_user() {
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
-        die "Missing required tools for user '$user': ${missing[*]}. Install git (if needed), Node.js (>=$MIN_NODE_VERSION), and pnpm (e.g. corepack enable && corepack prepare pnpm@latest --activate)."
+        die "Missing required tools for user '$user': ${missing[*]}. Install git (if needed), Node.js ^22.13.0 or >=24, and pnpm $PINNED_PNPM_VERSION."
     fi
 }
 
@@ -337,8 +338,23 @@ check_node_version_for_user() {
         die "Unable to determine Node.js version for user '$user'."
     fi
 
-    if ! semver_gte "$node_version" "$MIN_NODE_VERSION"; then
-        die "Node.js $node_version is unsupported for user '$user'. OpenCloud requires Node.js >= $MIN_NODE_VERSION. Upgrade Node.js for '$user' and rerun."
+    local node_major
+    node_major="$(semver_part "${node_version#v}")"
+    if ! { [[ "$node_major" -eq 22 ]] && semver_gte "$node_version" "$MIN_NODE_22_VERSION"; } && [[ "$node_major" -lt 24 ]]; then
+        die "Node.js $node_version is unsupported for user '$user'. OpenCloud requires Node.js ^22.13.0 or >=24. Upgrade Node.js for '$user' and rerun."
+    fi
+}
+
+check_pnpm_version_for_user() {
+    local user="$1"
+    local pnpm_version
+
+    if ! pnpm_version="$(run_as_user_with_nvm_shell "$user" "pnpm --version")"; then
+        die "Unable to determine the pnpm version for user '$user'."
+    fi
+
+    if [[ "$pnpm_version" != "$PINNED_PNPM_VERSION" ]]; then
+        die "pnpm $pnpm_version is unsupported for user '$user'. OpenCloud requires pnpm $PINNED_PNPM_VERSION."
     fi
 }
 
@@ -552,6 +568,7 @@ cmd_install() {
     fi
     check_tools_for_user "$service_user" "${required_tools[@]}"
     check_node_version_for_user "$service_user"
+    check_pnpm_version_for_user "$service_user"
 
     # Resolve repo directory
     if [[ -n "$repo_dir" ]]; then
@@ -593,11 +610,15 @@ cmd_install() {
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
 
+    if [[ -n "$clone_url" ]] && [[ ! -f "$repo_dir/.env" ]] && [[ ! -f "$repo_dir/.env.local" ]]; then
+        die "Clone complete at $repo_dir. Configure $repo_dir/.env or .env.local, then rerun install with --repo=$repo_dir."
+    fi
+
     # Install dependencies and build selected targets as the service user.
     echo "Installing dependencies (pnpm install) ..."
     local repo_dir_q
     repo_dir_q="$(shell_quote "$repo_dir")"
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install --frozen-lockfile"
 
     echo "Building selected targets ..."
     case "$mode" in
@@ -605,6 +626,11 @@ cmd_install() {
         nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
         both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
+
+    if [[ "$mode" != "nova" ]]; then
+        echo "Applying database migrations ..."
+        run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm --filter server db:migrate"
+    fi
 
     # Write env file for systemd units and install unit files.
     write_service_env "$repo_dir" "$service_user"
@@ -639,6 +665,21 @@ cmd_install() {
     echo "  sudo $SCRIPT_NAME logs -f"
 }
 
+migrate_server_database() {
+    local mode="$1"
+    local repo_dir_q="$2"
+    local service_user="$3"
+
+    if [[ "$mode" == "nova" ]]; then
+        return
+    fi
+
+    echo "Stopping the server for database migrations ..."
+    systemctl_system_units stop server
+    echo "Applying database migrations ..."
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm --filter server db:migrate"
+}
+
 cmd_update() {
     local mode="both"
     local mode_set=0
@@ -667,6 +708,7 @@ cmd_update() {
 
     check_tools_for_user "$service_user" git node pnpm
     check_node_version_for_user "$service_user"
+    check_pnpm_version_for_user "$service_user"
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
@@ -677,7 +719,7 @@ cmd_update() {
     run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && git pull"
 
     echo "Installing dependencies (pnpm install) ..."
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install --frozen-lockfile"
 
     echo "Building ..."
     case "$mode" in
@@ -685,6 +727,8 @@ cmd_update() {
         nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
         both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
+
+    migrate_server_database "$mode" "$repo_dir_q" "$service_user"
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
@@ -722,6 +766,7 @@ cmd_rebuild() {
 
     check_tools_for_user "$service_user" node pnpm
     check_node_version_for_user "$service_user"
+    check_pnpm_version_for_user "$service_user"
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
@@ -729,7 +774,7 @@ cmd_rebuild() {
     repo_dir_q="$(shell_quote "$repo_dir")"
 
     echo "Installing dependencies (pnpm install) ..."
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
+    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install --frozen-lockfile"
 
     echo "Building ..."
     case "$mode" in
@@ -737,6 +782,8 @@ cmd_rebuild() {
         nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
         both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
     esac
+
+    migrate_server_database "$mode" "$repo_dir_q" "$service_user"
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"

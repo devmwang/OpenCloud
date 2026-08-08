@@ -1,6 +1,7 @@
 import { DocumentIcon } from "@heroicons/react/24/outline";
 import { useQuery } from "@tanstack/react-query";
 
+import { env } from "@/env";
 import { createReadToken } from "@/features/auth/api";
 import { buildFileContentUrl, normalizeFileId } from "@/features/files/api";
 
@@ -141,6 +142,7 @@ function OfficePreviewPane({
 }) {
     const normalizedFileId = normalizeFileId(fileRouteId);
     const requiresToken = !readToken && fileAccess === "PROTECTED";
+    const officePreviewEnabled = env.NEXT_PUBLIC_OFFICE_ONLINE_PREVIEW_ENABLED;
 
     const readTokenQuery = useQuery({
         queryKey: ["file", "office-preview-read-token", normalizedFileId],
@@ -150,10 +152,26 @@ function OfficePreviewPane({
                 description: "Nova Office preview",
                 expiresAt: new Date(Date.now() + OFFICE_PREVIEW_TOKEN_TTL_MS).toISOString(),
             }),
-        enabled: requiresToken && !import.meta.env.SSR,
+        enabled: officePreviewEnabled && requiresToken && !import.meta.env.SSR,
         retry: false,
         staleTime: 5 * 60 * 1000,
     });
+
+    const source = buildFileContentUrl(fileRouteId, readToken);
+
+    if (!officePreviewEnabled) {
+        return (
+            <div className="preview-shell grid place-items-center p-10">
+                <div className="flex max-w-md flex-col items-center gap-3 text-center">
+                    <p className="text-text text-sm font-medium">Office Online preview is disabled.</p>
+                    <p className="text-text-muted text-sm">
+                        Download the file to view it without sending it to a third-party preview service.
+                    </p>
+                    <ViewToolbar downloadUrl={source} fileName={fileName} />
+                </div>
+            </div>
+        );
+    }
 
     if (requiresToken && (import.meta.env.SSR || readTokenQuery.isPending)) {
         return (
@@ -164,7 +182,7 @@ function OfficePreviewPane({
     }
 
     const resolvedReadToken = readToken ?? readTokenQuery.data?.readToken;
-    const source = buildFileContentUrl(fileRouteId, resolvedReadToken);
+    const resolvedSource = buildFileContentUrl(fileRouteId, resolvedReadToken);
 
     if ((fileAccess === "PRIVATE" && !readToken) || (requiresToken && !resolvedReadToken)) {
         return (
@@ -174,18 +192,18 @@ function OfficePreviewPane({
                     <p className="text-text-muted text-sm">
                         This document needs a public or tokenized URL for Office Online rendering.
                     </p>
-                    <ViewToolbar downloadUrl={source} fileName={fileName} />
+                    <ViewToolbar downloadUrl={resolvedSource} fileName={fileName} />
                 </div>
             </div>
         );
     }
 
-    const officeSource = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(source)}`;
+    const officeSource = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(resolvedSource)}`;
 
     return (
         <div className="preview-shell">
-            <iframe src={officeSource} title="Office File Preview" />
-            <ViewToolbar downloadUrl={source} fileName={fileName} />
+            <iframe src={officeSource} title="Office File Preview" referrerPolicy="no-referrer" />
+            <ViewToolbar downloadUrl={resolvedSource} fileName={fileName} />
         </div>
     );
 }

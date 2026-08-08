@@ -6,7 +6,6 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { getSessionSafe } from "@/features/auth/api";
 import { buildFileContentUrl, getFileDetails, normalizeFileId, type FileDetails } from "@/features/files/api";
 import { PreviewPane } from "@/features/files/components/preview-pane";
 import { moveToRecycleBin } from "@/features/recycle-bin/api";
@@ -45,14 +44,12 @@ export const Route = createFileRoute("/file/$fileId")({
             const file = await getFileDetails(normalizedFileId, deps.readToken, {
                 forwardServerCookies: true,
             });
-            const session = await getSessionSafe();
-
             return {
                 kind: "ok",
                 file,
                 fileRouteId: params.fileId,
                 normalizedFileId,
-                canDelete: session?.user.id === file.ownerId,
+                canDelete: file.canDelete,
                 readToken: deps.readToken,
             } satisfies FileLoaderData;
         } catch (error) {
@@ -71,15 +68,20 @@ export const Route = createFileRoute("/file/$fileId")({
     },
     head: async ({ loaderData, params }) => {
         const title = loaderData?.kind === "ok" ? `OpenCloud - ${loaderData.file.name}` : "OpenCloud - File";
+        const publicFile =
+            loaderData?.kind === "ok" && loaderData.file.access === "PUBLIC" ? loaderData.file : undefined;
+        const contentUrl = publicFile ? buildFileContentUrl(params.fileId) : undefined;
+        const secureContentUrl = contentUrl && new URL(contentUrl).protocol === "https:" ? contentUrl : undefined;
+        const contentType = publicFile?.mimeType;
+        const mediaKind = contentType?.split("/", 1)[0];
         const description =
-            loaderData?.kind === "ok" ? `Preview ${loaderData.file.name} in OpenCloud.` : "OpenCloud file preview";
-
-        const imageUrl = buildFileContentUrl(params.fileId, loaderData?.readToken);
-
+            publicFile && mediaKind
+                ? `Public OpenCloud ${mediaKind} file: ${publicFile.name} (${contentType}).`
+                : loaderData?.kind === "ok"
+                  ? `Preview ${loaderData.file.name} in OpenCloud.`
+                  : "OpenCloud file preview";
         const canonicalBase = await resolveCanonicalBaseUrl();
-        const canonicalPath = `/file/${encodeURIComponent(params.fileId)}${
-            loaderData?.readToken ? `?readToken=${encodeURIComponent(loaderData.readToken)}` : ""
-        }`;
+        const canonicalPath = `/file/${encodeURIComponent(params.fileId)}`;
         const canonicalHref = canonicalBase ? new URL(canonicalPath, canonicalBase).toString() : undefined;
 
         return {
@@ -88,14 +90,52 @@ export const Route = createFileRoute("/file/$fileId")({
                 { name: "description", content: description },
                 { property: "og:title", content: title },
                 { property: "og:description", content: description },
-                { property: "og:type", content: "website" },
-                { property: "og:image", content: imageUrl },
-                { name: "twitter:card", content: "summary_large_image" },
+                { property: "og:type", content: mediaKind === "video" ? "video.other" : "website" },
+                { name: "twitter:card", content: mediaKind === "image" ? "summary_large_image" : "summary" },
                 { name: "twitter:title", content: title },
                 { name: "twitter:description", content: description },
-                { name: "twitter:image", content: imageUrl },
+                ...(contentUrl && contentType && mediaKind === "image"
+                    ? [
+                          { property: "og:image", content: contentUrl },
+                          ...(secureContentUrl ? [{ property: "og:image:secure_url", content: secureContentUrl }] : []),
+                          { property: "og:image:type", content: contentType },
+                          { property: "og:image:alt", content: publicFile.name },
+                          { name: "twitter:image", content: contentUrl },
+                          { name: "twitter:image:alt", content: publicFile.name },
+                      ]
+                    : []),
+                ...(contentUrl && contentType && mediaKind === "video"
+                    ? [
+                          { property: "og:video", content: contentUrl },
+                          ...(secureContentUrl ? [{ property: "og:video:secure_url", content: secureContentUrl }] : []),
+                          { property: "og:video:type", content: contentType },
+                      ]
+                    : []),
+                ...(contentUrl && contentType && mediaKind === "audio"
+                    ? [
+                          { property: "og:audio", content: contentUrl },
+                          ...(secureContentUrl ? [{ property: "og:audio:secure_url", content: secureContentUrl }] : []),
+                          { property: "og:audio:type", content: contentType },
+                      ]
+                    : []),
+                {
+                    name: "robots",
+                    content: "noindex, nofollow, noarchive, nosnippet, noimageindex",
+                },
             ],
-            links: canonicalHref ? [{ rel: "canonical", href: canonicalHref }] : undefined,
+            links: [
+                ...(canonicalHref ? [{ rel: "canonical", href: canonicalHref }] : []),
+                ...(contentUrl && contentType
+                    ? [
+                          {
+                              rel: "alternate",
+                              href: contentUrl,
+                              type: contentType,
+                              title: `Direct file: ${publicFile.name}`,
+                          },
+                      ]
+                    : []),
+            ],
         };
     },
     component: FilePage,
@@ -111,7 +151,7 @@ function FilePage() {
     const deleteMutation = useMutation({
         mutationFn: () => moveToRecycleBin({ itemType: "FILE", itemId: data.normalizedFileId }),
         onSuccess: async () => {
-            if (data.kind === "ok") {
+            if (data.kind === "ok" && data.file.folderId) {
                 await router.navigate({
                     to: "/folder/$folderId",
                     params: { folderId: data.file.folderId },
@@ -137,6 +177,9 @@ function FilePage() {
         );
     }
 
+    const publicContentUrl = data.file.access === "PUBLIC" ? buildFileContentUrl(data.fileRouteId) : undefined;
+    const mediaKind = data.file.mimeType.split("/", 1)[0] || "file";
+
     const handleDelete = async () => {
         if (!data.canDelete) {
             return;
@@ -148,6 +191,18 @@ function FilePage() {
 
     return (
         <main className="bg-root flex min-h-screen flex-col">
+            {publicContentUrl ? (
+                <section className="sr-only" aria-label="Public file details">
+                    <p>
+                        This OpenCloud URL represents a public {mediaKind} file with MIME type {data.file.mimeType}.
+                        Agents and tools can download and analyze the original media using the direct file link.
+                    </p>
+                    <a href={publicContentUrl} type={data.file.mimeType}>
+                        Direct {mediaKind} file: {publicContentUrl}
+                    </a>
+                </section>
+            ) : null}
+
             {/* Top bar */}
             <div className="border-border bg-surface/80 sticky top-0 z-10 border-b backdrop-blur-sm">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
