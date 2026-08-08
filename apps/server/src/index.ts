@@ -39,6 +39,7 @@ declare module "fastify" {
 
 // Initialize Fastify Instance
 const server = Fastify({
+    connectionTimeout: env.SERVER_CONNECTION_TIMEOUT_MS,
     logger: true,
     trustProxy: env.TRUST_PROXY_HOPS,
 });
@@ -89,7 +90,11 @@ void server.register(csrfPlugin);
 
 void server.register(FastifyMultipart, {
     limits: {
+        fields: 1,
+        fieldSize: 8 * 1024,
+        files: 1,
         fileSize: 10 * 1024 * 1024 * 1024, // 10 GB
+        parts: 2,
     },
 });
 

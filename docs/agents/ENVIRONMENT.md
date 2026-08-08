@@ -20,8 +20,11 @@ Server:
 - `FILE_STORE_PATH`: directory for stored files
 - `SERVER_HOST`: host interface for the API server (default `0.0.0.0`)
 - `SERVER_PORT`: port for the API server (default `8080`)
+- `SERVER_CONNECTION_TIMEOUT_MS`: maximum inactive socket time in milliseconds (default `120000`)
 - `TRUST_PROXY_HOPS`: number of trusted proxy hops (default `0`)
 - `FILE_PURGE_RETENTION_DAYS`: recycle-bin retention window before permanent purge (default `30`)
+- `UPLOAD_CONCURRENCY_LIMIT`: maximum active file uploads per server process (default `8`)
+- `THUMBNAIL_CONCURRENCY_LIMIT`: maximum active thumbnail generations per server process (default `4`)
 - `RATE_LIMIT_AUTH_MAX_PER_MINUTE`: max requests per minute for `/api/auth/*` routes (default `240`)
 - `RATE_LIMIT_ASSET_READ_MAX_PER_MINUTE`: max requests per minute for file content/thumbnail reads (default `6000`)
 - `RATE_LIMIT_READ_MAX_PER_MINUTE`: max requests per minute for other read routes (default `3000`)

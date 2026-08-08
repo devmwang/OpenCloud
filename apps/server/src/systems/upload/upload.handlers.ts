@@ -24,6 +24,8 @@ type UploadContext = {
     fileAccess: FileAccess;
 };
 
+let activeUploadCount = 0;
+
 const resolveAuthenticatedUploadContext = async (
     server: FastifyInstance,
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
@@ -190,6 +192,12 @@ export async function uploadFileHandler(
         }
     }
 
+    if (activeUploadCount >= env.UPLOAD_CONCURRENCY_LIMIT) {
+        fileData.file.resume();
+        return reply.header("Retry-After", "1").code(503).send({ message: "Upload capacity is full" });
+    }
+
+    activeUploadCount += 1;
     try {
         const fileRecord = await createFileDetails(
             this.db,
@@ -210,6 +218,8 @@ export async function uploadFileHandler(
     } catch (error) {
         request.log.error({ err: error }, "Upload failed");
         return reply.code(500).send({ message: "Upload failed" });
+    } finally {
+        activeUploadCount -= 1;
     }
 }
 
