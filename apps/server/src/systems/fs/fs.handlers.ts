@@ -10,6 +10,13 @@ import { env } from "@/env/env";
 
 import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
 
+const setUnlistedFileResponseHeaders = (reply: FastifyReply) => {
+    void reply.headers({
+        "Cache-Control": "private, no-store",
+        "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex",
+    });
+};
+
 const getReadToken = (request: FastifyRequest<{ Querystring: FileReadQuery }>) => {
     const readToken = request.query.readToken;
     return typeof readToken === "string" ? readToken : undefined;
@@ -109,6 +116,8 @@ export async function getDetailsHandler(
     request: FastifyRequest<{ Params: FileParams; Querystring: FileReadQuery }>,
     reply: FastifyReply,
 ) {
+    setUnlistedFileResponseHeaders(reply);
+
     const cleanedFileId = request.params.fileId.split(".")[0];
     if (!cleanedFileId) {
         return reply.code(404).send({ message: "File not found" });
@@ -158,6 +167,8 @@ export async function getFileHandler(
     request: FastifyRequest<{ Params: FileParams; Querystring: FileReadQuery }>,
     reply: FastifyReply,
 ) {
+    setUnlistedFileResponseHeaders(reply);
+
     const cleanedFileId = request.params.fileId.split(".")[0];
 
     if (!cleanedFileId) {
@@ -185,7 +196,7 @@ export async function getFileHandler(
     void reply.header("Content-Type", fileDetails.fileType);
     void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
 
-    return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id);
+    return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id, { cacheControl: false });
 }
 
 export async function getThumbnailHandler(
@@ -193,6 +204,8 @@ export async function getThumbnailHandler(
     request: FastifyRequest<{ Params: FileParams; Querystring: FileReadQuery }>,
     reply: FastifyReply,
 ) {
+    setUnlistedFileResponseHeaders(reply);
+
     const cleanedFileId = request.params.fileId.split(".")[0];
 
     if (!cleanedFileId) {

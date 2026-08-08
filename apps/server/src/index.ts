@@ -30,6 +30,13 @@ import { getRateLimitKey, getRateLimitMax, getRateLimitTimeWindow } from "@/util
 export const SERVER_HOST = env.SERVER_HOST;
 export const SERVER_PORT = env.SERVER_PORT;
 
+const ROBOTS_TXT = `User-agent: GPTBot
+Disallow: /v1/files/
+
+User-agent: ClaudeBot
+Disallow: /v1/files/
+`;
+
 // Fastify Types
 declare module "fastify" {
     interface FastifyRequest {
@@ -112,6 +119,16 @@ void server.register(uploadRouter, { prefix: "/v1" });
 void server.register(fileSystemRouter, { prefix: "/v1" });
 void server.register(folderRouter, { prefix: "/v1" });
 void server.register(recycleBinRouter, { prefix: "/v1/recycle-bin" });
+
+server.get(
+    "/robots.txt",
+    {
+        config: {
+            rateLimit: false,
+        },
+    },
+    async (_request, reply) => reply.type("text/plain; charset=utf-8").send(ROBOTS_TXT),
+);
 
 // Server Health Check
 server.get(
