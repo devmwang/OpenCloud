@@ -8,3 +8,7 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - unrs-resolver
+
+overrides:
+  # Drizzle Kit's legacy ESM loader pins a vulnerable esbuild 0.18 release.
+  '@esbuild-kit/core-utils@3.3.2>esbuild': 0.25.12
