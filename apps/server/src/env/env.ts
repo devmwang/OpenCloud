@@ -3,7 +3,68 @@ import path from "node:path";
 
 import dotenvx from "@dotenvx/dotenvx";
 import { createEnv } from "@t3-oss/env-core";
+import { getDomain } from "tldts";
 import { z } from "zod";
+
+const httpOriginSchema = z
+    .string()
+    .url()
+    .transform((value, context) => {
+        const url = new URL(value);
+        if (
+            (url.protocol !== "http:" && url.protocol !== "https:") ||
+            url.username ||
+            url.password ||
+            url.pathname !== "/" ||
+            url.search ||
+            url.hash
+        ) {
+            context.addIssue({
+                code: "custom",
+                message: "Must be an HTTP(S) origin without credentials, a path, a query, or a fragment",
+            });
+            return z.NEVER;
+        }
+
+        return url.origin;
+    });
+
+const cookieDomainSchema = z
+    .string()
+    .trim()
+    .min(1)
+    .transform((input, context) => {
+        const value = input.startsWith(".") ? input.slice(1) : input;
+        let url: URL;
+
+        try {
+            url = new URL(`http://${value}`);
+        } catch {
+            context.addIssue({
+                code: "custom",
+                message: "Must be a hostname without a scheme, port, path, query, or fragment",
+            });
+            return z.NEVER;
+        }
+
+        if (
+            !value ||
+            value.endsWith(".") ||
+            url.hostname !== value.toLowerCase() ||
+            url.port ||
+            url.pathname !== "/" ||
+            url.search ||
+            url.hash
+        ) {
+            context.addIssue({
+                code: "custom",
+                message: "Must be a hostname without a scheme, port, path, query, or fragment",
+            });
+            return z.NEVER;
+        }
+
+        return url.hostname;
+    });
 
 const findEnvFile = (fileName: string) => {
     let currentDir = process.cwd();
@@ -35,11 +96,11 @@ if (envPaths.length > 0) {
     });
 }
 
-export const env = createEnv({
+const parsedEnv = createEnv({
     server: {
-        OPENCLOUD_WEBUI_URL: z.string(),
-        NEXT_PUBLIC_OPENCLOUD_SERVER_URL: z.string().url(),
-        COOKIE_URL: z.string(),
+        OPENCLOUD_WEBUI_URL: httpOriginSchema,
+        NEXT_PUBLIC_OPENCLOUD_SERVER_URL: httpOriginSchema,
+        COOKIE_URL: cookieDomainSchema.optional(),
         AUTH_SECRET: z.string(),
         DATABASE_URL: z.string().url(),
         FILE_STORE_PATH: z.string(),
@@ -61,3 +122,40 @@ export const env = createEnv({
 
     emptyStringAsUndefined: true,
 });
+
+const webUrl = new URL(parsedEnv.OPENCLOUD_WEBUI_URL);
+const apiUrl = new URL(parsedEnv.NEXT_PUBLIC_OPENCLOUD_SERVER_URL);
+
+if (webUrl.protocol !== apiUrl.protocol) {
+    throw new Error("Nova and API origins must use the same protocol");
+}
+
+const isSameHostname = webUrl.hostname === apiUrl.hostname;
+
+if (isSameHostname) {
+    if (parsedEnv.COOKIE_URL && parsedEnv.COOKIE_URL !== webUrl.hostname) {
+        throw new Error("COOKIE_URL must match the shared Nova and API hostname");
+    }
+} else {
+    const cookieDomain = parsedEnv.COOKIE_URL;
+    if (!cookieDomain) {
+        throw new Error("COOKIE_URL is required when Nova and the API use different hostnames");
+    }
+
+    const isDirectSubdomain = (hostname: string) => {
+        const suffix = `.${cookieDomain}`;
+        const prefix = hostname.endsWith(suffix) ? hostname.slice(0, -suffix.length) : "";
+        return prefix.length > 0 && !prefix.includes(".");
+    };
+
+    if (
+        getDomain(cookieDomain, { allowPrivateDomains: true }) === null ||
+        !isDirectSubdomain(webUrl.hostname) ||
+        !isDirectSubdomain(apiUrl.hostname)
+    ) {
+        throw new Error("COOKIE_URL must be a valid non-public-suffix parent of direct Nova and API subdomains");
+    }
+}
+
+export const env = parsedEnv;
+export const crossSubDomainCookiesEnabled = !isSameHostname;

@@ -41,7 +41,7 @@ Create a Vercel project with root directory set to `apps/nova`. Use the Nitro bu
 Also configure the backend server so Nova can authenticate successfully:
 
 - `OPENCLOUD_WEBUI_URL` must include your deployed Nova origin for CORS and trusted origins.
-- `COOKIE_URL` must match your cookie domain strategy.
+- If Nova and the API use different hostnames, assign custom direct sibling hostnames to them and set `COOKIE_URL` to their parent. For example, use `app.opencloud.example.com`, `api.opencloud.example.com`, and `opencloud.example.com`. A default Vercel hostname and an unrelated API hostname are not supported. See [Environment and configuration](docs/agents/ENVIRONMENT.md).
 
 #### Option 2: Local Self-Hosting
 

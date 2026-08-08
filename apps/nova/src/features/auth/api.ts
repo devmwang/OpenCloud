@@ -29,7 +29,7 @@ const authInfoSchema = userSchema.extend({
 });
 
 const createUserInputSchema = z.object({
-    username: z.string().min(3),
+    username: z.string().min(3).max(255),
     password: z.string().min(8),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
@@ -128,39 +128,6 @@ export type CreateReadTokenInput = z.infer<typeof createReadTokenInputSchema>;
 export type AccessRuleSummary = z.infer<typeof accessRuleSummarySchema>;
 export type UploadTokenSummary = z.infer<typeof uploadTokenSummarySchema>;
 
-type BetterAuthResult = {
-    data?: unknown;
-    error?: {
-        message?: string;
-    } | null;
-};
-
-const unwrapBetterAuthData = (input: unknown) => {
-    if (!input || typeof input !== "object") {
-        return input;
-    }
-
-    if ("data" in input) {
-        return (input as BetterAuthResult).data;
-    }
-
-    return input;
-};
-
-const parseSessionPayload = (payload: unknown) => {
-    const unwrapped = unwrapBetterAuthData(payload);
-    if (!unwrapped) {
-        return null;
-    }
-
-    const parsed = authSessionSchema.safeParse(unwrapped);
-    if (!parsed.success) {
-        return null;
-    }
-
-    return parsed.data;
-};
-
 const getServerCookieHeader = () => {
     if (!import.meta.env.SSR) {
         return undefined;
@@ -175,7 +142,7 @@ const SESSION_QUERY_STALE_TIME_MS = 60_000;
 export const getSession = async () => {
     const cookieHeader = getServerCookieHeader();
 
-    const payload = await authClient.getSession({
+    const result = await authClient.getSession({
         query: {
             disableCookieCache: true,
         },
@@ -188,29 +155,29 @@ export const getSession = async () => {
             : undefined,
     });
 
-    return parseSessionPayload(payload);
-};
+    if (result.error) {
+        throw new Error(result.error.message ?? "Failed to load session");
+    }
 
-export const getSessionSafe = async () => {
-    try {
-        return await getSession();
-    } catch {
+    if (result.data === null) {
         return null;
     }
+
+    return authSessionSchema.parse(result.data);
 };
 
-export const getSessionSafeCached = (queryClient: QueryClient) => {
+export const getSessionCached = (queryClient: QueryClient) => {
     return queryClient.fetchQuery({
         queryKey: queryKeys.session,
-        queryFn: getSessionSafe,
+        queryFn: getSession,
         staleTime: SESSION_QUERY_STALE_TIME_MS,
     });
 };
 
 export const signInWithUsername = async (username: string, password: string) => {
-    const result = (await authClient.signIn.username({ username, password })) as BetterAuthResult;
+    const result = await authClient.signIn.username({ username, password });
 
-    if (result?.error) {
+    if (result.error) {
         return {
             success: false,
             error: result.error.message ?? "Invalid username or password",
@@ -223,9 +190,9 @@ export const signInWithUsername = async (username: string, password: string) => 
 };
 
 export const signOut = async () => {
-    const result = (await authClient.signOut()) as BetterAuthResult;
+    const result = await authClient.signOut();
 
-    if (result?.error) {
+    if (result.error) {
         throw new Error(result.error.message ?? "Failed to sign out");
     }
 };

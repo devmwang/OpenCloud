@@ -14,7 +14,7 @@ Working directory: repo root.
 Server:
 
 - `OPENCLOUD_WEBUI_URL`: allowed frontend origin for CORS and trusted origins (legacy variable name; set to the Nova origin)
-- `COOKIE_URL`: cookie domain
+- `COOKIE_URL`: optional when Nova and the API use one hostname; otherwise, the valid non-public-suffix parent of their direct subdomains; an optional leading dot is accepted and removed
 - `AUTH_SECRET`: signing secret
 - `DATABASE_URL`: Postgres connection string
 - `FILE_STORE_PATH`: directory for stored files
@@ -31,3 +31,5 @@ Web frontend (Nova):
 
 - `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by Nova and by the Server for Better Auth `baseURL`)
 - `OPENCLOUD_WEBUI_URL`: canonical public frontend origin (legacy variable name retained for compatibility) used by the Server and Nova canonical URL fallback
+
+Nova and the API origins must both use HTTP or both use HTTPS. When they use the same hostname, omit `COOKIE_URL` or set it to that exact hostname. OpenCloud uses a host-only session cookie in this mode, which supports `localhost` and IP addresses. When the hostnames differ, each one must be a direct subdomain of `COOKIE_URL`, and `COOKIE_URL` must be a valid domain that is not a public suffix. For example, use `opencloud.example.com` for `app.opencloud.example.com` and `api.opencloud.example.com`. Do not include a scheme, port, path, query, or fragment.

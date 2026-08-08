@@ -5,7 +5,7 @@ import { username } from "better-auth/plugins";
 
 import type { Database } from "@/db";
 import { accounts, sessions, users, verifications } from "@/db/schema";
-import { env } from "@/env/env";
+import { crossSubDomainCookiesEnabled, env } from "@/env/env";
 
 const usernamePlugin = username({
     usernameNormalization: false,
@@ -35,7 +35,7 @@ export const createAuth = (db: Database) =>
         user: {
             modelName: "Users",
             additionalFields: {
-                rootFolderId: { type: "string", required: false, input: false },
+                rootFolderId: { type: "string", required: true, input: false },
                 firstName: { type: "string", required: false, input: false },
                 lastName: { type: "string", required: false, input: false },
             },
@@ -54,10 +54,9 @@ export const createAuth = (db: Database) =>
         plugins: [usernamePlugin],
         disabledPaths: ["/sign-up/email", "/sign-in/email"],
         advanced: {
-            crossSubDomainCookies: {
-                enabled: true,
-                domain: env.COOKIE_URL,
-            },
+            crossSubDomainCookies: env.COOKIE_URL
+                ? { enabled: crossSubDomainCookiesEnabled, domain: env.COOKIE_URL }
+                : { enabled: false },
         },
     });
 

@@ -9,7 +9,8 @@ const userBase = {
             required_error: "Username is required",
             invalid_type_error: "Username must be a string",
         })
-        .min(3, { message: "Username must be 3 or more characters long" }),
+        .min(3, { message: "Username must be 3 or more characters long" })
+        .max(255, { message: "Username must be 255 or fewer characters long" }),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
 };
