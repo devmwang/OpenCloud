@@ -17,6 +17,7 @@ import { env } from "@/env/env";
 import type { UploadFileQuerystring } from "./upload.schemas";
 
 const pump = util.promisify(pipeline);
+type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 type UploadContext = {
     ownerId: string;
@@ -191,14 +192,34 @@ export async function uploadFileHandler(
     }
 
     try {
-        const fileRecord = await createFileDetails(
-            this.db,
-            fileData.filename,
-            fileData.mimetype,
-            uploadContext.ownerId,
-            uploadContext.folderId,
-            uploadContext.fileAccess,
-        );
+        const fileRecord = await this.db.transaction(async (tx) => {
+            const [activeParent] = await tx
+                .select({ id: folders.id })
+                .from(folders)
+                .where(
+                    and(
+                        eq(folders.id, uploadContext.folderId),
+                        eq(folders.ownerId, uploadContext.ownerId),
+                        isNull(folders.deletedAt),
+                    ),
+                )
+                .for("share")
+                .limit(1);
+
+            if (!activeParent) {
+                throw new Error("PARENT_FOLDER_NOT_FOUND");
+            }
+
+            const record = await createFileDetails(
+                tx,
+                fileData.filename,
+                fileData.mimetype,
+                uploadContext.ownerId,
+                uploadContext.folderId,
+                uploadContext.fileAccess,
+            );
+            return record;
+        });
 
         await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file);
 
@@ -208,13 +229,20 @@ export async function uploadFileHandler(
             storageState: "READY",
         });
     } catch (error) {
+        if (error instanceof Error && error.message === "PARENT_FOLDER_NOT_FOUND") {
+            return reply.code(404).send({ message: "Parent folder not found" });
+        }
+        if (error instanceof Error && error.message === "UPLOAD_INVALIDATED") {
+            return reply.code(409).send({ message: "Upload conflicted with a folder change" });
+        }
+
         request.log.error({ err: error }, "Upload failed");
         return reply.code(500).send({ message: "Upload failed" });
     }
 }
 
 async function createFileDetails(
-    db: Database,
+    db: DatabaseTransaction,
     fileName: string,
     fileType: string,
     ownerId: string,
@@ -250,7 +278,7 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
         await pump(file, fs.createWriteStream(filePath));
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
 
-        await db
+        const [readyFile] = await db
             .update(files)
             .set({
                 fileSize: sizeInBytes,
@@ -258,7 +286,12 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
                 storageError: null,
                 storageVerifiedAt: new Date(),
             })
-            .where(eq(files.id, fileId));
+            .where(and(eq(files.id, fileId), isNull(files.deletedAt)))
+            .returning({ id: files.id });
+
+        if (!readyFile) {
+            throw new Error("UPLOAD_INVALIDATED");
+        }
     } catch (error) {
         try {
             await fs.promises.unlink(filePath);
