@@ -614,7 +614,12 @@ require_legacy_user_units_disabled_and_stopped() {
 
             err "Legacy user-level OpenCloud service '$unit' must be disabled and fully stopped for user '$user'."
             err "Current states: unit-file=${unit_file_state:-unknown}, active=${active_state:-unknown}."
-            err "Run this command before you retry:"
+            if [[ "$unit_file_state" == "masked-runtime" ]]; then
+                err "Run these commands before you retry:"
+                err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user unmask --runtime $unit"
+            else
+                err "Run this command before you retry:"
+            fi
             err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now $unit"
             exit 1
         done
