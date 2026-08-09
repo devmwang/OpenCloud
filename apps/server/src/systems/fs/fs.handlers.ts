@@ -7,7 +7,7 @@ import sharp from "sharp";
 import { fileReadTokens } from "@/db/schema/auth";
 import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
-import { isMissingStoredFileError, UNKNOWN_MIME_TYPE, verifyStoredMimeType } from "@/utils/stored-mime";
+import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 
 import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
 
@@ -89,6 +89,44 @@ const ensureFileReadable = (
     return false;
 };
 
+const isMissingFileError = (error: unknown) => {
+    if (typeof error === "object" && error !== null && "code" in error) {
+        const errorCode = (error as NodeJS.ErrnoException).code;
+        if (errorCode === "ENOENT") {
+            return true;
+        }
+    }
+
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    const normalizedMessage = error.message.toLowerCase();
+    return normalizedMessage.includes("input file is missing") || normalizedMessage.includes("no such file");
+};
+
+const verifyStoredMimeType = async (
+    server: FastifyInstance,
+    file: Pick<typeof files.$inferSelect, "id" | "ownerId" | "fileType">,
+) => {
+    const filePath = path.join(env.FILE_STORE_PATH, file.ownerId, file.id);
+
+    try {
+        const mimeType = await detectStoredMimeType(filePath);
+        if (mimeType !== file.fileType) {
+            await server.db.update(files).set({ fileType: mimeType }).where(eq(files.id, file.id));
+        }
+
+        return mimeType;
+    } catch (error) {
+        if (isMissingFileError(error)) {
+            return null;
+        }
+
+        throw error;
+    }
+};
+
 export async function getDetailsHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Params: FileParams; Querystring: FileReadQuery }>,
@@ -126,8 +164,8 @@ export async function getDetailsHandler(
 
     let mimeType = UNKNOWN_MIME_TYPE;
     if (file.storageState === "READY") {
-        const verifiedMimeType = await verifyStoredMimeType(this.db, file);
-        if (verifiedMimeType === null) {
+        const verifiedMimeType = await verifyStoredMimeType(this, file);
+        if (!verifiedMimeType) {
             return reply.code(404).send({ message: "File not found" });
         }
         mimeType = verifiedMimeType;
@@ -176,8 +214,8 @@ export async function getFileHandler(
         return reply;
     }
 
-    const mimeType = await verifyStoredMimeType(this.db, fileDetails);
-    if (mimeType === null) {
+    const mimeType = await verifyStoredMimeType(this, fileDetails);
+    if (!mimeType) {
         return reply.code(404).send({ message: "File not found" });
     }
 
@@ -216,8 +254,8 @@ export async function getThumbnailHandler(
         return reply;
     }
 
-    const mimeType = await verifyStoredMimeType(this.db, fileDetails);
-    if (mimeType === null) {
+    const mimeType = await verifyStoredMimeType(this, fileDetails);
+    if (!mimeType) {
         return reply.code(404).send({ message: "File not found" });
     }
 
@@ -233,7 +271,7 @@ export async function getThumbnailHandler(
         const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).toBuffer();
         return reply.send(thumbnailBuffer);
     } catch (error) {
-        if (isMissingStoredFileError(error)) {
+        if (isMissingFileError(error)) {
             return reply.code(404).send({ message: "File not found" });
         }
 
