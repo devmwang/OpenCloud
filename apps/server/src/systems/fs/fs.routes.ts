@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import type { FastifyInstance } from "fastify";
 
+import { env } from "@/env/env";
+
 import {
     deleteFileHandler,
     getDetailsHandler,
@@ -26,7 +28,19 @@ async function fileSystemRouter(server: FastifyInstance) {
     server.route({
         method: "GET",
         url: "/files/:fileId/content",
-        onRequest: [server.optionalAuthenticate],
+        onRequest: [
+            server.optionalAuthenticate,
+            (request, _reply, done) => {
+                request.raw.setTimeout(env.SERVER_CONNECTION_TIMEOUT_MS);
+                done();
+            },
+        ],
+        onResponse: [
+            (request, _reply, done) => {
+                request.raw.setTimeout(0);
+                done();
+            },
+        ],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),

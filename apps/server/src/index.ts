@@ -39,7 +39,6 @@ declare module "fastify" {
 
 // Initialize Fastify Instance
 const server = Fastify({
-    connectionTimeout: env.SERVER_CONNECTION_TIMEOUT_MS,
     logger: true,
     trustProxy: env.TRUST_PROXY_HOPS,
 });
