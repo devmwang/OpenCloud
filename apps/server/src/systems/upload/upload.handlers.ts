@@ -18,6 +18,57 @@ import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 import type { UploadFileQuerystring } from "./upload.schemas";
 
 const pump = util.promisify(pipeline);
+const MAX_ACTIVE_UPLOADS = 8;
+const MAX_ACTIVE_UPLOADS_PER_OWNER = 2;
+
+let activeUploads = 0;
+const activeUploadsByOwner = new Map<string, number>();
+
+const reserveUploadSlot = (ownerId: string) => {
+    const ownerActiveUploads = activeUploadsByOwner.get(ownerId) ?? 0;
+    if (activeUploads >= MAX_ACTIVE_UPLOADS || ownerActiveUploads >= MAX_ACTIVE_UPLOADS_PER_OWNER) {
+        return null;
+    }
+
+    activeUploads += 1;
+    activeUploadsByOwner.set(ownerId, ownerActiveUploads + 1);
+
+    return () => {
+        activeUploads -= 1;
+        const remainingOwnerUploads = (activeUploadsByOwner.get(ownerId) ?? 1) - 1;
+        if (remainingOwnerUploads === 0) {
+            activeUploadsByOwner.delete(ownerId);
+        } else {
+            activeUploadsByOwner.set(ownerId, remainingOwnerUploads);
+        }
+    };
+};
+
+class InvalidMultipartUploadError extends Error {
+    constructor(readonly statusCode = 400) {
+        super("INVALID_MULTIPART_UPLOAD");
+    }
+}
+
+class UploadFileTooLargeError extends Error {
+    readonly statusCode = 413;
+
+    constructor() {
+        super("UPLOAD_FILE_TOO_LARGE");
+    }
+}
+
+const getMultipartStatusCode = (error: unknown) => {
+    if (error instanceof Error && "statusCode" in error && typeof error.statusCode === "number") {
+        return error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : null;
+    }
+
+    if (error instanceof Error && error.message.includes("terminated early")) {
+        return 400;
+    }
+
+    return null;
+};
 
 type UploadContext = {
     ownerId: string;
@@ -130,7 +181,7 @@ const resolveTokenUploadContext = async (
 const resolveUploadContext = async (
     server: FastifyInstance,
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
-    uploadTokenValue: string | null,
+    uploadTokenValue: string | undefined,
 ) => {
     if (request.authenticated && request.query.folderId) {
         const context = await resolveAuthenticatedUploadContext(server, request);
@@ -155,20 +206,14 @@ export async function uploadFileHandler(
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
     reply: FastifyReply,
 ) {
-    const fileData = await request.file();
-
-    if (!fileData) {
-        return reply.code(400).send({ message: "No file provided" });
-    }
-
-    const uploadTokenField = fileData.fields["uploadToken"];
-    const uploadTokenValue =
-        uploadTokenField && "value" in uploadTokenField ? (uploadTokenField.value as string) : null;
+    const uploadTokenHeader = request.headers["x-opencloud-upload-token"];
+    const uploadTokenValue = typeof uploadTokenHeader === "string" ? uploadTokenHeader : undefined;
 
     let uploadContext: UploadContext;
     try {
         uploadContext = await resolveUploadContext(this, request, uploadTokenValue);
     } catch (error) {
+        void reply.header("Connection", "close");
         const message = error instanceof Error ? error.message : "UPLOAD_CONTEXT_ERROR";
         switch (message) {
             case "MISSING_FOLDER_ID":
@@ -191,16 +236,56 @@ export async function uploadFileHandler(
         }
     }
 
-    try {
-        const fileRecord = await createFileDetails(
-            this.db,
-            fileData.filename,
-            uploadContext.ownerId,
-            uploadContext.folderId,
-            uploadContext.fileAccess,
-        );
+    if (request.raw.destroyed) {
+        return;
+    }
 
-        await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file);
+    const releaseUploadSlot = reserveUploadSlot(uploadContext.ownerId);
+    if (!releaseUploadSlot) {
+        void reply.header("Retry-After", "5");
+        void reply.header("Connection", "close");
+        return reply.code(503).send({ message: "Upload capacity is currently full" });
+    }
+
+    let file: BusboyFileStream | undefined;
+    try {
+        const parts = request.parts();
+        let firstPart: Awaited<ReturnType<typeof parts.next>>;
+        try {
+            firstPart = await parts.next();
+        } catch (error) {
+            throw new InvalidMultipartUploadError(getMultipartStatusCode(error) ?? 400);
+        }
+
+        if (firstPart.done || firstPart.value.type !== "file") {
+            throw new InvalidMultipartUploadError();
+        }
+
+        const fileData = firstPart.value;
+        file = fileData.file;
+        const fileRecord = await createPendingFile(this.db, fileData.filename, uploadContext);
+        if (!fileRecord) {
+            fileData.file.destroy();
+            void reply.header("Connection", "close");
+            return reply.code(409).send({ message: "Upload parent folder is no longer available" });
+        }
+
+        await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file, async () => {
+            if (fileData.file.truncated) {
+                throw new UploadFileTooLargeError();
+            }
+
+            let trailingPart: Awaited<ReturnType<typeof parts.next>>;
+            try {
+                trailingPart = await parts.next();
+            } catch (error) {
+                throw new InvalidMultipartUploadError(getMultipartStatusCode(error) ?? 400);
+            }
+
+            if (!trailingPart.done) {
+                throw new InvalidMultipartUploadError();
+            }
+        });
 
         return reply.code(201).send({
             id: fileRecord.id,
@@ -208,45 +293,85 @@ export async function uploadFileHandler(
             storageState: "READY",
         });
     } catch (error) {
+        if (file && !file.readableEnded) {
+            file.destroy();
+        }
+
+        const multipartStatusCode = getMultipartStatusCode(error);
+        if (multipartStatusCode) {
+            void reply.header("Connection", "close");
+            return reply.code(multipartStatusCode).send({ message: "Invalid multipart upload" });
+        }
+
         request.log.error({ err: error }, "Upload failed");
+        void reply.header("Connection", "close");
         return reply.code(500).send({ message: "Upload failed" });
+    } finally {
+        releaseUploadSlot();
     }
 }
 
-async function createFileDetails(
+async function createPendingFile(db: Database, fileName: string, uploadContext: UploadContext) {
+    return db.transaction(async (tx) => {
+        const [parentFolder] = await tx
+            .select({ id: folders.id })
+            .from(folders)
+            .where(
+                and(
+                    eq(folders.id, uploadContext.folderId),
+                    eq(folders.ownerId, uploadContext.ownerId),
+                    isNull(folders.deletedAt),
+                ),
+            )
+            .for("share")
+            .limit(1);
+
+        if (!parentFolder) {
+            return null;
+        }
+
+        const [fileDetails] = await tx
+            .insert(files)
+            .values({
+                fileName,
+                fileType: UNKNOWN_MIME_TYPE,
+                ownerId: uploadContext.ownerId,
+                fileAccess: uploadContext.fileAccess,
+                parentId: parentFolder.id,
+                storageState: "PENDING",
+                storageError: null,
+                storageVerifiedAt: null,
+            })
+            .returning({ id: files.id });
+        if (!fileDetails) {
+            throw new Error("Failed to create file details");
+        }
+
+        return fileDetails;
+    });
+}
+
+async function coreUploadHandler(
     db: Database,
-    fileName: string,
     ownerId: string,
-    parentFolderId: string,
-    fileAccess: FileAccess,
+    fileId: string,
+    file: BusboyFileStream,
+    verifyMultipartComplete: () => Promise<void>,
 ) {
-    const [fileDetails] = await db
-        .insert(files)
-        .values({
-            fileName,
-            fileType: UNKNOWN_MIME_TYPE,
-            ownerId,
-            fileAccess,
-            parentId: parentFolderId,
-            storageState: "PENDING",
-            storageError: null,
-            storageVerifiedAt: null,
-        })
-        .returning({ id: files.id });
-    if (!fileDetails) {
-        throw new Error("Failed to create file details");
-    }
-
-    return fileDetails;
-}
-
-async function coreUploadHandler(db: Database, ownerId: string, fileId: string, file: BusboyFileStream) {
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
     const filePath = path.join(folderPath, fileId);
 
     try {
         await fs.promises.mkdir(folderPath, { recursive: true });
-        await pump(file, fs.createWriteStream(filePath));
+        const output = fs.createWriteStream(filePath);
+        const multipartComplete = verifyMultipartComplete();
+        void multipartComplete.catch((error: unknown) => {
+            if (!output.destroyed) {
+                output.destroy(error instanceof Error ? error : new InvalidMultipartUploadError());
+            }
+        });
+        await pump(file, output);
+        await multipartComplete;
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
         const fileType = await detectStoredMimeType(filePath);
 
@@ -261,11 +386,20 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
             })
             .where(eq(files.id, fileId));
     } catch (error) {
-        try {
-            await fs.promises.unlink(filePath);
-        } catch {}
+        if (!file.readableEnded) {
+            file.destroy();
+        }
 
-        await db.delete(files).where(eq(files.id, fileId));
+        const [fileCleanup, recordCleanup] = await Promise.allSettled([
+            fs.promises.rm(filePath, { force: true }),
+            db.delete(files).where(eq(files.id, fileId)),
+        ]);
+        if (fileCleanup.status === "rejected") {
+            throw fileCleanup.reason;
+        }
+        if (recordCleanup.status === "rejected") {
+            throw recordCleanup.reason;
+        }
 
         throw error;
     }

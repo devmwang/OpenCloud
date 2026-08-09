@@ -90,6 +90,9 @@ void server.register(csrfPlugin);
 void server.register(FastifyMultipart, {
     limits: {
         fileSize: 10 * 1024 * 1024 * 1024, // 10 GB
+        files: 1,
+        fields: 0,
+        parts: 1,
     },
 });
 

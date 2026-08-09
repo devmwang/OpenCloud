@@ -233,7 +233,7 @@ Required actions:
 
 - Create upload token (`/v1/upload-tokens`).
 - Create read token (`/v1/files/:fileId/read-tokens`).
-- Token-based upload utility (`/v1/files` with `uploadToken` form field).
+- Token-based upload utility (`/v1/files` with the `x-opencloud-upload-token` header).
 - List owned upload tokens (`/v1/upload-tokens`).
 
 ### Root Error + Not Found

@@ -4,11 +4,19 @@ import type { FastifyInstance } from "fastify";
 import { uploadFileHandler } from "./upload.handlers";
 import { $ref } from "./upload.schemas";
 
+const UPLOAD_IDLE_TIMEOUT_MS = 120_000;
+
 async function uploadRouter(server: FastifyInstance) {
     server.route({
         method: "POST",
         url: "/files",
-        onRequest: [server.optionalAuthenticate],
+        onRequest: [
+            server.optionalAuthenticate,
+            (request, _reply, done) => {
+                request.raw.setTimeout(UPLOAD_IDLE_TIMEOUT_MS);
+                done();
+            },
+        ],
         preHandler: [
             async (request, reply) => {
                 const query = request.query as { folderId?: string } | undefined;
