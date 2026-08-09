@@ -2,6 +2,7 @@
 Description=OpenCloud API server
 After=network-online.target
 Wants=network-online.target
+ConditionPathExists=!__OPENCLOUD_SERVER_MIGRATION_BLOCK__
 
 [Service]
 Type=simple

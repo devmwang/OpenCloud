@@ -14,6 +14,7 @@ readonly DEFAULT_CLONE_URL="https://github.com/devmwang/OpenCloud.git"
 readonly OPENCLOUD_SERVICE_ENV="${OPENCLOUD_SERVICE_ENV:-/etc/opencloud/opencloud-service.env}"
 readonly OPENCLOUD_CONFIG_DIR="${OPENCLOUD_CONFIG_DIR:-/etc/opencloud}"
 readonly SYSTEMD_SYSTEM_DIR="${SYSTEMD_SYSTEM_DIR:-/etc/systemd/system}"
+readonly SERVER_MIGRATION_BLOCK="$OPENCLOUD_CONFIG_DIR/server-migration-pending"
 
 readonly SERVER_UNIT="opencloud-server"
 readonly NOVA_UNIT="opencloud-nova"
@@ -479,19 +480,24 @@ run_server_migrations() {
     local service_user="$2"
     local pnpm_bin
 
-    echo "Disabling and stopping $SERVER_UNIT for database migrations ..."
-    if ! run_root systemctl disable --now "$SERVER_UNIT"; then
-        die "Failed to disable and stop $SERVER_UNIT before database migration. Check: sudo systemctl status $SERVER_UNIT"
+    echo "Blocking automatic $SERVER_UNIT starts during database migrations ..."
+    if ! run_root mkdir -p "$OPENCLOUD_CONFIG_DIR" || ! run_root install -m 0644 /dev/null "$SERVER_MIGRATION_BLOCK"; then
+        die "Failed to create the server migration block at $SERVER_MIGRATION_BLOCK."
     fi
+
+    echo "Stopping $SERVER_UNIT for database migrations ..."
+    systemctl_system_units stop server
 
     pnpm_bin="$(resolve_pnpm_bin_for_user "$service_user")"
     echo "Running server database migrations ..."
     if ! run_pnpm_for_user "$service_user" "$repo_dir" exec dotenvx run --convention=nextjs -- "$pnpm_bin" --filter server db:migrate; then
-        die "Server database migration failed. $SERVER_UNIT remains disabled and stopped."
+        die "Server database migration failed. $SERVER_UNIT remains blocked and stopped."
     fi
 
-    echo "Re-enabling $SERVER_UNIT after successful database migrations ..."
-    systemctl_system_units enable server
+    if ! run_root rm -f "$SERVER_MIGRATION_BLOCK"; then
+        die "Database migration succeeded, but the server migration block could not be removed: $SERVER_MIGRATION_BLOCK"
+    fi
+    echo "Removed the server migration block after successful database migrations."
 }
 
 # Install OpenCloud unit files from a repo and reload systemd daemon.
@@ -512,10 +518,13 @@ sync_system_units_from_repo() {
     service_user_sed="$(sed_escape_replacement "$service_user")"
     local service_env_sed
     service_env_sed="$(sed_escape_replacement "$OPENCLOUD_SERVICE_ENV")"
+    local migration_block_sed
+    migration_block_sed="$(sed_escape_replacement "$SERVER_MIGRATION_BLOCK")"
 
     sed \
         -e "s|__OPENCLOUD_SERVICE_USER__|$service_user_sed|g" \
         -e "s|__OPENCLOUD_SERVICE_ENV__|$service_env_sed|g" \
+        -e "s|__OPENCLOUD_SERVER_MIGRATION_BLOCK__|$migration_block_sed|g" \
         "$deploy_units/opencloud-server.service" > "$tmp_server"
     sed \
         -e "s|__OPENCLOUD_SERVICE_USER__|$service_user_sed|g" \
@@ -1004,6 +1013,11 @@ cmd_uninstall() {
     if run_root test -f "$OPENCLOUD_SERVICE_ENV"; then
         run_root rm -f "$OPENCLOUD_SERVICE_ENV"
         echo "Removed $OPENCLOUD_SERVICE_ENV"
+    fi
+
+    if run_root test -f "$SERVER_MIGRATION_BLOCK"; then
+        run_root rm -f "$SERVER_MIGRATION_BLOCK"
+        echo "Removed $SERVER_MIGRATION_BLOCK"
     fi
 
     echo "Uninstall complete. Repo and data were not removed."
