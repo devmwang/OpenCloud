@@ -68,15 +68,22 @@ sudo ./scripts/linux/opencloud-user-service.sh uninstall
 
 ### Required first update from the older script
 
-If you already use an older copy of this service script, you must use these commands for the first update that installs this release. Do not run `update` for this one transition. The running older script does not load changes that Git makes to its file. Pull first, and then run the new `rebuild` command with your installed mode:
+If you already use an older copy of this service script, you must use these commands for the first update that installs this release. Do not run the older script's `update` or `install --clone` path for this transition. The running older script does not load changes that Git makes to its file.
+
+First, read the saved repository path and service user:
 
 ```bash
-cd /path/to/OpenCloud
-git pull --ff-only
-sudo ./scripts/linux/opencloud-user-service.sh rebuild both
+sudo grep -E '^(OPENCLOUD_REPO_DIR|OPENCLOUD_SERVICE_USER)=' /etc/opencloud/opencloud-service.env
 ```
 
-Replace `both` with `server` or `nova` if that is the installed mode. Normal future updates reload the service script after each successful pull.
+Then pull as the saved service user and run the new script with the installed mode. This example uses service user `opencloud`, repository `/path/to/OpenCloud`, and mode `both`:
+
+```bash
+sudo -H -u opencloud git -C /path/to/OpenCloud pull --ff-only
+sudo /path/to/OpenCloud/scripts/linux/opencloud-user-service.sh rebuild both
+```
+
+Replace `opencloud`, `/path/to/OpenCloud`, and `both` with the saved service user, saved repository path, and installed mode. Normal future updates reload the service script after each successful pull.
 
 ### Normal updates
 
@@ -91,12 +98,11 @@ This fast-forwards to the latest code from Git (using the repo path saved at ins
 Option 2: pull manually, then rebuild.
 
 ```bash
-cd /path/to/OpenCloud
-git pull --ff-only
-sudo ./scripts/linux/opencloud-user-service.sh rebuild
+sudo -H -u opencloud git -C /path/to/OpenCloud pull --ff-only
+sudo /path/to/OpenCloud/scripts/linux/opencloud-user-service.sh rebuild both
 ```
 
-`rebuild` uses the repo path from `/etc/opencloud/opencloud-service.env`. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component.
+Replace the example service user, repository path, and mode with the values from `/etc/opencloud/opencloud-service.env` and the installed mode. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component.
 
 ## Install options
 
@@ -154,13 +160,15 @@ corepack prepare pnpm@10.29.3 --activate
 
 ### Migrating from older user-level units
 
-If you previously installed user-level units (`systemctl --user`), disable them before you run `install`, `update`, or `rebuild`. The service script stops before build or migration when it finds a selected legacy unit:
+If you previously installed user-level units (`systemctl --user`), run these commands as the account that installed them before you run `install`, `update`, or `rebuild`:
 
 ```bash
 systemctl --user disable --now opencloud-server opencloud-nova
-rm -f ~/.config/systemd/user/opencloud-server.service ~/.config/systemd/user/opencloud-nova.service
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opencloud-server.service" "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opencloud-nova.service"
 systemctl --user daemon-reload
 ```
+
+Before build or migration, the service script also checks the selected units in the system service user's user manager and the invoking `sudo` user's manager. It stops with the exact disable command if either manager still runs a selected legacy service.
 
 ### Repo path changed (moved or re-cloned)
 

@@ -528,31 +528,52 @@ sync_system_units_from_repo() {
     echo "Reloaded systemd daemon"
 }
 
-require_no_legacy_user_units() {
+require_no_active_user_units() {
     local service_user="$1"
     local mode="$2"
-    local user_home legacy_dir unit
-    local legacy_units=()
-    local legacy_unit_files=()
+    local operator_user user user_id runtime_dir runtime_dir_q unit unit_q query_status
+    local users=("$service_user")
+    local selected_units
 
-    user_home="$(get_user_home "$service_user")"
-    legacy_dir="$user_home/.config/systemd/user"
+    operator_user="$(default_service_user)"
+    if [[ "$operator_user" != "$service_user" ]]; then
+        users+=("$operator_user")
+    fi
+    selected_units=($(units_for_mode "$mode"))
 
-    for unit in $(units_for_mode "$mode"); do
-        if [[ -f "$legacy_dir/$unit.service" ]]; then
-            legacy_units+=("$unit")
-            legacy_unit_files+=("$legacy_dir/$unit.service")
+    for user in "${users[@]}"; do
+        user_id="$(id -u -- "$user")"
+        runtime_dir="/run/user/$user_id"
+        if [[ ! -d "$runtime_dir" ]]; then
+            continue
+        fi
+
+        runtime_dir_q="$(shell_quote "$runtime_dir")"
+        if ! run_as_user_shell "$user" "XDG_RUNTIME_DIR=$runtime_dir_q systemctl --user show-environment >/dev/null"; then
+            die "Unable to query the systemd user manager for '$user'. Log in as '$user', disable the selected legacy OpenCloud service(s), and retry."
+        fi
+
+        local active_units=()
+        for unit in "${selected_units[@]}"; do
+            unit_q="$(shell_quote "$unit")"
+            if run_as_user_shell "$user" "XDG_RUNTIME_DIR=$runtime_dir_q systemctl --user is-active --quiet $unit_q"; then
+                active_units+=("$unit")
+            else
+                query_status=$?
+                case "$query_status" in
+                    3|4) ;;
+                    *) die "Unable to query $unit in the systemd user manager for '$user'. Check: sudo -H -u $user XDG_RUNTIME_DIR=$runtime_dir systemctl --user status $unit" ;;
+                esac
+            fi
+        done
+
+        if [[ ${#active_units[@]} -gt 0 ]]; then
+            err "Legacy user-level OpenCloud service(s) are active for user '$user': ${active_units[*]}."
+            err "Run this command before you retry:"
+            err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now ${active_units[*]}"
+            exit 1
         fi
     done
-
-    if [[ ${#legacy_units[@]} -gt 0 ]]; then
-        err "Detected legacy user-level OpenCloud units: ${legacy_units[*]}."
-        err "Run these commands as '$service_user' before you retry:"
-        err "  systemctl --user disable --now ${legacy_units[*]}"
-        err "  rm -f ${legacy_unit_files[*]}"
-        err "  systemctl --user daemon-reload"
-        exit 1
-    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -663,6 +684,8 @@ cmd_install() {
         fi
 
         repo_dir="$(get_repo_root "$clone_dir")" || die "Cloned directory is not OpenCloud root: $clone_dir"
+        echo "Reloading the installer from $repo_dir ..."
+        exec bash "$repo_dir/scripts/linux/opencloud-user-service.sh" install "--repo=$repo_dir" "--service-user=$service_user" "$mode"
     else
         repo_dir="$(get_repo_root .)" || die "Current directory is not the OpenCloud repo root. Run from repo root or use --repo=DIR or --clone=URL."
     fi
@@ -672,7 +695,7 @@ cmd_install() {
 
     check_tools_for_user "$service_user" pnpm
     check_pnpm_version_for_user "$service_user" "$repo_dir"
-    require_no_legacy_user_units "$service_user" "$mode"
+    require_no_active_user_units "$service_user" "$mode"
 
     # Install dependencies and build selected targets as the service user.
     echo "Installing dependencies (pnpm install --frozen-lockfile) ..."
@@ -793,7 +816,7 @@ cmd_rebuild() {
     check_tools_for_user "$service_user" node pnpm
     check_node_version_for_user "$service_user"
     check_pnpm_version_for_user "$service_user" "$repo_dir"
-    require_no_legacy_user_units "$service_user" "$mode"
+    require_no_active_user_units "$service_user" "$mode"
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
