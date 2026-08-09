@@ -531,8 +531,8 @@ sync_system_units_from_repo() {
 require_legacy_user_units_disabled_and_stopped() {
     local service_user="$1"
     local mode="$2"
-    local operator_user user user_id runtime_dir runtime_dir_q unit unit_q unit_status
-    local load_state active_state unit_file_state
+    local operator_user user user_id user_home legacy_env runtime_dir runtime_dir_q systemctl_env unit unit_name unit_q unit_status listed_unit
+    local load_state active_state unit_file_state manager_available unit_is_safe
     local users=("$service_user")
     local selected_units
 
@@ -544,33 +544,73 @@ require_legacy_user_units_disabled_and_stopped() {
 
     for user in "${users[@]}"; do
         user_id="$(id -u -- "$user")"
+        user_home="$(get_user_home "$user")"
+        legacy_env="$user_home/.config/opencloud/opencloud-service.env"
         runtime_dir="/run/user/$user_id"
-        if [[ ! -d "$runtime_dir" ]]; then
-            continue
-        fi
+        manager_available=0
+        systemctl_env=""
 
-        runtime_dir_q="$(shell_quote "$runtime_dir")"
-        if ! run_as_user_shell "$user" "XDG_RUNTIME_DIR=$runtime_dir_q systemctl --user show-environment >/dev/null"; then
-            die "Unable to query the systemd user manager for '$user'. Log in as '$user', disable the selected legacy OpenCloud service(s), and retry."
+        if [[ -d "$runtime_dir" ]]; then
+            runtime_dir_q="$(shell_quote "$runtime_dir")"
+            systemctl_env="XDG_RUNTIME_DIR=$runtime_dir_q "
+            if ! run_as_user_shell "$user" "${systemctl_env}systemctl --user show-environment >/dev/null"; then
+                die "Unable to query the systemd user manager for '$user'. Log in as '$user', disable the selected legacy OpenCloud service(s), and retry."
+            fi
+            manager_available=1
         fi
 
         for unit in "${selected_units[@]}"; do
-            unit_q="$(shell_quote "$unit")"
-            if ! unit_status="$(run_as_user_shell "$user" "XDG_RUNTIME_DIR=$runtime_dir_q systemctl --user show --all --property=LoadState --property=ActiveState --property=UnitFileState $unit_q")"; then
-                die "Unable to query $unit in the systemd user manager for '$user'. Check: sudo -H -u $user XDG_RUNTIME_DIR=$runtime_dir systemctl --user status $unit"
+            unit_name="$unit.service"
+            unit_q="$(shell_quote "$unit_name")"
+            active_state="offline"
+
+            if [[ "$manager_available" -eq 1 ]]; then
+                if ! unit_status="$(run_as_user_shell "$user" "${systemctl_env}systemctl --user show --all --property=LoadState --property=ActiveState --property=UnitFileState $unit_q")"; then
+                    die "Unable to query $unit in the systemd user manager for '$user'. Check: sudo -H -u $user XDG_RUNTIME_DIR=$runtime_dir systemctl --user status $unit"
+                fi
+                load_state="$(sed -n 's/^LoadState=//p' <<< "$unit_status")"
+                active_state="$(sed -n 's/^ActiveState=//p' <<< "$unit_status")"
+                unit_file_state="$(sed -n 's/^UnitFileState=//p' <<< "$unit_status")"
+                if [[ "$load_state" == "not-found" ]]; then
+                    unit_file_state="not-found"
+                fi
+            else
+                if ! unit_status="$(run_as_user_shell "$user" "systemctl --user --root=/ list-unit-files --no-legend --no-pager $unit_q" 2>&1)"; then
+                    if [[ -n "$unit_status" ]]; then
+                        die "Unable to query the persistent unit-file state for $unit as '$user': $unit_status"
+                    fi
+                fi
+
+                if [[ -z "$unit_status" ]]; then
+                    unit_file_state="not-found"
+                else
+                    read -r listed_unit unit_file_state _ <<< "$unit_status"
+                    if [[ "$listed_unit" != "$unit_name" ]] || [[ -z "$unit_file_state" ]]; then
+                        die "Unable to read the persistent unit-file state for $unit as '$user': $unit_status"
+                    fi
+                fi
+
+                if [[ "$unit_file_state" == "not-found" ]] && [[ -f "$legacy_env" ]]; then
+                    die "Unable to confirm that legacy unit $unit is absent for '$user' while $legacy_env exists. Log in as '$user', disable and remove the legacy user units, remove the legacy environment file, and retry."
+                fi
             fi
 
-            load_state="$(sed -n 's/^LoadState=//p' <<< "$unit_status")"
-            active_state="$(sed -n 's/^ActiveState=//p' <<< "$unit_status")"
-            unit_file_state="$(sed -n 's/^UnitFileState=//p' <<< "$unit_status")"
+            unit_is_safe=1
+            case "$unit_file_state" in
+                disabled|masked|not-found) ;;
+                *) unit_is_safe=0 ;;
+            esac
 
-            if [[ "$load_state" == "not-found" ]]; then
+            if [[ "$manager_available" -eq 1 ]]; then
+                case "$active_state" in
+                    inactive|failed) ;;
+                    *) unit_is_safe=0 ;;
+                esac
+            fi
+
+            if [[ "$unit_is_safe" -eq 1 ]]; then
                 continue
             fi
-
-            case "$unit_file_state:$active_state" in
-                disabled:inactive|disabled:failed|masked:inactive|masked:failed|masked-runtime:inactive|masked-runtime:failed) continue ;;
-            esac
 
             err "Legacy user-level OpenCloud service '$unit' must be disabled and fully stopped for user '$user'."
             err "Current states: unit-file=${unit_file_state:-unknown}, active=${active_state:-unknown}."

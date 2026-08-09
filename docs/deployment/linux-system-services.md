@@ -165,10 +165,11 @@ If you previously installed user-level units (`systemctl --user`), run these com
 ```bash
 systemctl --user disable --now opencloud-server opencloud-nova
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opencloud-server.service" "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opencloud-nova.service"
+rm -f "$HOME/.config/opencloud/opencloud-service.env"
 systemctl --user daemon-reload
 ```
 
-Before build or migration, the service script also checks the selected units in the system service user's user manager and the invoking `sudo` user's manager. It stops with the exact disable command if a selected legacy service is enabled or is not fully stopped.
+Before build or migration, the service script checks persistent unit-file state for the system service user and the invoking `sudo` user, even when no user manager runs. It accepts only disabled or persistently masked legacy units. When a user manager runs, the selected units must also be inactive or failed. A runtime-only mask is not accepted. For an offline user, the historical environment file keeps a missing unit from being treated as safe until the legacy installation is cleaned up.
 
 ### Repo path changed (moved or re-cloned)
 
