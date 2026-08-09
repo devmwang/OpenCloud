@@ -1,0 +1,5 @@
+User-agent: GPTBot
+Disallow: /file/
+
+User-agent: ClaudeBot
+Disallow: /file/

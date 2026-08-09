@@ -69,6 +69,11 @@ export const Route = createFileRoute("/file/$fileId")({
             throw error;
         }
     },
+    headers: () => ({
+        "Cache-Control": "private, no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex",
+    }),
     head: async ({ loaderData, params }) => {
         const title = loaderData?.kind === "ok" ? `OpenCloud - ${loaderData.file.name}` : "OpenCloud - File";
         const description =
@@ -86,6 +91,8 @@ export const Route = createFileRoute("/file/$fileId")({
             meta: [
                 { title },
                 { name: "description", content: description },
+                { name: "robots", content: "noindex, nofollow, noarchive, nosnippet, noimageindex" },
+                { name: "referrer", content: "no-referrer" },
                 { property: "og:title", content: title },
                 { property: "og:description", content: description },
                 { property: "og:type", content: "website" },
