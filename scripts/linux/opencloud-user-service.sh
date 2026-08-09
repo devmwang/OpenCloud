@@ -528,10 +528,11 @@ sync_system_units_from_repo() {
     echo "Reloaded systemd daemon"
 }
 
-require_no_active_user_units() {
+require_legacy_user_units_disabled_and_stopped() {
     local service_user="$1"
     local mode="$2"
-    local operator_user user user_id runtime_dir runtime_dir_q unit unit_q query_status
+    local operator_user user user_id runtime_dir runtime_dir_q unit unit_q unit_status
+    local load_state active_state unit_file_state
     local users=("$service_user")
     local selected_units
 
@@ -553,26 +554,30 @@ require_no_active_user_units() {
             die "Unable to query the systemd user manager for '$user'. Log in as '$user', disable the selected legacy OpenCloud service(s), and retry."
         fi
 
-        local active_units=()
         for unit in "${selected_units[@]}"; do
             unit_q="$(shell_quote "$unit")"
-            if run_as_user_shell "$user" "XDG_RUNTIME_DIR=$runtime_dir_q systemctl --user is-active --quiet $unit_q"; then
-                active_units+=("$unit")
-            else
-                query_status=$?
-                case "$query_status" in
-                    3|4) ;;
-                    *) die "Unable to query $unit in the systemd user manager for '$user'. Check: sudo -H -u $user XDG_RUNTIME_DIR=$runtime_dir systemctl --user status $unit" ;;
-                esac
+            if ! unit_status="$(run_as_user_shell "$user" "XDG_RUNTIME_DIR=$runtime_dir_q systemctl --user show --all --property=LoadState --property=ActiveState --property=UnitFileState $unit_q")"; then
+                die "Unable to query $unit in the systemd user manager for '$user'. Check: sudo -H -u $user XDG_RUNTIME_DIR=$runtime_dir systemctl --user status $unit"
             fi
-        done
 
-        if [[ ${#active_units[@]} -gt 0 ]]; then
-            err "Legacy user-level OpenCloud service(s) are active for user '$user': ${active_units[*]}."
+            load_state="$(sed -n 's/^LoadState=//p' <<< "$unit_status")"
+            active_state="$(sed -n 's/^ActiveState=//p' <<< "$unit_status")"
+            unit_file_state="$(sed -n 's/^UnitFileState=//p' <<< "$unit_status")"
+
+            if [[ "$load_state" == "not-found" ]]; then
+                continue
+            fi
+
+            case "$unit_file_state:$active_state" in
+                disabled:inactive|disabled:failed|masked:inactive|masked:failed|masked-runtime:inactive|masked-runtime:failed) continue ;;
+            esac
+
+            err "Legacy user-level OpenCloud service '$unit' must be disabled and fully stopped for user '$user'."
+            err "Current states: unit-file=${unit_file_state:-unknown}, active=${active_state:-unknown}."
             err "Run this command before you retry:"
-            err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now ${active_units[*]}"
+            err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now $unit"
             exit 1
-        fi
+        done
     done
 }
 
@@ -695,7 +700,7 @@ cmd_install() {
 
     check_tools_for_user "$service_user" pnpm
     check_pnpm_version_for_user "$service_user" "$repo_dir"
-    require_no_active_user_units "$service_user" "$mode"
+    require_legacy_user_units_disabled_and_stopped "$service_user" "$mode"
 
     # Install dependencies and build selected targets as the service user.
     echo "Installing dependencies (pnpm install --frozen-lockfile) ..."
@@ -816,7 +821,7 @@ cmd_rebuild() {
     check_tools_for_user "$service_user" node pnpm
     check_node_version_for_user "$service_user"
     check_pnpm_version_for_user "$service_user" "$repo_dir"
-    require_no_active_user_units "$service_user" "$mode"
+    require_legacy_user_units_disabled_and_stopped "$service_user" "$mode"
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"

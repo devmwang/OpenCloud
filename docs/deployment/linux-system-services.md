@@ -168,7 +168,7 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opencloud-server.service" 
 systemctl --user daemon-reload
 ```
 
-Before build or migration, the service script also checks the selected units in the system service user's user manager and the invoking `sudo` user's manager. It stops with the exact disable command if either manager still runs a selected legacy service.
+Before build or migration, the service script also checks the selected units in the system service user's user manager and the invoking `sudo` user's manager. It stops with the exact disable command if a selected legacy service is enabled or is not fully stopped.
 
 ### Repo path changed (moved or re-cloned)
 
