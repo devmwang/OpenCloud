@@ -163,7 +163,11 @@ export async function uploadFileHandler(
     const sendUploadResponse = async (statusCode: number, payload: unknown) => {
         if (!fileData.file.readableEnded && !fileData.file.destroyed) {
             fileData.file.resume();
-            await finished(fileData.file);
+            try {
+                await finished(fileData.file);
+            } catch {
+                fileData.file.destroy();
+            }
         }
 
         return reply.code(statusCode).send(payload);
