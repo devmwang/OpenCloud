@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { displayOrders, files, folders, users } from "@/db/schema";
+import { verifyStoredMimeType } from "@/utils/stored-mime";
 
 import type {
     BatchDeleteItemsInput,
@@ -324,9 +325,10 @@ export async function listChildrenHandler(
 
     let childFiles: {
         id: string;
+        ownerId: string;
         name: string;
         sizeBytes: number | null;
-        mimeType: string;
+        fileType: string;
         access: "PRIVATE" | "PROTECTED" | "PUBLIC";
         storageState: "PENDING" | "READY" | "FAILED";
         createdAt: Date;
@@ -336,9 +338,10 @@ export async function listChildrenHandler(
         let childFileQuery = this.db
             .select({
                 id: files.id,
+                ownerId: files.ownerId,
                 name: files.fileName,
                 sizeBytes: files.fileSize,
-                mimeType: files.fileType,
+                fileType: files.fileType,
                 access: files.fileAccess,
                 storageState: files.storageState,
                 createdAt: files.createdAt,
@@ -360,6 +363,13 @@ export async function listChildrenHandler(
         childFiles = await childFileQuery;
     }
 
+    const verifiedChildFiles = await Promise.all(
+        childFiles.map(async (fileItem) => {
+            const mimeType = await verifyStoredMimeType(this.db, fileItem);
+            return mimeType === null ? null : { ...fileItem, mimeType };
+        }),
+    );
+
     return reply.code(200).send({
         id: folderId,
         folders: childFolders.map((folderItem) => ({
@@ -367,16 +377,18 @@ export async function listChildrenHandler(
             name: folderItem.name,
             createdAt: folderItem.createdAt.toISOString(),
         })),
-        files: childFiles.map((fileItem) => ({
-            id: fileItem.id,
-            name: fileItem.name,
-            sizeBytes: fileItem.sizeBytes,
-            mimeType: fileItem.mimeType,
-            access: fileItem.access,
-            storageState: fileItem.storageState,
-            createdAt: fileItem.createdAt.toISOString(),
-            updatedAt: fileItem.updatedAt.toISOString(),
-        })),
+        files: verifiedChildFiles
+            .filter((fileItem) => fileItem !== null)
+            .map((fileItem) => ({
+                id: fileItem.id,
+                name: fileItem.name,
+                sizeBytes: fileItem.sizeBytes,
+                mimeType: fileItem.mimeType,
+                access: fileItem.access,
+                storageState: fileItem.storageState,
+                createdAt: fileItem.createdAt.toISOString(),
+                updatedAt: fileItem.updatedAt.toISOString(),
+            })),
         ...(limit !== undefined ? { limit } : {}),
         ...(hasOffset ? { offset } : {}),
     });
