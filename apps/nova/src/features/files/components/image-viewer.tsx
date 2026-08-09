@@ -4,7 +4,8 @@ import { ViewToolbar } from "./view-toolbar";
 
 type ImageViewerProps = {
     src: string;
-    fileName?: string;
+    downloadUrl: string;
+    fileName: string;
 };
 
 const MIN_SCALE = 0.25;
@@ -12,7 +13,7 @@ const MAX_SCALE = 5;
 const ZOOM_STEP = 0.25;
 const WHEEL_ZOOM_FACTOR = 0.001;
 
-export function ImageViewer({ src, fileName }: ImageViewerProps) {
+export function ImageViewer({ src, downloadUrl, fileName }: ImageViewerProps) {
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
@@ -144,7 +145,7 @@ export function ImageViewer({ src, fileName }: ImageViewerProps) {
         >
             <img
                 src={src}
-                alt="File Preview"
+                alt={fileName}
                 loading="lazy"
                 draggable={false}
                 className="h-full w-full object-contain select-none"
@@ -159,8 +160,7 @@ export function ImageViewer({ src, fileName }: ImageViewerProps) {
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}
                 onReset={handleReset}
-                downloadUrl={src}
-                fileName={fileName}
+                downloadUrl={downloadUrl}
                 minScale={MIN_SCALE}
                 maxScale={MAX_SCALE}
             />

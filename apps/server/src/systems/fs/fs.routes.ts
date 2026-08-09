@@ -35,7 +35,7 @@ async function fileSystemRouter(server: FastifyInstance) {
     });
 
     server.route({
-        method: "GET",
+        method: ["GET", "HEAD"],
         url: "/files/:fileId/thumbnail",
         onRequest: [server.optionalAuthenticate],
         schema: {

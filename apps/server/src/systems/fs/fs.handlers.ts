@@ -1,5 +1,6 @@
 import path from "path";
 
+import contentDisposition from "content-disposition";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import sharp from "sharp";
@@ -10,6 +11,49 @@ import { env } from "@/env/env";
 import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 
 import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
+
+const INLINE_IMAGE_MIME_TYPES = new Set([
+    "image/apng",
+    "image/avif",
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/vnd.microsoft.icon",
+    "image/webp",
+    "image/x-icon",
+]);
+
+const THUMBNAIL_MIME_TYPES = new Set([
+    "image/apng",
+    "image/avif",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/webp",
+]);
+
+const INLINE_MIME_TYPES = new Set([
+    ...INLINE_IMAGE_MIME_TYPES,
+    "application/pdf",
+    "audio/aac",
+    "audio/flac",
+    "audio/mp4",
+    "audio/mpeg",
+    "audio/ogg",
+    "audio/wav",
+    "audio/webm",
+    "audio/x-m4a",
+    "audio/x-wav",
+    "video/mp4",
+    "video/ogg",
+    "video/quicktime",
+    "video/webm",
+    "video/x-m4v",
+]);
+
+const normalizeMimeType = (mimeType: string) => mimeType.replace(/;.*$/u, "").trim().toLowerCase();
 
 const getReadToken = (request: FastifyRequest<{ Querystring: FileReadQuery }>) => {
     const readToken = request.query.readToken;
@@ -109,10 +153,8 @@ const verifyStoredMimeType = async (
     server: FastifyInstance,
     file: Pick<typeof files.$inferSelect, "id" | "ownerId" | "fileType">,
 ) => {
-    const filePath = path.join(env.FILE_STORE_PATH, file.ownerId, file.id);
-
     try {
-        const mimeType = await detectStoredMimeType(filePath);
+        const mimeType = await detectStoredMimeType(path.join(env.FILE_STORE_PATH, file.ownerId, file.id));
         if (mimeType !== file.fileType) {
             await server.db.update(files).set({ fileType: mimeType }).where(eq(files.id, file.id));
         }
@@ -165,7 +207,7 @@ export async function getDetailsHandler(
     let mimeType = UNKNOWN_MIME_TYPE;
     if (file.storageState === "READY") {
         const verifiedMimeType = await verifyStoredMimeType(this, file);
-        if (!verifiedMimeType) {
+        if (verifiedMimeType === null) {
             return reply.code(404).send({ message: "File not found" });
         }
         mimeType = verifiedMimeType;
@@ -214,15 +256,35 @@ export async function getFileHandler(
         return reply;
     }
 
-    const mimeType = await verifyStoredMimeType(this, fileDetails);
-    if (!mimeType) {
+    const verifiedMimeType = await verifyStoredMimeType(this, fileDetails);
+    if (verifiedMimeType === null) {
         return reply.code(404).send({ message: "File not found" });
     }
 
-    void reply.header("Content-Type", mimeType);
-    void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
+    const mimeType = normalizeMimeType(verifiedMimeType);
+    const dispositionType =
+        request.query.download === "1" || !INLINE_MIME_TYPES.has(mimeType) ? "attachment" : "inline";
 
-    return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id);
+    if (mimeType === "application/pdf" && dispositionType === "inline") {
+        reply.helmet({
+            contentSecurityPolicy: {
+                directives: {
+                    frameAncestors: [env.OPENCLOUD_WEBUI_URL],
+                },
+            },
+            frameguard: false,
+        });
+        reply.raw.removeHeader("X-Frame-Options");
+    }
+
+    void reply.header("Cache-Control", "private, no-store");
+    void reply.header("Content-Type", mimeType);
+    void reply.header("Content-Disposition", contentDisposition(fileDetails.fileName, { type: dispositionType }));
+
+    return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id, {
+        cacheControl: false,
+        contentType: false,
+    });
 }
 
 export async function getThumbnailHandler(
@@ -255,20 +317,28 @@ export async function getThumbnailHandler(
     }
 
     const mimeType = await verifyStoredMimeType(this, fileDetails);
-    if (!mimeType) {
+    if (mimeType === null) {
         return reply.code(404).send({ message: "File not found" });
     }
 
-    if (!mimeType.startsWith("image/")) {
+    if (!THUMBNAIL_MIME_TYPES.has(normalizeMimeType(mimeType))) {
         return reply.code(415).send({ message: "Unsupported media type" });
     }
-
-    void reply.header("Content-Type", mimeType);
-    void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
-
     const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
+
+    if (request.method === "HEAD") {
+        void reply.header("Cache-Control", "private, no-store");
+        void reply.header("Content-Type", "image/webp");
+        void reply.header("Content-Disposition", "inline");
+        return reply.code(200).send();
+    }
+
     try {
-        const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).toBuffer();
+        const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).webp().toBuffer();
+
+        void reply.header("Cache-Control", "private, no-store");
+        void reply.header("Content-Type", "image/webp");
+        void reply.header("Content-Disposition", "inline");
         return reply.send(thumbnailBuffer);
     } catch (error) {
         if (isMissingFileError(error)) {

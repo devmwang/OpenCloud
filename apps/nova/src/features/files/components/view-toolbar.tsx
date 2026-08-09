@@ -13,8 +13,6 @@ type ViewToolbarProps = {
     onReset?: () => void;
     /** Direct download URL for the file. */
     downloadUrl: string;
-    /** File name used for the download attribute. */
-    fileName?: string;
     /** Minimum scale value — dims the zoom-out button at this limit. */
     minScale?: number;
     /** Maximum scale value — dims the zoom-in button at this limit. */
@@ -30,7 +28,6 @@ export function ViewToolbar({
     onZoomOut,
     onReset,
     downloadUrl,
-    fileName,
     minScale = 0.25,
     maxScale = 5,
 }: ViewToolbarProps) {
@@ -81,7 +78,7 @@ export function ViewToolbar({
                 </>
             ) : null}
 
-            <a href={downloadUrl} download={fileName ?? true} className={toolbarButton} aria-label="Download file">
+            <a href={downloadUrl} className={toolbarButton} aria-label="Download file">
                 <ArrowDownTrayIcon className="h-4.5 w-4.5" />
             </a>
         </div>

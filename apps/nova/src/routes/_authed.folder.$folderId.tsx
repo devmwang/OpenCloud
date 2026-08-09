@@ -398,7 +398,7 @@ type FolderPageContentProps = {
     folderDetails: { name: string; type: "ROOT" | "STANDARD"; hierarchy: { id: string; name: string; type: string }[] };
     folderContents: {
         folders: { id: string; folderName: string }[];
-        files: { id: string; fileName: string }[];
+        files: { id: string; fileName: string; mimeType: string }[];
     };
     breadcrumbTrail: { id: string; name: string; type: string }[];
     isEmpty: boolean;
@@ -426,6 +426,7 @@ type FolderListEntry = {
 type FileListEntry = {
     id: string;
     fileName: string;
+    mimeType: string;
 };
 
 function FolderPageContent({
@@ -915,6 +916,7 @@ const SelectableFileItem = memo(function SelectableFileItem({
                 <FileCard
                     id={entry.id}
                     fileName={entry.fileName}
+                    mimeType={entry.mimeType}
                     folderId={folderId}
                     selected={selected}
                     onClick={handleClick}

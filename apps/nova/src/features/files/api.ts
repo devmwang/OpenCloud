@@ -36,6 +36,92 @@ const renameFileInputSchema = z.object({
 
 export type FileDetails = z.infer<typeof fileDetailsSchema>;
 
+const previewImageMimeTypes = new Set([
+    "image/apng",
+    "image/avif",
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/vnd.microsoft.icon",
+    "image/webp",
+    "image/x-icon",
+]);
+
+const thumbnailMimeTypes = new Set([
+    "image/apng",
+    "image/avif",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/webp",
+]);
+
+const legacyThumbnailFileExtensions = new Set(["apng", "avif", "gif", "jpeg", "jpg", "png", "tif", "tiff", "webp"]);
+
+const previewVideoMimeTypes = new Set(["video/mp4", "video/ogg", "video/quicktime", "video/webm", "video/x-m4v"]);
+
+const previewAudioMimeTypes = new Set([
+    "audio/aac",
+    "audio/flac",
+    "audio/mp4",
+    "audio/mpeg",
+    "audio/ogg",
+    "audio/wav",
+    "audio/webm",
+    "audio/x-m4a",
+    "audio/x-wav",
+]);
+
+const officeMimeTypes = new Set([
+    "application/msword",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+    "application/vnd.ms-excel.sheet.macroenabled.12",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+    "application/vnd.ms-powerpoint.slideshow.macroenabled.12",
+    "application/vnd.ms-powerpoint.template.macroenabled.12",
+    "application/vnd.ms-word.document.macroenabled.12",
+    "application/vnd.ms-word.template.macroenabled.12",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+    "application/vnd.openxmlformats-officedocument.presentationml.template",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+]);
+
+const legacyOfficeFileNamePattern = /\.(?:doc|xls|ppt)$/iu;
+
+export type FilePreviewKind = "image" | "video" | "audio" | "pdf" | "office" | "unsupported";
+
+const normalizeMimeType = (mimeType: string) => mimeType.replace(/;.*$/u, "").trim().toLowerCase();
+
+export const getFilePreviewKind = (mimeType: string, fileName: string): FilePreviewKind => {
+    const normalizedMimeType = normalizeMimeType(mimeType);
+
+    if (previewImageMimeTypes.has(normalizedMimeType)) return "image";
+    if (previewVideoMimeTypes.has(normalizedMimeType)) return "video";
+    if (previewAudioMimeTypes.has(normalizedMimeType)) return "audio";
+    if (normalizedMimeType === "application/pdf") return "pdf";
+    if (officeMimeTypes.has(normalizedMimeType)) return "office";
+    if (normalizedMimeType === "application/x-cfb" && legacyOfficeFileNamePattern.test(fileName)) return "office";
+    return "unsupported";
+};
+
+export const canRequestThumbnail = (mimeType: string, fileName: string) => {
+    const normalizedMimeType = normalizeMimeType(mimeType);
+    if (thumbnailMimeTypes.has(normalizedMimeType)) {
+        return true;
+    }
+
+    const extensionSeparator = fileName.lastIndexOf(".");
+    const extension = extensionSeparator > 0 ? fileName.slice(extensionSeparator + 1).toLowerCase() : "";
+    return normalizedMimeType === "application/octet-stream" && legacyThumbnailFileExtensions.has(extension);
+};
+
 export const normalizeFileId = (fileRouteId: string) => {
     return stripFileRouteExtension(fileRouteId);
 };
@@ -53,6 +139,13 @@ export const getFileDetails = async (
 
 export const buildFileContentUrl = (fileRouteId: string, readToken?: string) => {
     return buildApiUrl(`/v1/files/${encodeURIComponent(fileRouteId)}/content`, { readToken }).toString();
+};
+
+export const buildFileDownloadUrl = (fileRouteId: string, readToken?: string) => {
+    return buildApiUrl(`/v1/files/${encodeURIComponent(fileRouteId)}/content`, {
+        readToken,
+        download: "1",
+    }).toString();
 };
 
 export const buildFileThumbnailUrl = (fileRouteId: string, readToken?: string) => {
