@@ -13,6 +13,7 @@ import { uploadTokenRules, uploadTokens } from "@/db/schema/auth";
 import type { FileAccess } from "@/db/schema/enums";
 import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
+import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 
 import type { UploadFileQuerystring } from "./upload.schemas";
 
@@ -258,7 +259,7 @@ export async function uploadFileHandler(
 
         const fileData = firstPart.value;
         file = fileData.file;
-        const fileRecord = await createPendingFile(this.db, fileData.filename, fileData.mimetype, uploadContext);
+        const fileRecord = await createPendingFile(this.db, fileData.filename, uploadContext);
         if (!fileRecord) {
             fileData.file.destroy();
             void reply.header("Connection", "close");
@@ -306,7 +307,7 @@ export async function uploadFileHandler(
     }
 }
 
-async function createPendingFile(db: Database, fileName: string, fileType: string, uploadContext: UploadContext) {
+async function createPendingFile(db: Database, fileName: string, uploadContext: UploadContext) {
     return db.transaction(async (tx) => {
         const [parentFolder] = await tx
             .select({ id: folders.id })
@@ -329,7 +330,7 @@ async function createPendingFile(db: Database, fileName: string, fileType: strin
             .insert(files)
             .values({
                 fileName,
-                fileType,
+                fileType: UNKNOWN_MIME_TYPE,
                 ownerId: uploadContext.ownerId,
                 fileAccess: uploadContext.fileAccess,
                 parentId: parentFolder.id,
@@ -368,11 +369,13 @@ async function coreUploadHandler(
         await pump(file, output);
         await multipartComplete;
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
+        const fileType = await detectStoredMimeType(filePath);
 
         await db
             .update(files)
             .set({
                 fileSize: sizeInBytes,
+                fileType,
                 storageState: "READY",
                 storageError: null,
                 storageVerifiedAt: new Date(),
