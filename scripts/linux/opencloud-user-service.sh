@@ -528,16 +528,30 @@ sync_system_units_from_repo() {
     echo "Reloaded systemd daemon"
 }
 
-warn_if_legacy_user_units() {
+require_no_legacy_user_units() {
     local service_user="$1"
-    local user_home legacy_dir
+    local mode="$2"
+    local user_home legacy_dir unit
+    local legacy_units=()
+    local legacy_unit_files=()
 
     user_home="$(get_user_home "$service_user")"
     legacy_dir="$user_home/.config/systemd/user"
 
-    if [[ -f "$legacy_dir/opencloud-server.service" ]] || [[ -f "$legacy_dir/opencloud-nova.service" ]]; then
-        err "Detected legacy user-level OpenCloud units in $legacy_dir."
-        err "Disable/remove them to avoid confusion with system units."
+    for unit in $(units_for_mode "$mode"); do
+        if [[ -f "$legacy_dir/$unit.service" ]]; then
+            legacy_units+=("$unit")
+            legacy_unit_files+=("$legacy_dir/$unit.service")
+        fi
+    done
+
+    if [[ ${#legacy_units[@]} -gt 0 ]]; then
+        err "Detected legacy user-level OpenCloud units: ${legacy_units[*]}."
+        err "Run these commands as '$service_user' before you retry:"
+        err "  systemctl --user disable --now ${legacy_units[*]}"
+        err "  rm -f ${legacy_unit_files[*]}"
+        err "  systemctl --user daemon-reload"
+        exit 1
     fi
 }
 
@@ -658,6 +672,7 @@ cmd_install() {
 
     check_tools_for_user "$service_user" pnpm
     check_pnpm_version_for_user "$service_user" "$repo_dir"
+    require_no_legacy_user_units "$service_user" "$mode"
 
     # Install dependencies and build selected targets as the service user.
     echo "Installing dependencies (pnpm install --frozen-lockfile) ..."
@@ -699,8 +714,6 @@ cmd_install() {
     systemctl_system_units start "$mode"
     echo "Enabled and started: ${units[*]}"
 
-    warn_if_legacy_user_units "$service_user"
-
     echo ""
     echo "Done. Useful commands:"
     echo "  sudo systemctl status $SERVER_UNIT $NOVA_UNIT"
@@ -735,8 +748,7 @@ cmd_update() {
     repo_dir="$(get_installed_repo_dir)"
     service_user="$(get_installed_service_user)"
 
-    check_tools_for_user "$service_user" git node pnpm
-    check_node_version_for_user "$service_user"
+    check_tools_for_user "$service_user" git
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
@@ -747,30 +759,9 @@ cmd_update() {
     if ! run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && git pull --ff-only"; then
         die "Failed to update the OpenCloud repo at $repo_dir. Resolve its Git state and rerun."
     fi
-    check_pnpm_version_for_user "$service_user" "$repo_dir"
 
-    echo "Installing dependencies (pnpm install --frozen-lockfile) ..."
-    if ! run_pnpm_for_user "$service_user" "$repo_dir" install --frozen-lockfile; then
-        die "Dependency installation failed for $repo_dir."
-    fi
-
-    echo "Building ..."
-    case "$mode" in
-        server) run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=server ;;
-        nova)   run_pnpm_for_user "$service_user" "$repo_dir" run build --filter=nova ;;
-        both)   run_pnpm_for_user "$service_user" "$repo_dir" run build ;;
-    esac
-
-    write_service_env "$repo_dir" "$service_user"
-    sync_system_units_from_repo "$repo_dir" "$service_user"
-
-    if [[ "$mode" != "nova" ]]; then
-        run_server_migrations "$repo_dir" "$service_user"
-    fi
-
-    echo "Restarting $mode ..."
-    systemctl_system_units restart "$mode"
-    echo "Update complete."
+    echo "Reloading the updated service script ..."
+    exec bash "$repo_dir/scripts/linux/opencloud-user-service.sh" rebuild "$mode"
 }
 
 cmd_rebuild() {
@@ -802,6 +793,7 @@ cmd_rebuild() {
     check_tools_for_user "$service_user" node pnpm
     check_node_version_for_user "$service_user"
     check_pnpm_version_for_user "$service_user" "$repo_dir"
+    require_no_legacy_user_units "$service_user" "$mode"
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"

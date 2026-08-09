@@ -66,19 +66,33 @@ sudo ./scripts/linux/opencloud-user-service.sh uninstall
 
 ## Updating OpenCloud
 
+### Required first update from the older script
+
+If you already use an older copy of this service script, you must use these commands for the first update that installs this release. Do not run `update` for this one transition. The running older script does not load changes that Git makes to its file. Pull first, and then run the new `rebuild` command with your installed mode:
+
+```bash
+cd /path/to/OpenCloud
+git pull --ff-only
+sudo ./scripts/linux/opencloud-user-service.sh rebuild both
+```
+
+Replace `both` with `server` or `nova` if that is the installed mode. Normal future updates reload the service script after each successful pull.
+
+### Normal updates
+
 Option 1: script does everything.
 
 ```bash
 sudo ./scripts/linux/opencloud-user-service.sh update
 ```
 
-This fast-forwards to the latest code from Git (using the repo path saved at install time), runs `pnpm install --frozen-lockfile`, builds, and restarts the service(s). For `server` and `both`, it stops the server and applies migrations before restart. If a migration fails, the server remains stopped. Add a mode to limit the work to one app: `update server` or `update nova`.
+This fast-forwards to the latest code from Git (using the repo path saved at install time), reloads the updated service script, runs `pnpm install --frozen-lockfile`, builds, and restarts the service(s). For `server` and `both`, it stops the server and applies migrations before restart. If a migration fails, the server remains stopped. Add a mode to limit the work to one app: `update server` or `update nova`.
 
 Option 2: pull manually, then rebuild.
 
 ```bash
 cd /path/to/OpenCloud
-git pull
+git pull --ff-only
 sudo ./scripts/linux/opencloud-user-service.sh rebuild
 ```
 
@@ -140,7 +154,7 @@ corepack prepare pnpm@10.29.3 --activate
 
 ### Migrating from older user-level units
 
-If you previously installed user-level units (`systemctl --user`), disable them to avoid confusion/conflicts:
+If you previously installed user-level units (`systemctl --user`), disable them before you run `install`, `update`, or `rebuild`. The service script stops before build or migration when it finds a selected legacy unit:
 
 ```bash
 systemctl --user disable --now opencloud-server opencloud-nova
