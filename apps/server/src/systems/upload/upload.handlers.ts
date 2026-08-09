@@ -236,6 +236,10 @@ export async function uploadFileHandler(
         }
     }
 
+    if (request.raw.destroyed) {
+        return;
+    }
+
     const releaseUploadSlot = reserveUploadSlot(uploadContext.ownerId);
     if (!releaseUploadSlot) {
         void reply.header("Retry-After", "5");
