@@ -12,6 +12,7 @@ import { uploadTokenRules, uploadTokens } from "@/db/schema/auth";
 import type { FileAccess } from "@/db/schema/enums";
 import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
+import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 
 import type { UploadFileQuerystring } from "./upload.schemas";
 
@@ -220,7 +221,6 @@ export async function uploadFileHandler(
             return createFileDetails(
                 tx,
                 fileData.filename,
-                fileData.mimetype,
                 uploadContext.ownerId,
                 uploadContext.folderId,
                 uploadContext.fileAccess,
@@ -251,7 +251,6 @@ export async function uploadFileHandler(
 async function createFileDetails(
     db: DatabaseTransaction,
     fileName: string,
-    fileType: string,
     ownerId: string,
     parentFolderId: string,
     fileAccess: FileAccess,
@@ -260,7 +259,7 @@ async function createFileDetails(
         .insert(files)
         .values({
             fileName,
-            fileType,
+            fileType: UNKNOWN_MIME_TYPE,
             ownerId,
             fileAccess,
             parentId: parentFolderId,
@@ -284,11 +283,13 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
         await fs.promises.mkdir(folderPath, { recursive: true });
         await pipeline(file, fs.createWriteStream(filePath));
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
+        const fileType = await detectStoredMimeType(filePath);
 
         const [readyFile] = await db
             .update(files)
             .set({
                 fileSize: sizeInBytes,
+                fileType,
                 storageState: "READY",
                 storageError: null,
                 storageVerifiedAt: new Date(),
