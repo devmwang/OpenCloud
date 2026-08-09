@@ -132,10 +132,22 @@ if (webUrl.protocol !== apiUrl.protocol) {
 
 const isSameHostname = webUrl.hostname === apiUrl.hostname;
 
+export type SessionCookieScope =
+    | { type: "host"; protocol: string; hostname: string }
+    | { type: "domain"; protocol: string; domain: string };
+
+let sessionCookieScope: SessionCookieScope;
+
 if (isSameHostname) {
     if (parsedEnv.COOKIE_URL && parsedEnv.COOKIE_URL !== webUrl.hostname) {
         throw new Error("COOKIE_URL must match the shared Nova and API hostname");
     }
+
+    sessionCookieScope = {
+        type: "host",
+        protocol: apiUrl.protocol,
+        hostname: apiUrl.hostname,
+    };
 } else {
     const cookieDomain = parsedEnv.COOKIE_URL;
     if (!cookieDomain) {
@@ -155,7 +167,13 @@ if (isSameHostname) {
     ) {
         throw new Error("COOKIE_URL must be a valid non-public-suffix parent of direct Nova and API subdomains");
     }
+
+    sessionCookieScope = {
+        type: "domain",
+        protocol: apiUrl.protocol,
+        domain: cookieDomain,
+    };
 }
 
 export const env = parsedEnv;
-export const crossSubDomainCookiesEnabled = !isSameHostname;
+export { sessionCookieScope };

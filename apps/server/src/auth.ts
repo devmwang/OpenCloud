@@ -1,3 +1,5 @@
+import { createHash, createHmac } from "node:crypto";
+
 import * as argon2 from "argon2";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -5,7 +7,7 @@ import { username } from "better-auth/plugins";
 
 import type { Database } from "@/db";
 import { accounts, sessions, users, verifications } from "@/db/schema";
-import { crossSubDomainCookiesEnabled, env } from "@/env/env";
+import { env, sessionCookieScope, type SessionCookieScope } from "@/env/env";
 
 const usernamePlugin = username({
     usernameNormalization: false,
@@ -20,12 +22,28 @@ const authSchema = {
     Verification: verifications,
 };
 
+export const getSessionCookieConfiguration = (scope: SessionCookieScope, authSecret: string) => {
+    const serializedScope =
+        scope.type === "host" ? `${scope.protocol}//${scope.hostname}` : `${scope.protocol}//${scope.domain}`;
+
+    return {
+        cookiePrefix: `opencloud-${createHash("sha256")
+            .update(`opencloud-cookie-name:${scope.type}:${serializedScope}`)
+            .digest("hex")}`,
+        authSecret: createHmac("sha256", authSecret)
+            .update(`opencloud-cookie-signing:${scope.type}:${serializedScope}`)
+            .digest("base64url"),
+    };
+};
+
+const sessionCookieConfiguration = getSessionCookieConfiguration(sessionCookieScope, env.AUTH_SECRET);
+
 export const createAuth = (db: Database) =>
     betterAuth({
         baseURL: env.NEXT_PUBLIC_OPENCLOUD_SERVER_URL,
         basePath: "/api/auth",
         trustedOrigins: [env.OPENCLOUD_WEBUI_URL],
-        secret: env.AUTH_SECRET,
+        secret: sessionCookieConfiguration.authSecret,
         database: drizzleAdapter(db, {
             provider: "pg",
             schema: authSchema,
@@ -54,10 +72,11 @@ export const createAuth = (db: Database) =>
         plugins: [usernamePlugin],
         disabledPaths: ["/sign-up/email", "/sign-in/email"],
         advanced: {
-            cookiePrefix: "opencloud",
-            crossSubDomainCookies: env.COOKIE_URL
-                ? { enabled: crossSubDomainCookiesEnabled, domain: env.COOKIE_URL }
-                : { enabled: false },
+            cookiePrefix: sessionCookieConfiguration.cookiePrefix,
+            crossSubDomainCookies:
+                sessionCookieScope.type === "domain"
+                    ? { enabled: true, domain: sessionCookieScope.domain }
+                    : { enabled: false },
         },
     });
 

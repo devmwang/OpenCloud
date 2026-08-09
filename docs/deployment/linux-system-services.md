@@ -37,8 +37,8 @@ Then open the API at **http://localhost:8080** and Nova at **http://localhost:30
 | Command     | Description                                                                                                                                                      |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `install`   | Set up repo (clone or use current dir), install dependencies, build, install systemd system units, start selected mode, and disable non-selected OpenCloud units |
-| `update`    | Pull latest from git, `pnpm install`, build, and restart (uses repo path from install)                                                                           |
-| `rebuild`   | `pnpm install`, build, and restart without pulling (use after a manual `git pull`)                                                                               |
+| `update`    | Pull latest from git, then run the current rebuild path (uses repo path from install)                                                                            |
+| `rebuild`   | `pnpm install`, build, stop and migrate the Server for `server` or `both`, and restart without pulling                                                           |
 | `start`     | Start the service(s)                                                                                                                                             |
 | `stop`      | Stop the service(s)                                                                                                                                              |
 | `restart`   | Restart the service(s)                                                                                                                                           |
@@ -73,7 +73,17 @@ Option 1: script does everything.
 sudo ./scripts/linux/opencloud-user-service.sh update
 ```
 
-This pulls the latest code from git (using the repo path saved at install time), runs `pnpm install`, builds, and restarts the service(s). Add a mode to limit to one app: `update server` or `update nova`.
+This pulls the latest code from git and then loads the updated script's `rebuild` path. For `server` and `both`, the rebuild stops the Server, applies database migrations, and restarts the selected services only after migration success. Migration failure leaves the Server stopped. `update nova` does not stop or migrate the Server.
+
+For the first update from an older script that does not run migrations, load the new script before rebuilding:
+
+```bash
+cd /path/to/OpenCloud
+git pull --ff-only
+sudo ./scripts/linux/opencloud-user-service.sh rebuild both
+```
+
+Replace `both` with the installed mode when the installation runs only `server` or `nova`. Do not use the older `update` implementation for this one transition. Its running Bash process cannot load the script changes that it pulls.
 
 Option 2: pull manually, then rebuild.
 
@@ -83,7 +93,7 @@ git pull
 sudo ./scripts/linux/opencloud-user-service.sh rebuild
 ```
 
-`rebuild` uses the repo path from `/etc/opencloud/opencloud-service.env`. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component.
+`rebuild` uses the repo path from `/etc/opencloud/opencloud-service.env`. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component. `rebuild server` and the default `rebuild` stop the Server, apply migrations, and restart only after migration success.
 
 ## Install options
 

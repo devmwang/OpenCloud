@@ -28,8 +28,8 @@ Usage: $SCRIPT_NAME <command> [options] [mode]
 
 Commands:
   install     Set up OpenCloud repo, install system units, and start selected mode
-  update      Pull latest from git, pnpm install, build, and restart (uses repo from install)
-  rebuild     pnpm install, build, and restart (no git pull; use after manual git pull)
+  update      Pull latest from git, then run the current rebuild path (uses repo from install)
+  rebuild     pnpm install, build, migrate server modes, and restart (no git pull)
   start       Start the service(s)
   stop        Stop the service(s)
   restart     Restart the service(s)
@@ -428,6 +428,21 @@ systemctl_system_units() {
     run_root systemctl "$action" "${units[@]}"
 }
 
+run_server_migrations() {
+    local repo_dir="$1"
+    local service_user="$2"
+    local repo_dir_q
+    repo_dir_q="$(shell_quote "$repo_dir")"
+
+    echo "Stopping $SERVER_UNIT for database migrations ..."
+    systemctl_system_units stop server
+
+    echo "Running server database migrations ..."
+    if ! run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm exec dotenvx run --convention=nextjs -- pnpm --filter server db:migrate"; then
+        die "Server database migration failed. $SERVER_UNIT remains stopped."
+    fi
+}
+
 # Install OpenCloud unit files from a repo and reload systemd daemon.
 sync_system_units_from_repo() {
     local repo_dir="$1"
@@ -665,8 +680,7 @@ cmd_update() {
     repo_dir="$(get_installed_repo_dir)"
     service_user="$(get_installed_service_user)"
 
-    check_tools_for_user "$service_user" git node pnpm
-    check_node_version_for_user "$service_user"
+    check_tools_for_user "$service_user" git
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
@@ -676,22 +690,8 @@ cmd_update() {
     echo "Pulling latest ..."
     run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && git pull"
 
-    echo "Installing dependencies (pnpm install) ..."
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
-
-    echo "Building ..."
-    case "$mode" in
-        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
-    esac
-
-    write_service_env "$repo_dir" "$service_user"
-    sync_system_units_from_repo "$repo_dir" "$service_user"
-
-    echo "Restarting $mode ..."
-    systemctl_system_units restart "$mode"
-    echo "Update complete."
+    echo "Reloading the updated service script ..."
+    exec bash "$repo_dir/scripts/linux/opencloud-user-service.sh" rebuild "$mode"
 }
 
 cmd_rebuild() {
@@ -740,6 +740,10 @@ cmd_rebuild() {
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
+
+    if [[ "$mode" != "nova" ]]; then
+        run_server_migrations "$repo_dir" "$service_user"
+    fi
 
     echo "Restarting $mode ..."
     systemctl_system_units restart "$mode"
