@@ -48,7 +48,17 @@ const previewImageMimeTypes = new Set([
     "image/x-icon",
 ]);
 
-const thumbnailMimeTypes = new Set(["image/apng", "image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+const thumbnailMimeTypes = new Set([
+    "image/apng",
+    "image/avif",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/webp",
+]);
+
+const legacyThumbnailFileExtensions = new Set(["apng", "avif", "gif", "jpeg", "jpg", "png", "tif", "tiff", "webp"]);
 
 const previewVideoMimeTypes = new Set(["video/mp4", "video/ogg", "video/quicktime", "video/webm", "video/x-m4v"]);
 
@@ -101,7 +111,16 @@ export const getFilePreviewKind = (mimeType: string, fileName: string): FilePrev
     return "unsupported";
 };
 
-export const canGenerateThumbnail = (mimeType: string) => thumbnailMimeTypes.has(normalizeMimeType(mimeType));
+export const canRequestThumbnail = (mimeType: string, fileName: string) => {
+    const normalizedMimeType = normalizeMimeType(mimeType);
+    if (thumbnailMimeTypes.has(normalizedMimeType)) {
+        return true;
+    }
+
+    const extensionSeparator = fileName.lastIndexOf(".");
+    const extension = extensionSeparator > 0 ? fileName.slice(extensionSeparator + 1).toLowerCase() : "";
+    return normalizedMimeType === "application/octet-stream" && legacyThumbnailFileExtensions.has(extension);
+};
 
 export const normalizeFileId = (fileRouteId: string) => {
     return stripFileRouteExtension(fileRouteId);

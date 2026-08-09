@@ -11,7 +11,7 @@ import { useRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { buildFileThumbnailUrl, canGenerateThumbnail } from "@/features/files/api";
+import { buildFileThumbnailUrl, canRequestThumbnail } from "@/features/files/api";
 import { toFileRouteId } from "@/lib/file-id";
 
 type FileCardProps = {
@@ -54,7 +54,7 @@ export function FileCard({ id, fileName, mimeType, folderId, selected, onClick, 
     const router = useRouter();
     const fileRouteId = toFileRouteId(id, fileName);
     const ext = getFileExtension(fileName);
-    const thumbnailUrl = canGenerateThumbnail(mimeType) ? buildFileThumbnailUrl(fileRouteId) : null;
+    const thumbnailUrl = canRequestThumbnail(mimeType, fileName) ? buildFileThumbnailUrl(fileRouteId) : null;
 
     const openPreview = () => {
         void router.navigate({
