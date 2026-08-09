@@ -479,14 +479,19 @@ run_server_migrations() {
     local service_user="$2"
     local pnpm_bin
 
-    echo "Stopping $SERVER_UNIT for database migrations ..."
-    systemctl_system_units stop server
+    echo "Disabling and stopping $SERVER_UNIT for database migrations ..."
+    if ! run_root systemctl disable --now "$SERVER_UNIT"; then
+        die "Failed to disable and stop $SERVER_UNIT before database migration. Check: sudo systemctl status $SERVER_UNIT"
+    fi
 
     pnpm_bin="$(resolve_pnpm_bin_for_user "$service_user")"
     echo "Running server database migrations ..."
     if ! run_pnpm_for_user "$service_user" "$repo_dir" exec dotenvx run --convention=nextjs -- "$pnpm_bin" --filter server db:migrate; then
-        die "Server database migration failed. $SERVER_UNIT remains stopped."
+        die "Server database migration failed. $SERVER_UNIT remains disabled and stopped."
     fi
+
+    echo "Re-enabling $SERVER_UNIT after successful database migrations ..."
+    systemctl_system_units enable server
 }
 
 # Install OpenCloud unit files from a repo and reload systemd daemon.

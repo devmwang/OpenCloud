@@ -93,7 +93,7 @@ Option 1: script does everything.
 sudo ./scripts/linux/opencloud-user-service.sh update
 ```
 
-This fast-forwards to the latest code from Git (using the repo path saved at install time), reloads the updated service script, runs `pnpm install --frozen-lockfile`, builds, and restarts the service(s). For `server` and `both`, it stops the server and applies migrations before restart. If a migration fails, the server remains stopped. Add a mode to limit the work to one app: `update server` or `update nova`.
+This fast-forwards to the latest code from Git (using the repo path saved at install time), reloads the updated service script, runs `pnpm install --frozen-lockfile`, builds, and restarts the service(s). For `server` and `both`, it disables and stops the server, applies migrations, and re-enables it before restart only after migration succeeds. If a migration fails, the server remains disabled and stopped across reboots until a successful retry. Add a mode to limit the work to one app: `update server` or `update nova`.
 
 Option 2: pull manually, then rebuild.
 
