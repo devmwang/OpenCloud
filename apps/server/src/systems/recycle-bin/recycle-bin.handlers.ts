@@ -4,8 +4,13 @@ import path from "path";
 import { and, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { displayOrders, files, folders, users } from "@/db/schema";
+import { files, folders, users } from "@/db/schema";
 import { env } from "@/env/env";
+import {
+    tryWithOwnerHierarchyLock,
+    withOwnerHierarchyLock,
+    type OwnerHierarchyTransaction,
+} from "@/utils/owner-hierarchy-lock";
 
 import type {
     BatchPermanentlyDeleteBody,
@@ -54,7 +59,12 @@ type PurgeSummary = {
     purgedFolders: number;
 };
 
+type OwnerPurgeSummary = PurgeSummary & {
+    failed: boolean;
+};
+
 type RunPurgeExpiredResult = PurgeSummary & {
+    failedOwners: number;
     olderThanDays: number;
     skipped: boolean;
 };
@@ -138,6 +148,9 @@ const resolveBatchStatus = (summary: BatchOperationSummary): BatchOperationStatu
     return summary.failed === 0 ? "success" : "failed";
 };
 
+const isActiveDescendantsError = (error: unknown) =>
+    error instanceof Error && error.message === "ACTIVE_DESCENDANTS_PRESENT";
+
 const buildBatchMessage = (operationLabel: string, status: BatchOperationStatus) => {
     if (status === "success") {
         return `${operationLabel} completed successfully`;
@@ -220,7 +233,7 @@ const topLevelDeletedFoldersSql = (ownerId: string) => sql`
         folder_row."parentFolderId" as "parentFolderId",
         null::bigint as "fileSize",
         case
-            when folder_row."parentFolderId" is null then false
+            when folder_row."parentFolderId" is null then true
             when parent_folder."id" is null then true
             when parent_folder."deletedAt" is not null then true
             else false
@@ -377,12 +390,12 @@ const withPurgeLock = async <T>(server: FastifyInstance, fn: () => Promise<T>) =
     });
 };
 
-const collectFolderSubtreeIds = async (server: FastifyInstance, ownerId: string, rootFolderId: string) => {
+const collectFolderSubtreeIds = async (db: OwnerHierarchyTransaction, ownerId: string, rootFolderId: string) => {
     const visited = new Set<string>([rootFolderId]);
     let frontier = [rootFolderId];
 
     while (frontier.length > 0) {
-        const children = await server.db
+        const children = await db
             .select({ id: folders.id })
             .from(folders)
             .where(and(eq(folders.ownerId, ownerId), inArray(folders.parentFolderId, frontier)));
@@ -437,7 +450,7 @@ const unlinkFileRows = async (fileRows: Array<{ id: string; ownerId: string }>) 
 };
 
 const hardDeleteFilesByRows = async (
-    server: FastifyInstance,
+    db: OwnerHierarchyTransaction,
     fileRows: Array<{ id: string; ownerId: string }>,
 ): Promise<number> => {
     if (fileRows.length === 0) {
@@ -454,12 +467,11 @@ const hardDeleteFilesByRows = async (
     let purgedFiles = 0;
     const dedupedIds = Array.from(deduped.keys()).sort((left, right) => left.localeCompare(right));
     for (const idChunk of chunk(dedupedIds, 500)) {
-        const chunkPurgedCount = await server.db.transaction(async (tx) => {
-            const idValuesSql = sql.join(
-                idChunk.map((id) => sql`${id}`),
-                sql`, `,
-            );
-            const lockedRowsResult = (await tx.execute(sql`
+        const idValuesSql = sql.join(
+            idChunk.map((id) => sql`${id}`),
+            sql`, `,
+        );
+        const lockedRowsResult = (await db.execute(sql`
                 select file_row."id" as "id", file_row."ownerId" as "ownerId"
                 from "Files" as file_row
                 where file_row."id" in (${idValuesSql})
@@ -467,58 +479,110 @@ const hardDeleteFilesByRows = async (
                 order by file_row."id"
                 for update
             `)) as {
-                rows?: Array<{
-                    id?: unknown;
-                    ownerId?: unknown;
-                }>;
-            };
+            rows?: Array<{
+                id?: unknown;
+                ownerId?: unknown;
+            }>;
+        };
 
-            const lockedRows: Array<{ id: string; ownerId: string }> = [];
-            for (const row of lockedRowsResult.rows ?? []) {
-                if (typeof row.id !== "string" || typeof row.ownerId !== "string") {
-                    continue;
-                }
-                lockedRows.push({ id: row.id, ownerId: row.ownerId });
+        const lockedRows: Array<{ id: string; ownerId: string }> = [];
+        for (const row of lockedRowsResult.rows ?? []) {
+            if (typeof row.id !== "string" || typeof row.ownerId !== "string") {
+                continue;
             }
+            lockedRows.push({ id: row.id, ownerId: row.ownerId });
+        }
 
-            if (lockedRows.length === 0) {
-                return 0;
-            }
+        if (lockedRows.length === 0) {
+            continue;
+        }
 
-            await unlinkFileRows(lockedRows);
+        await unlinkFileRows(lockedRows);
 
-            const deletedRows = await tx
-                .delete(files)
-                .where(
-                    and(
-                        inArray(
-                            files.id,
-                            lockedRows.map((row) => row.id),
-                        ),
-                        isNotNull(files.deletedAt),
+        const deletedRows = await db
+            .delete(files)
+            .where(
+                and(
+                    inArray(
+                        files.id,
+                        lockedRows.map((row) => row.id),
                     ),
-                )
-                .returning({
-                    id: files.id,
-                });
-            return deletedRows.length;
-        });
+                    isNotNull(files.deletedAt),
+                ),
+            )
+            .returning({
+                id: files.id,
+            });
 
-        purgedFiles += chunkPurgedCount;
+        purgedFiles += deletedRows.length;
     }
 
     return purgedFiles;
 };
 
+const hardDeleteFolderSubtreeFiles = async (
+    db: OwnerHierarchyTransaction,
+    ownerId: string,
+    rootFolderIds: string[],
+): Promise<number> => {
+    let purgedFiles = 0;
+    const rootValuesSql = sql.join(
+        rootFolderIds.map((id) => sql`(${id})`),
+        sql`, `,
+    );
+
+    while (true) {
+        const fileBatchResult = (await db.execute(sql`
+            with recursive root_ids ("id") as (
+                values ${rootValuesSql}
+            ),
+            subtree ("id") as (
+                select "id"
+                from root_ids
+                union
+                select child_folder."id"
+                from "Folders" as child_folder
+                inner join subtree on child_folder."parentFolderId" = subtree."id"
+                where child_folder."ownerId" = ${ownerId}
+            )
+            select file_row."id" as "id", file_row."ownerId" as "ownerId"
+            from "Files" as file_row
+            where file_row."ownerId" = ${ownerId}
+              and file_row."deletedAt" is not null
+              and file_row."parentId" in (select "id" from subtree)
+            order by file_row."id"
+            limit 500
+        `)) as {
+            rows?: Array<{
+                id?: unknown;
+                ownerId?: unknown;
+            }>;
+        };
+        const fileBatch: Array<{ id: string; ownerId: string }> = [];
+        for (const row of fileBatchResult.rows ?? []) {
+            if (typeof row.id !== "string" || typeof row.ownerId !== "string") {
+                throw new Error("Unexpected file row returned by recycle-bin purge query");
+            }
+            fileBatch.push({ id: row.id, ownerId: row.ownerId });
+        }
+
+        if (fileBatch.length === 0) {
+            return purgedFiles;
+        }
+
+        purgedFiles += await hardDeleteFilesByRows(db, fileBatch);
+    }
+};
+
 const getTopLevelDeletedRowsForOwner = async (
-    server: FastifyInstance,
+    db: OwnerHierarchyTransaction,
     ownerId: string,
     options: {
         threshold?: Date | undefined;
         itemType?: RecycleItemType | undefined;
     } = {},
 ) => {
-    const allDeletedFolders = await server.db
+    const allDeletedFolders = await db
         .select({
             id: folders.id,
             folderName: folders.folderName,
@@ -538,6 +602,7 @@ const getTopLevelDeletedRowsForOwner = async (
         }));
 
     const deletedFolderIdSet = new Set(normalizedFolders.map((folder) => folder.id));
+    const deletedFolderMap = new Map(normalizedFolders.map((folder) => [folder.id, folder]));
 
     const candidateFolders =
         options.itemType === "FILE"
@@ -554,10 +619,51 @@ const getTopLevelDeletedRowsForOwner = async (
         return !deletedFolderIdSet.has(folder.parentFolderId);
     });
 
+    if (options.itemType !== "FILE") {
+        const visitedFolderIds = new Set<string>();
+
+        for (const folder of normalizedFolders) {
+            if (visitedFolderIds.has(folder.id)) {
+                continue;
+            }
+
+            const path: DeletedFolderRow[] = [];
+            const pathIndexes = new Map<string, number>();
+            let current: DeletedFolderRow | undefined = folder;
+
+            while (current && !visitedFolderIds.has(current.id)) {
+                const cycleStart = pathIndexes.get(current.id);
+                if (cycleStart !== undefined) {
+                    const cycle = path.slice(cycleStart);
+                    const threshold = options.threshold;
+                    const cycleIsEligible = threshold
+                        ? cycle.every((cycleFolder) => cycleFolder.deletedAt <= threshold)
+                        : true;
+
+                    if (cycleIsEligible) {
+                        const cycleRoot = cycle.reduce((currentRoot, cycleFolder) =>
+                            cycleFolder.id < currentRoot.id ? cycleFolder : currentRoot,
+                        );
+                        topLevelDeletedFolders.push(cycleRoot);
+                    }
+                    break;
+                }
+
+                pathIndexes.set(current.id, path.length);
+                path.push(current);
+                current = current.parentFolderId ? deletedFolderMap.get(current.parentFolderId) : undefined;
+            }
+
+            for (const pathFolder of path) {
+                visitedFolderIds.add(pathFolder.id);
+            }
+        }
+    }
+
     const deletedFiles =
         options.itemType === "FOLDER"
             ? []
-            : await server.db
+            : await db
                   .select({
                       id: files.id,
                       fileName: files.fileName,
@@ -594,11 +700,11 @@ const getTopLevelDeletedRowsForOwner = async (
 };
 
 const permanentlyDeleteFolderSubtree = async (
-    server: FastifyInstance,
+    db: OwnerHierarchyTransaction,
     ownerId: string,
     rootFolderId: string,
 ): Promise<PurgeSummary | null> => {
-    const [rootFolder] = await server.db
+    const [rootFolder] = await db
         .select({ id: folders.id, ownerId: folders.ownerId, deletedAt: folders.deletedAt })
         .from(folders)
         .where(and(eq(folders.id, rootFolderId), eq(folders.ownerId, ownerId)))
@@ -608,44 +714,73 @@ const permanentlyDeleteFolderSubtree = async (
         return null;
     }
 
-    const subtreeFolderIds = await collectFolderSubtreeIds(server, ownerId, rootFolderId);
+    const activeCountsResult = (await db.execute(sql`
+        with recursive subtree ("id") as (
+            values (${rootFolderId})
+            union
+            select child_folder."id"
+            from "Folders" as child_folder
+            inner join subtree on child_folder."parentFolderId" = subtree."id"
+            where child_folder."ownerId" = ${ownerId}
+        )
+        select
+            (
+                select count(*)::int
+                from "Folders" as folder_row
+                where folder_row."ownerId" = ${ownerId}
+                  and folder_row."deletedAt" is null
+                  and folder_row."id" in (select "id" from subtree)
+            ) as "activeFolderCount",
+            (
+                select count(*)::int
+                from "Files" as file_row
+                where file_row."ownerId" = ${ownerId}
+                  and file_row."deletedAt" is null
+                  and file_row."parentId" in (select "id" from subtree)
+            ) as "activeFileCount"
+    `)) as {
+        rows?: Array<{
+            activeFolderCount?: unknown;
+            activeFileCount?: unknown;
+        }>;
+    };
+    const activeCounts = activeCountsResult.rows?.[0];
 
-    if (subtreeFolderIds.length === 0) {
-        return { purgedFiles: 0, purgedFolders: 0 };
-    }
-
-    const [activeFolderCount] = await server.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(folders)
-        .where(and(eq(folders.ownerId, ownerId), inArray(folders.id, subtreeFolderIds), isNull(folders.deletedAt)));
-
-    const [activeFileCount] = await server.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(files)
-        .where(and(eq(files.ownerId, ownerId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)));
-
-    if ((activeFolderCount?.count ?? 0) > 0 || (activeFileCount?.count ?? 0) > 0) {
+    if (parsePgInteger(activeCounts?.activeFolderCount) > 0 || parsePgInteger(activeCounts?.activeFileCount) > 0) {
         throw new Error("ACTIVE_DESCENDANTS_PRESENT");
     }
 
-    const subtreeFiles = await server.db
-        .select({ id: files.id, ownerId: files.ownerId })
-        .from(files)
-        .where(and(eq(files.ownerId, ownerId), inArray(files.parentId, subtreeFolderIds), isNotNull(files.deletedAt)));
+    const purgedFiles = await hardDeleteFolderSubtreeFiles(db, ownerId, [rootFolderId]);
 
-    const purgedFiles = await hardDeleteFilesByRows(server, subtreeFiles);
-
-    await server.db.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
-
-    let purgedFolders = 0;
-    for (const folderIdChunk of chunk(subtreeFolderIds, 500)) {
-        const deletedFolders = await server.db
-            .delete(folders)
-            .where(and(eq(folders.ownerId, ownerId), inArray(folders.id, folderIdChunk), isNotNull(folders.deletedAt)))
-            .returning({ id: folders.id });
-
-        purgedFolders += deletedFolders.length;
-    }
+    const deletedFoldersResult = (await db.execute(sql`
+        with recursive subtree ("id") as (
+            values (${rootFolderId})
+            union
+            select child_folder."id"
+            from "Folders" as child_folder
+            inner join subtree on child_folder."parentFolderId" = subtree."id"
+            where child_folder."ownerId" = ${ownerId}
+        ),
+        target_folders ("id") as materialized (
+            select folder_row."id"
+            from "Folders" as folder_row
+            where folder_row."ownerId" = ${ownerId}
+              and folder_row."deletedAt" is not null
+              and folder_row."id" in (select "id" from subtree)
+            for update of folder_row
+        ),
+        deleted_folders as (
+            delete from "Folders" as folder_row
+            using target_folders
+            where folder_row."id" = target_folders."id"
+              and folder_row."ownerId" = ${ownerId}
+              and folder_row."deletedAt" is not null
+            returning folder_row."id"
+        )
+        select count(*)::int as "purgedFolders"
+        from target_folders
+    `)) as { rows?: Array<{ purgedFolders?: unknown }> };
+    const purgedFolders = parsePgInteger(deletedFoldersResult.rows?.[0]?.purgedFolders);
 
     return {
         purgedFiles,
@@ -653,8 +788,8 @@ const permanentlyDeleteFolderSubtree = async (
     };
 };
 
-const getActiveDestinationFolder = async (server: FastifyInstance, ownerId: string, folderId: string) => {
-    const [destinationFolder] = await server.db
+const getActiveDestinationFolder = async (db: OwnerHierarchyTransaction, ownerId: string, folderId: string) => {
+    const [destinationFolder] = await db
         .select({ id: folders.id, folderPath: folders.folderPath })
         .from(folders)
         .where(and(eq(folders.id, folderId), eq(folders.ownerId, ownerId), isNull(folders.deletedAt)))
@@ -664,13 +799,13 @@ const getActiveDestinationFolder = async (server: FastifyInstance, ownerId: stri
 };
 
 const resolveRestoreParentFolder = async (
-    server: FastifyInstance,
+    db: OwnerHierarchyTransaction,
     ownerId: string,
     originalParentFolderId: string | null,
     requestedDestinationFolderId?: string,
 ) => {
     if (requestedDestinationFolderId) {
-        const destinationFolder = await getActiveDestinationFolder(server, ownerId, requestedDestinationFolderId);
+        const destinationFolder = await getActiveDestinationFolder(db, ownerId, requestedDestinationFolderId);
         if (!destinationFolder) {
             return {
                 error: {
@@ -693,7 +828,7 @@ const resolveRestoreParentFolder = async (
         } as const;
     }
 
-    const originalParent = await getActiveDestinationFolder(server, ownerId, originalParentFolderId);
+    const originalParent = await getActiveDestinationFolder(db, ownerId, originalParentFolderId);
     if (!originalParent) {
         return {
             error: {
@@ -709,33 +844,46 @@ const resolveRestoreParentFolder = async (
     } as const;
 };
 
-const purgeDeletedRowsForOwner = async (server: FastifyInstance, ownerId: string, threshold?: Date) => {
-    const { topLevelDeletedFiles, topLevelDeletedFolders } = await getTopLevelDeletedRowsForOwner(server, ownerId, {
+const purgeDeletedRowsForOwner = async (
+    db: OwnerHierarchyTransaction,
+    ownerId: string,
+    threshold?: Date,
+): Promise<OwnerPurgeSummary> => {
+    const { topLevelDeletedFiles, topLevelDeletedFolders } = await getTopLevelDeletedRowsForOwner(db, ownerId, {
         threshold,
     });
 
     const purgedFilesFromTopLevelFiles = await hardDeleteFilesByRows(
-        server,
+        db,
         topLevelDeletedFiles.map((file) => ({ id: file.id, ownerId })),
     );
 
     let purgedFilesFromFolders = 0;
     let purgedFolders = 0;
+    let failed = false;
 
     for (const folderRow of topLevelDeletedFolders) {
-        const folderSummary = await permanentlyDeleteFolderSubtree(server, ownerId, folderRow.id);
-        if (!folderSummary) {
-            continue;
-        }
+        try {
+            const folderSummary = await permanentlyDeleteFolderSubtree(db, ownerId, folderRow.id);
+            if (!folderSummary) {
+                continue;
+            }
 
-        purgedFilesFromFolders += folderSummary.purgedFiles;
-        purgedFolders += folderSummary.purgedFolders;
+            purgedFilesFromFolders += folderSummary.purgedFiles;
+            purgedFolders += folderSummary.purgedFolders;
+        } catch (error) {
+            if (!isActiveDescendantsError(error)) {
+                throw error;
+            }
+            failed = true;
+        }
     }
 
     return {
+        failed,
         purgedFiles: purgedFilesFromTopLevelFiles + purgedFilesFromFolders,
         purgedFolders,
-    } satisfies PurgeSummary;
+    };
 };
 
 export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: number): Promise<RunPurgeExpiredResult> {
@@ -763,21 +911,34 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
             purgedFiles: 0,
             purgedFolders: 0,
         };
+        let failedOwners = 0;
 
         for (const ownerId of ownerIds) {
-            const ownerSummary = await purgeDeletedRowsForOwner(server, ownerId, threshold);
+            const ownerLockResult = await tryWithOwnerHierarchyLock(server, ownerId, (tx) =>
+                purgeDeletedRowsForOwner(tx, ownerId, threshold),
+            );
+            if (!ownerLockResult.locked) {
+                failedOwners += 1;
+                continue;
+            }
+
+            const ownerSummary = ownerLockResult.result;
             summary = {
                 purgedFiles: summary.purgedFiles + ownerSummary.purgedFiles,
                 purgedFolders: summary.purgedFolders + ownerSummary.purgedFolders,
             };
+            if (ownerSummary.failed) {
+                failedOwners += 1;
+            }
         }
 
-        return summary;
+        return { ...summary, failedOwners };
     });
 
     if (!lockResult.locked || !lockResult.result) {
         return {
             olderThanDays: retentionDays,
+            failedOwners: 0,
             purgedFiles: 0,
             purgedFolders: 0,
             skipped: true,
@@ -786,6 +947,7 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
 
     return {
         olderThanDays: retentionDays,
+        failedOwners: lockResult.result.failedOwners,
         purgedFiles: lockResult.result.purgedFiles,
         purgedFolders: lockResult.result.purgedFolders,
         skipped: false,
@@ -890,14 +1052,14 @@ export async function destinationFoldersHandler(
 }
 
 const restoreRecycleItem = async (
-    server: FastifyInstance,
+    db: OwnerHierarchyTransaction,
     ownerId: string,
     itemType: RecycleItemType,
     itemId: string,
     destinationFolderId?: string,
 ): Promise<RestoreItemResultWithStatus> => {
     if (itemType === "FILE") {
-        const [file] = await server.db
+        const [file] = await db
             .select({
                 id: files.id,
                 ownerId: files.ownerId,
@@ -931,7 +1093,7 @@ const restoreRecycleItem = async (
         }
 
         const restoreParentResolution = await resolveRestoreParentFolder(
-            server,
+            db,
             ownerId,
             file.parentId,
             destinationFolderId,
@@ -963,7 +1125,7 @@ const restoreRecycleItem = async (
             };
         }
 
-        await server.db.update(files).set({ deletedAt: null, parentId: parentFolderId }).where(eq(files.id, itemId));
+        await db.update(files).set({ deletedAt: null, parentId: parentFolderId }).where(eq(files.id, itemId));
 
         return {
             statusCode: 200,
@@ -976,7 +1138,7 @@ const restoreRecycleItem = async (
         };
     }
 
-    const [folder] = await server.db
+    const [folder] = await db
         .select({
             id: folders.id,
             ownerId: folders.ownerId,
@@ -1023,10 +1185,10 @@ const restoreRecycleItem = async (
         };
     }
 
-    const subtreeFolderIds = await collectFolderSubtreeIds(server, ownerId, itemId);
+    const subtreeFolderIds = await collectFolderSubtreeIds(db, ownerId, itemId);
 
     const restoreParentResolution = await resolveRestoreParentFolder(
-        server,
+        db,
         ownerId,
         folder.parentFolderId,
         destinationFolderId,
@@ -1071,7 +1233,7 @@ const restoreRecycleItem = async (
         };
     }
 
-    const restoreCounts = await server.db.transaction(async (tx) => {
+    const restoreCounts = await db.transaction(async (tx) => {
         const newFolderPath = `${parentFolderPath}/${itemId}`;
         if (folder.folderPath !== newFolderPath) {
             await tx.execute(sql`
@@ -1128,13 +1290,13 @@ const restoreRecycleItem = async (
 };
 
 const permanentlyDeleteRecycleItem = async (
-    server: FastifyInstance,
+    db: OwnerHierarchyTransaction,
     ownerId: string,
     itemType: RecycleItemType,
     itemId: string,
 ): Promise<PermanentlyDeleteItemResultWithStatus> => {
     if (itemType === "FILE") {
-        const [file] = await server.db
+        const [file] = await db
             .select({ id: files.id, ownerId: files.ownerId, deletedAt: files.deletedAt })
             .from(files)
             .where(eq(files.id, itemId))
@@ -1166,7 +1328,7 @@ const permanentlyDeleteRecycleItem = async (
             };
         }
 
-        const purgedFiles = await hardDeleteFilesByRows(server, [{ id: file.id, ownerId: file.ownerId }]);
+        const purgedFiles = await hardDeleteFilesByRows(db, [{ id: file.id, ownerId: file.ownerId }]);
 
         return {
             statusCode: 200,
@@ -1179,7 +1341,7 @@ const permanentlyDeleteRecycleItem = async (
         };
     }
 
-    const [folder] = await server.db
+    const [folder] = await db
         .select({ id: folders.id, ownerId: folders.ownerId, deletedAt: folders.deletedAt })
         .from(folders)
         .where(eq(folders.id, itemId))
@@ -1213,7 +1375,7 @@ const permanentlyDeleteRecycleItem = async (
 
     let summary: PurgeSummary | null;
     try {
-        summary = await permanentlyDeleteFolderSubtree(server, ownerId, itemId);
+        summary = await permanentlyDeleteFolderSubtree(db, ownerId, itemId);
     } catch (error) {
         if (error instanceof Error && error.message === "ACTIVE_DESCENDANTS_PRESENT") {
             return {
@@ -1266,7 +1428,9 @@ export async function restoreHandler(
     }
 
     const { itemType, itemId } = request.params;
-    const restoreResult = await restoreRecycleItem(this, userId, itemType, itemId, request.body.destinationFolderId);
+    const restoreResult = await withOwnerHierarchyLock(this, userId, (tx) =>
+        restoreRecycleItem(tx, userId, itemType, itemId, request.body.destinationFolderId),
+    );
 
     if (restoreResult.outcome !== "SUCCESS") {
         return reply.code(restoreResult.statusCode).send({ message: restoreResult.message });
@@ -1292,181 +1456,185 @@ export async function batchRestoreHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const folderIds = dedupeIds(request.body.folderIds);
-    const fileIds = dedupeIds(request.body.fileIds);
-    const destinationFolderId = request.body.destinationFolderId;
-    const total = folderIds.length + fileIds.length;
+    const result = await withOwnerHierarchyLock(this, userId, async (ownerTx) => {
+        const folderIds = dedupeIds(request.body.folderIds);
+        const fileIds = dedupeIds(request.body.fileIds);
+        const destinationFolderId = request.body.destinationFolderId;
+        const total = folderIds.length + fileIds.length;
 
-    let fixedDestination: { id: string; folderPath: string } | undefined;
-    if (destinationFolderId) {
-        fixedDestination = await getActiveDestinationFolder(this, userId, destinationFolderId);
-        if (!fixedDestination) {
-            const summary = buildBatchSummary(total, 0);
-            const status = resolveBatchStatus(summary);
-            return reply.code(200).send({
-                status,
-                message: "Destination folder not found or unavailable",
-                summary,
+        let fixedDestination: { id: string; folderPath: string } | undefined;
+        if (destinationFolderId) {
+            fixedDestination = await getActiveDestinationFolder(ownerTx, userId, destinationFolderId);
+            if (!fixedDestination) {
+                const summary = buildBatchSummary(total, 0);
+                const status = resolveBatchStatus(summary);
+                return {
+                    statusCode: 200,
+                    body: {
+                        status,
+                        message: "Destination folder not found or unavailable",
+                        summary,
+                    },
+                };
+            }
+        }
+
+        const requestedFolders: Array<{
+            id: string;
+            ownerId: string;
+            type: "ROOT" | "STANDARD";
+            parentFolderId: string | null;
+            folderPath: string;
+            deletedAt: Date | null;
+        }> = [];
+        for (const idChunk of chunk(folderIds, 500)) {
+            const rows = await ownerTx
+                .select({
+                    id: folders.id,
+                    ownerId: folders.ownerId,
+                    type: folders.type,
+                    parentFolderId: folders.parentFolderId,
+                    folderPath: folders.folderPath,
+                    deletedAt: folders.deletedAt,
+                })
+                .from(folders)
+                .where(inArray(folders.id, idChunk));
+            requestedFolders.push(...rows);
+        }
+
+        const requestedFiles: Array<{
+            id: string;
+            ownerId: string;
+            parentId: string;
+            deletedAt: Date | null;
+        }> = [];
+        for (const idChunk of chunk(fileIds, 500)) {
+            const rows = await ownerTx
+                .select({
+                    id: files.id,
+                    ownerId: files.ownerId,
+                    parentId: files.parentId,
+                    deletedAt: files.deletedAt,
+                })
+                .from(files)
+                .where(inArray(files.id, idChunk));
+            requestedFiles.push(...rows);
+        }
+
+        const selectedRestorableFolders = requestedFolders.filter((folder) => {
+            if (folder.ownerId !== userId) {
+                return false;
+            }
+            if (folder.deletedAt === null) {
+                return false;
+            }
+            if (folder.type === "ROOT") {
+                return false;
+            }
+            if (fixedDestination && isFolderPathInSubtree(fixedDestination.folderPath, folder.folderPath)) {
+                return false;
+            }
+            return true;
+        });
+
+        const selectedRestorableFolderMap = new Map(selectedRestorableFolders.map((folder) => [folder.id, folder]));
+        const restorableFolderIds = new Set<string>();
+
+        if (fixedDestination) {
+            for (const folder of selectedRestorableFolders) {
+                restorableFolderIds.add(folder.id);
+            }
+        } else {
+            const externalParentIds = new Set<string>();
+            for (const folder of selectedRestorableFolders) {
+                if (folder.parentFolderId && !selectedRestorableFolderMap.has(folder.parentFolderId)) {
+                    externalParentIds.add(folder.parentFolderId);
+                }
+            }
+
+            const externalActiveParents =
+                externalParentIds.size === 0
+                    ? []
+                    : await ownerTx
+                          .select({
+                              id: folders.id,
+                          })
+                          .from(folders)
+                          .where(
+                              and(
+                                  eq(folders.ownerId, userId),
+                                  isNull(folders.deletedAt),
+                                  inArray(folders.id, Array.from(externalParentIds)),
+                              ),
+                          );
+            const externalActiveParentSet = new Set(externalActiveParents.map((row) => row.id));
+
+            let changed = true;
+            while (changed) {
+                changed = false;
+                for (const folder of selectedRestorableFolders) {
+                    if (restorableFolderIds.has(folder.id)) {
+                        continue;
+                    }
+                    if (!folder.parentFolderId) {
+                        continue;
+                    }
+                    if (
+                        externalActiveParentSet.has(folder.parentFolderId) ||
+                        restorableFolderIds.has(folder.parentFolderId)
+                    ) {
+                        restorableFolderIds.add(folder.id);
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        const restorableFolders = selectedRestorableFolders.filter((folder) => restorableFolderIds.has(folder.id));
+        const sortedRestorableFolders = [...restorableFolders].sort((left, right) => {
+            if (left.folderPath.length === right.folderPath.length) {
+                return left.folderPath.localeCompare(right.folderPath);
+            }
+            return left.folderPath.length - right.folderPath.length;
+        });
+
+        const restoreRoots: Array<{
+            id: string;
+            oldPath: string;
+            newPath: string;
+            newParentId: string;
+            rootDeletedAt: Date;
+        }> = [];
+        for (const folder of sortedRestorableFolders) {
+            const newParentId = fixedDestination?.id ?? folder.parentFolderId;
+            if (!newParentId || folder.deletedAt === null) {
+                continue;
+            }
+
+            restoreRoots.push({
+                id: folder.id,
+                oldPath: folder.folderPath,
+                newPath: fixedDestination ? buildFolderPath(fixedDestination.folderPath, folder.id) : folder.folderPath,
+                newParentId,
+                rootDeletedAt: folder.deletedAt,
             });
         }
-    }
 
-    const requestedFolders: Array<{
-        id: string;
-        ownerId: string;
-        type: "ROOT" | "STANDARD";
-        parentFolderId: string | null;
-        folderPath: string;
-        deletedAt: Date | null;
-    }> = [];
-    for (const idChunk of chunk(folderIds, 500)) {
-        const rows = await this.db
-            .select({
-                id: folders.id,
-                ownerId: folders.ownerId,
-                type: folders.type,
-                parentFolderId: folders.parentFolderId,
-                folderPath: folders.folderPath,
-                deletedAt: folders.deletedAt,
-            })
-            .from(folders)
-            .where(inArray(folders.id, idChunk));
-        requestedFolders.push(...rows);
-    }
-
-    const requestedFiles: Array<{
-        id: string;
-        ownerId: string;
-        parentId: string;
-        deletedAt: Date | null;
-    }> = [];
-    for (const idChunk of chunk(fileIds, 500)) {
-        const rows = await this.db
-            .select({
-                id: files.id,
-                ownerId: files.ownerId,
-                parentId: files.parentId,
-                deletedAt: files.deletedAt,
-            })
-            .from(files)
-            .where(inArray(files.id, idChunk));
-        requestedFiles.push(...rows);
-    }
-
-    const selectedRestorableFolders = requestedFolders.filter((folder) => {
-        if (folder.ownerId !== userId) {
-            return false;
-        }
-        if (folder.deletedAt === null) {
-            return false;
-        }
-        if (folder.type === "ROOT") {
-            return false;
-        }
-        if (fixedDestination && isFolderPathInSubtree(fixedDestination.folderPath, folder.folderPath)) {
-            return false;
-        }
-        return true;
-    });
-
-    const selectedRestorableFolderMap = new Map(selectedRestorableFolders.map((folder) => [folder.id, folder]));
-    const restorableFolderIds = new Set<string>();
-
-    if (fixedDestination) {
-        for (const folder of selectedRestorableFolders) {
-            restorableFolderIds.add(folder.id);
-        }
-    } else {
-        const externalParentIds = new Set<string>();
-        for (const folder of selectedRestorableFolders) {
-            if (folder.parentFolderId && !selectedRestorableFolderMap.has(folder.parentFolderId)) {
-                externalParentIds.add(folder.parentFolderId);
-            }
-        }
-
-        const externalActiveParents =
-            externalParentIds.size === 0
-                ? []
-                : await this.db
-                      .select({
-                          id: folders.id,
-                      })
-                      .from(folders)
-                      .where(
-                          and(
-                              eq(folders.ownerId, userId),
-                              isNull(folders.deletedAt),
-                              inArray(folders.id, Array.from(externalParentIds)),
-                          ),
-                      );
-        const externalActiveParentSet = new Set(externalActiveParents.map((row) => row.id));
-
-        let changed = true;
-        while (changed) {
-            changed = false;
-            for (const folder of selectedRestorableFolders) {
-                if (restorableFolderIds.has(folder.id)) {
-                    continue;
-                }
-                if (!folder.parentFolderId) {
-                    continue;
-                }
-                if (
-                    externalActiveParentSet.has(folder.parentFolderId) ||
-                    restorableFolderIds.has(folder.parentFolderId)
-                ) {
-                    restorableFolderIds.add(folder.id);
-                    changed = true;
-                }
-            }
-        }
-    }
-
-    const restorableFolders = selectedRestorableFolders.filter((folder) => restorableFolderIds.has(folder.id));
-    const sortedRestorableFolders = [...restorableFolders].sort((left, right) => {
-        if (left.folderPath.length === right.folderPath.length) {
-            return left.folderPath.localeCompare(right.folderPath);
-        }
-        return left.folderPath.length - right.folderPath.length;
-    });
-
-    const restoreRoots: Array<{
-        id: string;
-        oldPath: string;
-        newPath: string;
-        newParentId: string;
-        rootDeletedAt: Date;
-    }> = [];
-    for (const folder of sortedRestorableFolders) {
-        const newParentId = fixedDestination?.id ?? folder.parentFolderId;
-        if (!newParentId || folder.deletedAt === null) {
-            continue;
-        }
-
-        restoreRoots.push({
-            id: folder.id,
-            oldPath: folder.folderPath,
-            newPath: fixedDestination ? buildFolderPath(fixedDestination.folderPath, folder.id) : folder.folderPath,
-            newParentId,
-            rootDeletedAt: folder.deletedAt,
+        const selectedRestorableFilesBase = requestedFiles.filter((fileRow) => {
+            return fileRow.ownerId === userId && fileRow.deletedAt !== null;
         });
-    }
+        const selectedRestorableFileIds = selectedRestorableFilesBase.map((fileRow) => fileRow.id);
+        const selectedRestorableFolderIds = selectedRestorableFolders.map((folder) => folder.id);
 
-    const selectedRestorableFilesBase = requestedFiles.filter((fileRow) => {
-        return fileRow.ownerId === userId && fileRow.deletedAt !== null;
-    });
-    const selectedRestorableFileIds = selectedRestorableFilesBase.map((fileRow) => fileRow.id);
-    const selectedRestorableFolderIds = selectedRestorableFolders.map((folder) => folder.id);
+        await ownerTx.transaction(async (tx) => {
+            if (fixedDestination) {
+                for (const fileChunk of chunk(selectedRestorableFileIds, 500)) {
+                    const fileIdsSql = sql.join(
+                        fileChunk.map((fileId) => sql`${fileId}`),
+                        sql`, `,
+                    );
 
-    await this.db.transaction(async (tx) => {
-        if (fixedDestination) {
-            for (const fileChunk of chunk(selectedRestorableFileIds, 500)) {
-                const fileIdsSql = sql.join(
-                    fileChunk.map((fileId) => sql`${fileId}`),
-                    sql`, `,
-                );
-
-                await tx.execute(sql`
+                    await tx.execute(sql`
                     update "Files" as file_row
                     set "deletedAt" = null,
                         "parentId" = ${fixedDestination.id}
@@ -1478,20 +1646,20 @@ export async function batchRestoreHandler(
                       and destination_folder."ownerId" = ${userId}
                       and destination_folder."deletedAt" is null
                 `);
+                }
             }
-        }
 
-        if (restoreRoots.length > 0) {
-            for (const rootChunk of chunk(restoreRoots, 500)) {
-                const rootValuesSql = sql.join(
-                    rootChunk.map(
-                        (root) =>
-                            sql`(${root.id}, ${root.oldPath}, ${root.newPath}, ${root.newParentId}, ${root.rootDeletedAt})`,
-                    ),
-                    sql`, `,
-                );
+            if (restoreRoots.length > 0) {
+                for (const rootChunk of chunk(restoreRoots, 500)) {
+                    const rootValuesSql = sql.join(
+                        rootChunk.map(
+                            (root) =>
+                                sql`(${root.id}, ${root.oldPath}, ${root.newPath}, ${root.newParentId}, ${root.rootDeletedAt})`,
+                        ),
+                        sql`, `,
+                    );
 
-                await tx.execute(sql`
+                    await tx.execute(sql`
                     with recursive root_input ("id", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         values ${rootValuesSql}
                     ),
@@ -1563,7 +1731,7 @@ export async function batchRestoreHandler(
                     subtree ("id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         select "id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt"
                         from root_updates
-                        union all
+                        union
                         select
                             child_folder."id",
                             subtree."rootId",
@@ -1594,7 +1762,7 @@ export async function batchRestoreHandler(
                       and file_row."deletedAt" = winner."rootDeletedAt"
                 `);
 
-                await tx.execute(sql`
+                    await tx.execute(sql`
                     with recursive root_input ("id", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         values ${rootValuesSql}
                     ),
@@ -1666,7 +1834,7 @@ export async function batchRestoreHandler(
                     subtree ("id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt") as (
                         select "id", "rootId", "oldPath", "newPath", "newParentId", "rootDeletedAt"
                         from root_updates
-                        union all
+                        union
                         select
                             child_folder."id",
                             subtree."rootId",
@@ -1709,17 +1877,17 @@ export async function batchRestoreHandler(
                     where folder_row."id" = winner."id"
                       and folder_row."ownerId" = ${userId}
                 `);
+                }
             }
-        }
 
-        for (const fileChunk of chunk(selectedRestorableFileIds, 500)) {
-            if (!fixedDestination) {
-                const fileIdsSql = sql.join(
-                    fileChunk.map((fileId) => sql`${fileId}`),
-                    sql`, `,
-                );
+            for (const fileChunk of chunk(selectedRestorableFileIds, 500)) {
+                if (!fixedDestination) {
+                    const fileIdsSql = sql.join(
+                        fileChunk.map((fileId) => sql`${fileId}`),
+                        sql`, `,
+                    );
 
-                await tx.execute(sql`
+                    await tx.execute(sql`
                     update "Files" as file_row
                     set "deletedAt" = null
                     from "Folders" as parent_folder
@@ -1730,40 +1898,46 @@ export async function batchRestoreHandler(
                       and parent_folder."ownerId" = ${userId}
                       and parent_folder."deletedAt" is null
                 `);
+                }
             }
+        });
+
+        let restoredSelectedFolderCount = 0;
+        for (const idChunk of chunk(selectedRestorableFolderIds, 500)) {
+            const rows = await ownerTx
+                .select({
+                    id: folders.id,
+                })
+                .from(folders)
+                .where(and(eq(folders.ownerId, userId), isNull(folders.deletedAt), inArray(folders.id, idChunk)));
+            restoredSelectedFolderCount += rows.length;
         }
+
+        let restoredSelectedFileCount = 0;
+        for (const idChunk of chunk(selectedRestorableFileIds, 500)) {
+            const rows = await ownerTx
+                .select({
+                    id: files.id,
+                })
+                .from(files)
+                .where(and(eq(files.ownerId, userId), isNull(files.deletedAt), inArray(files.id, idChunk)));
+            restoredSelectedFileCount += rows.length;
+        }
+
+        const summary = buildBatchSummary(total, restoredSelectedFolderCount + restoredSelectedFileCount);
+        const status = resolveBatchStatus(summary);
+
+        return {
+            statusCode: 200,
+            body: {
+                status,
+                message: buildBatchMessage("Batch restore", status),
+                summary,
+            },
+        };
     });
 
-    let restoredSelectedFolderCount = 0;
-    for (const idChunk of chunk(selectedRestorableFolderIds, 500)) {
-        const rows = await this.db
-            .select({
-                id: folders.id,
-            })
-            .from(folders)
-            .where(and(eq(folders.ownerId, userId), isNull(folders.deletedAt), inArray(folders.id, idChunk)));
-        restoredSelectedFolderCount += rows.length;
-    }
-
-    let restoredSelectedFileCount = 0;
-    for (const idChunk of chunk(selectedRestorableFileIds, 500)) {
-        const rows = await this.db
-            .select({
-                id: files.id,
-            })
-            .from(files)
-            .where(and(eq(files.ownerId, userId), isNull(files.deletedAt), inArray(files.id, idChunk)));
-        restoredSelectedFileCount += rows.length;
-    }
-
-    const summary = buildBatchSummary(total, restoredSelectedFolderCount + restoredSelectedFileCount);
-    const status = resolveBatchStatus(summary);
-
-    return reply.code(200).send({
-        status,
-        message: buildBatchMessage("Batch restore", status),
-        summary,
-    });
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function permanentlyDeleteHandler(
@@ -1777,7 +1951,9 @@ export async function permanentlyDeleteHandler(
     }
 
     const { itemType, itemId } = request.params;
-    const deleteResult = await permanentlyDeleteRecycleItem(this, userId, itemType, itemId);
+    const deleteResult = await withOwnerHierarchyLock(this, userId, (tx) =>
+        permanentlyDeleteRecycleItem(tx, userId, itemType, itemId),
+    );
 
     if (deleteResult.outcome !== "SUCCESS") {
         return reply.code(deleteResult.statusCode).send({ message: deleteResult.message });
@@ -1803,57 +1979,58 @@ export async function batchPermanentlyDeleteHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const folderIds = dedupeIds(request.body.folderIds);
-    const fileIds = dedupeIds(request.body.fileIds);
-    const total = folderIds.length + fileIds.length;
+    const result = await withOwnerHierarchyLock(this, userId, async (ownerTx) => {
+        const folderIds = dedupeIds(request.body.folderIds);
+        const fileIds = dedupeIds(request.body.fileIds);
+        const total = folderIds.length + fileIds.length;
 
-    const requestedFolders: Array<{
-        id: string;
-        ownerId: string;
-        folderPath: string;
-        deletedAt: Date | null;
-    }> = [];
-    for (const idChunk of chunk(folderIds, 500)) {
-        const rows = await this.db
-            .select({
-                id: folders.id,
-                ownerId: folders.ownerId,
-                folderPath: folders.folderPath,
-                deletedAt: folders.deletedAt,
-            })
-            .from(folders)
-            .where(inArray(folders.id, idChunk));
-        requestedFolders.push(...rows);
-    }
+        const requestedFolders: Array<{
+            id: string;
+            ownerId: string;
+            folderPath: string;
+            deletedAt: Date | null;
+        }> = [];
+        for (const idChunk of chunk(folderIds, 500)) {
+            const rows = await ownerTx
+                .select({
+                    id: folders.id,
+                    ownerId: folders.ownerId,
+                    folderPath: folders.folderPath,
+                    deletedAt: folders.deletedAt,
+                })
+                .from(folders)
+                .where(inArray(folders.id, idChunk));
+            requestedFolders.push(...rows);
+        }
 
-    const requestedFiles: Array<{
-        id: string;
-        ownerId: string;
-        deletedAt: Date | null;
-    }> = [];
-    for (const idChunk of chunk(fileIds, 500)) {
-        const rows = await this.db
-            .select({
-                id: files.id,
-                ownerId: files.ownerId,
-                deletedAt: files.deletedAt,
-            })
-            .from(files)
-            .where(inArray(files.id, idChunk));
-        requestedFiles.push(...rows);
-    }
+        const requestedFiles: Array<{
+            id: string;
+            ownerId: string;
+            deletedAt: Date | null;
+        }> = [];
+        for (const idChunk of chunk(fileIds, 500)) {
+            const rows = await ownerTx
+                .select({
+                    id: files.id,
+                    ownerId: files.ownerId,
+                    deletedAt: files.deletedAt,
+                })
+                .from(files)
+                .where(inArray(files.id, idChunk));
+            requestedFiles.push(...rows);
+        }
 
-    const selectedDeletedFolders = requestedFolders.filter(
-        (folder) => folder.ownerId === userId && folder.deletedAt !== null,
-    );
-    const activeDescendantCounts = new Map<string, number>();
-
-    for (const folderChunk of chunk(selectedDeletedFolders, 500)) {
-        const valuesSql = sql.join(
-            folderChunk.map((folder) => sql`(${folder.id})`),
-            sql`, `,
+        const selectedDeletedFolders = requestedFolders.filter(
+            (folder) => folder.ownerId === userId && folder.deletedAt !== null,
         );
-        const activeCountsResult = (await this.db.execute(sql`
+        const activeDescendantCounts = new Map<string, number>();
+
+        for (const folderChunk of chunk(selectedDeletedFolders, 500)) {
+            const valuesSql = sql.join(
+                folderChunk.map((folder) => sql`(${folder.id})`),
+                sql`, `,
+            );
+            const activeCountsResult = (await ownerTx.execute(sql`
             with recursive selected_roots ("rootId", "id") as (
                 select root_values."id", root_values."id"
                 from (values ${valuesSql}) as root_values("id")
@@ -1861,7 +2038,7 @@ export async function batchPermanentlyDeleteHandler(
             subtree ("rootId", "id") as (
                 select "rootId", "id"
                 from selected_roots
-                union all
+                union
                 select subtree."rootId", child_folder."id"
                 from "Folders" as child_folder
                 inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -1881,110 +2058,73 @@ export async function batchPermanentlyDeleteHandler(
                 and active_file."deletedAt" is null
             group by subtree."rootId"
         `)) as {
-            rows?: Array<{
-                rootId?: unknown;
-                activeCount?: unknown;
-            }>;
-        };
+                rows?: Array<{
+                    rootId?: unknown;
+                    activeCount?: unknown;
+                }>;
+            };
 
-        for (const row of activeCountsResult.rows ?? []) {
-            if (typeof row.rootId !== "string") {
-                continue;
+            for (const row of activeCountsResult.rows ?? []) {
+                if (typeof row.rootId !== "string") {
+                    continue;
+                }
+                activeDescendantCounts.set(row.rootId, parsePgInteger(row.activeCount));
             }
-            activeDescendantCounts.set(row.rootId, parsePgInteger(row.activeCount));
         }
-    }
 
-    const validSelectedFolders = selectedDeletedFolders.filter(
-        (folder) => (activeDescendantCounts.get(folder.id) ?? 0) === 0,
-    );
-    const sortedValidSelectedFolders = [...validSelectedFolders].sort((left, right) => {
-        if (left.folderPath.length === right.folderPath.length) {
-            return left.folderPath.localeCompare(right.folderPath);
-        }
-        return left.folderPath.length - right.folderPath.length;
-    });
-
-    const deleteRoots: Array<{ id: string; folderPath: string }> = [];
-    for (const folder of sortedValidSelectedFolders) {
-        const isNestedSelectedFolder = deleteRoots.some((root) =>
-            isFolderPathInSubtree(folder.folderPath, root.folderPath),
+        const validSelectedFolders = selectedDeletedFolders.filter(
+            (folder) => (activeDescendantCounts.get(folder.id) ?? 0) === 0,
         );
-        if (isNestedSelectedFolder) {
-            continue;
-        }
-
-        deleteRoots.push({
-            id: folder.id,
-            folderPath: folder.folderPath,
+        const sortedValidSelectedFolders = [...validSelectedFolders].sort((left, right) => {
+            if (left.folderPath.length === right.folderPath.length) {
+                return left.folderPath.localeCompare(right.folderPath);
+            }
+            return left.folderPath.length - right.folderPath.length;
         });
-    }
 
-    const purgedFileRows = new Map<string, { id: string; ownerId: string }>();
-    for (const rootChunk of chunk(deleteRoots, 500)) {
-        const valuesSql = sql.join(
-            rootChunk.map((root) => sql`(${root.id})`),
-            sql`, `,
-        );
-        const subtreeFilesResult = (await this.db.execute(sql`
-            with recursive root_ids ("id") as (
-                values ${valuesSql}
-            ),
-            subtree ("id") as (
-                select "id"
-                from root_ids
-                union all
-                select child_folder."id"
-                from "Folders" as child_folder
-                inner join subtree on child_folder."parentFolderId" = subtree."id"
-                where child_folder."ownerId" = ${userId}
-            )
-            select file_row."id" as "id", file_row."ownerId" as "ownerId"
-            from "Files" as file_row
-            where file_row."ownerId" = ${userId}
-              and file_row."deletedAt" is not null
-              and file_row."parentId" in (select "id" from subtree)
-        `)) as {
-            rows?: Array<{
-                id?: unknown;
-                ownerId?: unknown;
-            }>;
-        };
-
-        for (const row of subtreeFilesResult.rows ?? []) {
-            if (typeof row.id !== "string" || typeof row.ownerId !== "string") {
+        const deleteRoots: Array<{ id: string; folderPath: string }> = [];
+        for (const folder of sortedValidSelectedFolders) {
+            const isNestedSelectedFolder = deleteRoots.some((root) =>
+                isFolderPathInSubtree(folder.folderPath, root.folderPath),
+            );
+            if (isNestedSelectedFolder) {
                 continue;
             }
-            purgedFileRows.set(row.id, { id: row.id, ownerId: row.ownerId });
+
+            deleteRoots.push({
+                id: folder.id,
+                folderPath: folder.folderPath,
+            });
         }
-    }
 
-    const selectedDeletedFiles = requestedFiles.filter(
-        (fileRow) => fileRow.ownerId === userId && fileRow.deletedAt !== null,
-    );
-    for (const fileRow of selectedDeletedFiles) {
-        purgedFileRows.set(fileRow.id, { id: fileRow.id, ownerId: fileRow.ownerId });
-    }
-
-    if (purgedFileRows.size > 0) {
-        await hardDeleteFilesByRows(this, Array.from(purgedFileRows.values()));
-    }
-
-    await this.db.transaction(async (tx) => {
         for (const rootChunk of chunk(deleteRoots, 500)) {
-            const valuesSql = sql.join(
-                rootChunk.map((root) => sql`(${root.id})`),
-                sql`, `,
+            await hardDeleteFolderSubtreeFiles(
+                ownerTx,
+                userId,
+                rootChunk.map((root) => root.id),
             );
+        }
 
-            await tx.execute(sql`
+        const selectedDeletedFiles = requestedFiles.filter(
+            (fileRow) => fileRow.ownerId === userId && fileRow.deletedAt !== null,
+        );
+        await hardDeleteFilesByRows(ownerTx, selectedDeletedFiles);
+
+        await ownerTx.transaction(async (tx) => {
+            for (const rootChunk of chunk(deleteRoots, 500)) {
+                const valuesSql = sql.join(
+                    rootChunk.map((root) => sql`(${root.id})`),
+                    sql`, `,
+                );
+
+                await tx.execute(sql`
                 with recursive root_ids ("id") as (
                     values ${valuesSql}
                 ),
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -1994,14 +2134,14 @@ export async function batchPermanentlyDeleteHandler(
                 where display_order."folderId" in (select "id" from subtree)
             `);
 
-            await tx.execute(sql`
+                await tx.execute(sql`
                 with recursive root_ids ("id") as (
                     values ${valuesSql}
                 ),
                 subtree ("id") as (
                     select "id"
                     from root_ids
-                    union all
+                    union
                     select child_folder."id"
                     from "Folders" as child_folder
                     inner join subtree on child_folder."parentFolderId" = subtree."id"
@@ -2012,17 +2152,23 @@ export async function batchPermanentlyDeleteHandler(
                   and folder_row."deletedAt" is not null
                   and folder_row."id" in (select "id" from subtree)
             `);
-        }
+            }
+        });
+
+        const summary = buildBatchSummary(total, validSelectedFolders.length + selectedDeletedFiles.length);
+        const status = resolveBatchStatus(summary);
+
+        return {
+            statusCode: 200,
+            body: {
+                status,
+                message: buildBatchMessage("Batch permanent delete", status),
+                summary,
+            },
+        };
     });
 
-    const summary = buildBatchSummary(total, validSelectedFolders.length + selectedDeletedFiles.length);
-    const status = resolveBatchStatus(summary);
-
-    return reply.code(200).send({
-        status,
-        message: buildBatchMessage("Batch permanent delete", status),
-        summary,
-    });
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function emptyRecycleBinHandler(
@@ -2035,46 +2181,56 @@ export async function emptyRecycleBinHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    const itemType = request.query.itemType;
+    const result = await withOwnerHierarchyLock(this, userId, async (tx) => {
+        const itemType = request.query.itemType;
 
-    const { topLevelDeletedFiles, topLevelDeletedFolders } = await getTopLevelDeletedRowsForOwner(this, userId, {
-        itemType,
-    });
+        const { topLevelDeletedFiles, topLevelDeletedFolders } = await getTopLevelDeletedRowsForOwner(tx, userId, {
+            itemType,
+        });
 
-    const purgedFilesFromTopLevelFiles = await hardDeleteFilesByRows(
-        this,
-        topLevelDeletedFiles.map((file) => ({ id: file.id, ownerId: userId })),
-    );
+        const purgedFilesFromTopLevelFiles = await hardDeleteFilesByRows(
+            tx,
+            topLevelDeletedFiles.map((file) => ({ id: file.id, ownerId: userId })),
+        );
 
-    let purgedFilesFromFolders = 0;
-    let purgedFolders = 0;
+        let purgedFilesFromFolders = 0;
+        let purgedFolders = 0;
 
-    for (const folderRow of topLevelDeletedFolders) {
-        try {
-            const summary = await permanentlyDeleteFolderSubtree(this, userId, folderRow.id);
-            if (!summary) {
-                continue;
+        for (const folderRow of topLevelDeletedFolders) {
+            try {
+                const summary = await permanentlyDeleteFolderSubtree(tx, userId, folderRow.id);
+                if (!summary) {
+                    continue;
+                }
+
+                purgedFilesFromFolders += summary.purgedFiles;
+                purgedFolders += summary.purgedFolders;
+            } catch (error) {
+                if (isActiveDescendantsError(error)) {
+                    return {
+                        statusCode: 409,
+                        body: {
+                            message: "Recycle bin contains folders with active descendants that cannot be purged",
+                        },
+                    };
+                }
+
+                throw error;
             }
-
-            purgedFilesFromFolders += summary.purgedFiles;
-            purgedFolders += summary.purgedFolders;
-        } catch (error) {
-            if (error instanceof Error && error.message === "ACTIVE_DESCENDANTS_PRESENT") {
-                return reply
-                    .code(409)
-                    .send({ message: "Recycle bin contains folders with active descendants that cannot be purged" });
-            }
-
-            throw error;
         }
-    }
 
-    return reply.code(200).send({
-        status: "success",
-        message: "Recycle bin emptied",
-        purgedFiles: purgedFilesFromTopLevelFiles + purgedFilesFromFolders,
-        purgedFolders,
+        return {
+            statusCode: 200,
+            body: {
+                status: "success",
+                message: "Recycle bin emptied",
+                purgedFiles: purgedFilesFromTopLevelFiles + purgedFilesFromFolders,
+                purgedFolders,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function purgeExpiredHandler(
@@ -2093,13 +2249,20 @@ export async function purgeExpiredHandler(
     }
 
     const purgeResult = await runPurgeExpired(this, request.body?.olderThanDays);
+    const status = purgeResult.failedOwners > 0 ? "partial" : "success";
 
     return reply.code(200).send({
-        status: "success",
-        message: purgeResult.skipped ? "Purge already in progress" : "Expired recycle-bin items purged",
+        status,
+        message: purgeResult.skipped
+            ? "Purge already in progress"
+            : purgeResult.failedOwners > 0
+              ? "Expired recycle-bin purge completed with owner failures"
+              : "Expired recycle-bin items purged",
         olderThanDays: purgeResult.olderThanDays,
+        failedOwners: purgeResult.failedOwners,
         purgedFiles: purgeResult.purgedFiles,
         purgedFolders: purgeResult.purgedFolders,
+        skipped: purgeResult.skipped,
     });
 }
 

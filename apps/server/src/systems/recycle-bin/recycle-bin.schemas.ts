@@ -147,11 +147,13 @@ const purgeBodySchema = z
     .optional();
 
 const purgeResponseSchema = z.object({
-    status: z.literal("success"),
+    status: z.enum(["success", "partial"]),
     message: z.string(),
     olderThanDays: z.number().int(),
+    failedOwners: z.number().int().min(0),
     purgedFiles: z.number().int(),
     purgedFolders: z.number().int(),
+    skipped: z.boolean(),
 });
 
 export type RecycleItemType = z.infer<typeof recycleItemTypeSchema>;

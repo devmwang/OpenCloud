@@ -122,18 +122,25 @@ async function recycleBinRouter(server: FastifyInstance) {
     const interval = setInterval(() => {
         void runPurgeExpired(server)
             .then((result) => {
-                if (result.skipped || (result.purgedFiles === 0 && result.purgedFolders === 0)) {
+                if (result.skipped) {
                     return;
                 }
 
-                server.log.info(
-                    {
-                        purgedFiles: result.purgedFiles,
-                        purgedFolders: result.purgedFolders,
-                        olderThanDays: result.olderThanDays,
-                    },
-                    "Automatic recycle-bin purge completed",
-                );
+                const purgeReport = {
+                    failedOwners: result.failedOwners,
+                    purgedFiles: result.purgedFiles,
+                    purgedFolders: result.purgedFolders,
+                    olderThanDays: result.olderThanDays,
+                };
+
+                if (result.failedOwners > 0) {
+                    server.log.warn(purgeReport, "Automatic recycle-bin purge completed with owner failures");
+                    return;
+                }
+
+                if (result.purgedFiles > 0 || result.purgedFolders > 0) {
+                    server.log.info(purgeReport, "Automatic recycle-bin purge completed");
+                }
             })
             .catch((error) => {
                 server.log.error({ err: error }, "Automatic recycle-bin purge failed");

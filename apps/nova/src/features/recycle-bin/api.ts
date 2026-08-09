@@ -152,11 +152,13 @@ const purgeExpiredInputSchema = z
     .optional();
 
 const purgeExpiredResponseSchema = z.object({
-    status: z.literal("success"),
+    status: z.enum(["success", "partial"]),
     message: z.string(),
     olderThanDays: z.number().int(),
+    failedOwners: z.number().int().min(0),
     purgedFiles: z.number().int(),
     purgedFolders: z.number().int(),
+    skipped: z.boolean(),
 });
 
 export type RecycleBinListItem = z.infer<typeof recycleBinListItemSchema>;

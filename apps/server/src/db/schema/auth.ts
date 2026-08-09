@@ -34,7 +34,7 @@ export const uploadTokens = pgTable(
             name: "UploadTokens_folderId_userId_fkey",
         })
             .onUpdate("cascade")
-            .onDelete("restrict"),
+            .onDelete("cascade"),
         userIdIdx: index("UploadTokens_userId_idx").on(table.userId),
         folderIdIdx: index("UploadTokens_folderId_idx").on(table.folderId),
         expiresAtIdx: index("UploadTokens_expiresAt_idx").on(table.expiresAt),

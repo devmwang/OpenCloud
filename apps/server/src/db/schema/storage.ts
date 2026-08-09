@@ -37,7 +37,7 @@ export const folders = pgTable(
             name: "Folders_parentFolderId_ownerId_fkey",
         })
             .onUpdate("cascade")
-            .onDelete("set null"),
+            .onDelete("cascade"),
         parentFolderIdIdx: index("Folders_parentFolderId_idx").on(table.parentFolderId),
         ownerParentNameIdx: index("Folders_owner_parent_name_idx").on(
             table.ownerId,
