@@ -7,7 +7,7 @@ Services are installed under `/etc/systemd/system` and can start at boot.
 
 - Linux with systemd
 - Root access (`sudo`) for service install/manage commands
-- Node.js `>= 22.12.0` for the service user account
+- Node.js `^22.13.0 || >=24.0.0` for the service user account
 - [pnpm](https://pnpm.io/) (for example: `corepack enable && corepack prepare pnpm@latest --activate`)
 - Git (for clone-based install)
 - For **server**: PostgreSQL, `.env` with `DATABASE_URL`, `FILE_STORE_PATH`, and other required variables (see [Environment](../agents/ENVIRONMENT.md))
@@ -108,7 +108,7 @@ If you omit both `--repo` and `--clone`, the script uses the current directory i
 
 ### Node version check fails
 
-OpenCloud requires Node.js `>= 22.12.0`. If you use nvm, set the service user's default alias to a supported version, then rerun install/update/rebuild:
+OpenCloud requires Node.js `^22.13.0 || >=24.0.0`. If you use nvm, set the service user's default alias to a supported version, then rerun install/update/rebuild:
 
 ```bash
 nvm alias default 22

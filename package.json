@@ -23,7 +23,7 @@
         "typescript-eslint": "^8.54.0"
     },
     "engines": {
-        "node": ">=22.12.0"
+        "node": "^22.13.0 || >=24.0.0"
     },
     "packageManager": "pnpm@10.34.0+sha512.8736169c56fdb6e26afb5d7e2bd5f4c99cc299620d8bdc288cb354e6dd0936bd4ea62276d1a6b2de4b6e971a00a530e0e08bbeeda63da5d820118d3d7e21ff69"
 }

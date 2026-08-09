@@ -8,7 +8,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="${0##*/}"
-readonly MIN_NODE_VERSION="22.12.0"
+readonly NODE_VERSION_RANGE="^22.13.0 || >=24.0.0"
 readonly DEFAULT_CLONE_URL="https://github.com/devmwang/OpenCloud.git"
 
 readonly OPENCLOUD_SERVICE_ENV="${OPENCLOUD_SERVICE_ENV:-/etc/opencloud/opencloud-service.env}"
@@ -290,7 +290,7 @@ check_tools_for_user() {
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
-        die "Missing required tools for user '$user': ${missing[*]}. Install git (if needed), Node.js (>=$MIN_NODE_VERSION), and pnpm (e.g. corepack enable && corepack prepare pnpm@latest --activate)."
+        die "Missing required tools for user '$user': ${missing[*]}. Install git (if needed), Node.js ($NODE_VERSION_RANGE), and pnpm (e.g. corepack enable && corepack prepare pnpm@latest --activate)."
     fi
 }
 
@@ -329,6 +329,17 @@ semver_gte() {
     return 1
 }
 
+node_version_supported() {
+    local version="${1#v}"
+    local major="${version%%.*}"
+
+    if [[ "$major" == "22" ]]; then
+        semver_gte "$version" "22.13.0"
+    else
+        semver_gte "$version" "24.0.0"
+    fi
+}
+
 check_node_version_for_user() {
     local user="$1"
     local node_version
@@ -337,8 +348,8 @@ check_node_version_for_user() {
         die "Unable to determine Node.js version for user '$user'."
     fi
 
-    if ! semver_gte "$node_version" "$MIN_NODE_VERSION"; then
-        die "Node.js $node_version is unsupported for user '$user'. OpenCloud requires Node.js >= $MIN_NODE_VERSION. Upgrade Node.js for '$user' and rerun."
+    if ! node_version_supported "$node_version"; then
+        die "Node.js $node_version is unsupported for user '$user'. OpenCloud requires Node.js $NODE_VERSION_RANGE. Upgrade Node.js for '$user' and rerun."
     fi
 }
 
