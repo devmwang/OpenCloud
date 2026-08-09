@@ -5,6 +5,7 @@ import util from "util";
 
 import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
+import type { Multipart, MultipartFile } from "@fastify/multipart";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -23,6 +24,17 @@ type UploadContext = {
     ownerId: string;
     folderId: string;
     fileAccess: FileAccess;
+};
+
+let activeUploadCount = 0;
+
+const rejectTruncatedField = (
+    part: Multipart,
+    FieldsLimitError: FastifyInstance["multipartErrors"]["FieldsLimitError"],
+) => {
+    if (part.type === "field" && part.valueTruncated) {
+        throw new FieldsLimitError();
+    }
 };
 
 const resolveAuthenticatedUploadContext = async (
@@ -155,15 +167,30 @@ export async function uploadFileHandler(
     request: FastifyRequest<{ Querystring: UploadFileQuerystring }>,
     reply: FastifyReply,
 ) {
-    const fileData = await request.file();
+    const parts = request.parts();
+    let fileData: MultipartFile | undefined;
+    let uploadTokenValue: string | null = null;
+
+    let nextPart = await parts.next();
+    while (!nextPart.done) {
+        const part = nextPart.value;
+        rejectTruncatedField(part, this.multipartErrors.FieldsLimitError);
+
+        if (part.type === "file") {
+            fileData = part;
+            break;
+        }
+
+        if (part.fieldname === "uploadToken" && typeof part.value === "string") {
+            uploadTokenValue = part.value;
+        }
+
+        nextPart = await parts.next();
+    }
 
     if (!fileData) {
         return reply.code(400).send({ message: "No file provided" });
     }
-
-    const uploadTokenField = fileData.fields["uploadToken"];
-    const uploadTokenValue =
-        uploadTokenField && "value" in uploadTokenField ? (uploadTokenField.value as string) : null;
 
     let uploadContext: UploadContext;
     try {
@@ -191,6 +218,12 @@ export async function uploadFileHandler(
         }
     }
 
+    if (activeUploadCount >= env.UPLOAD_CONCURRENCY_LIMIT) {
+        fileData.file.resume();
+        return reply.header("Retry-After", "1").code(503).send({ message: "Upload capacity is full" });
+    }
+
+    activeUploadCount += 1;
     try {
         const fileRecord = await createFileDetails(
             this.db,
@@ -200,7 +233,14 @@ export async function uploadFileHandler(
             uploadContext.fileAccess,
         );
 
-        await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file);
+        await coreUploadHandler(
+            this.db,
+            uploadContext.ownerId,
+            fileRecord.id,
+            fileData.file,
+            parts,
+            this.multipartErrors.FieldsLimitError,
+        );
 
         return reply.code(201).send({
             id: fileRecord.id,
@@ -208,8 +248,19 @@ export async function uploadFileHandler(
             storageState: "READY",
         });
     } catch (error) {
+        if (
+            error instanceof this.multipartErrors.PartsLimitError ||
+            error instanceof this.multipartErrors.FilesLimitError ||
+            error instanceof this.multipartErrors.FieldsLimitError ||
+            error instanceof this.multipartErrors.RequestFileTooLargeError
+        ) {
+            throw error;
+        }
+
         request.log.error({ err: error }, "Upload failed");
         return reply.code(500).send({ message: "Upload failed" });
+    } finally {
+        activeUploadCount -= 1;
     }
 }
 
@@ -240,13 +291,27 @@ async function createFileDetails(
     return fileDetails;
 }
 
-async function coreUploadHandler(db: Database, ownerId: string, fileId: string, file: BusboyFileStream) {
+async function coreUploadHandler(
+    db: Database,
+    ownerId: string,
+    fileId: string,
+    file: BusboyFileStream,
+    remainingParts: ReturnType<FastifyRequest["parts"]>,
+    FieldsLimitError: FastifyInstance["multipartErrors"]["FieldsLimitError"],
+) {
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
     const filePath = path.join(folderPath, fileId);
 
     try {
         await fs.promises.mkdir(folderPath, { recursive: true });
         await pump(file, fs.createWriteStream(filePath));
+
+        let nextPart = await remainingParts.next();
+        while (!nextPart.done) {
+            rejectTruncatedField(nextPart.value, FieldsLimitError);
+            nextPart = await remainingParts.next();
+        }
+
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
         const fileType = await detectStoredMimeType(filePath);
 

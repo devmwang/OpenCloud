@@ -11,6 +11,8 @@ import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 
 import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
 
+let activeThumbnailCount = 0;
+
 const getReadToken = (request: FastifyRequest<{ Querystring: FileReadQuery }>) => {
     const readToken = request.query.readToken;
     return typeof readToken === "string" ? readToken : undefined;
@@ -263,10 +265,15 @@ export async function getThumbnailHandler(
         return reply.code(415).send({ message: "Unsupported media type" });
     }
 
+    if (activeThumbnailCount >= env.THUMBNAIL_CONCURRENCY_LIMIT) {
+        return reply.header("Retry-After", "1").code(503).send({ message: "Thumbnail capacity is full" });
+    }
+
     void reply.header("Content-Type", mimeType);
     void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
 
     const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
+    activeThumbnailCount += 1;
     try {
         const thumbnailBuffer = await sharp(fullFilePath).resize(300, 200).toBuffer();
         return reply.send(thumbnailBuffer);
@@ -276,6 +283,8 @@ export async function getThumbnailHandler(
         }
 
         return reply.code(500).send({ message: "Thumbnail generation failed" });
+    } finally {
+        activeThumbnailCount -= 1;
     }
 }
 
