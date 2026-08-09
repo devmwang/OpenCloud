@@ -789,26 +789,7 @@ export async function batchDeleteItemsHandler(
                 sql`, `,
             );
 
-            await tx.execute(sql`
-                with recursive root_ids ("id") as (
-                    values ${valuesSql}
-                ),
-                subtree ("id") as (
-                    select "id"
-                    from root_ids
-                    union all
-                    select child_folder."id"
-                    from "Folders" as child_folder
-                    inner join subtree on child_folder."parentFolderId" = subtree."id"
-                    where child_folder."ownerId" = ${userId}
-                )
-                update "Files" as file_row
-                set "deletedAt" = ${deletedAt}
-                where file_row."ownerId" = ${userId}
-                  and file_row."deletedAt" is null
-                  and file_row."parentId" in (select "id" from subtree)
-            `);
-
+            // Lock folder rows before scanning files so in-flight uploads commit before the scan.
             await tx.execute(sql`
                 with recursive root_ids ("id") as (
                     values ${valuesSql}
@@ -827,6 +808,26 @@ export async function batchDeleteItemsHandler(
                 where folder_row."ownerId" = ${userId}
                   and folder_row."deletedAt" is null
                   and folder_row."id" in (select "id" from subtree)
+            `);
+
+            await tx.execute(sql`
+                with recursive root_ids ("id") as (
+                    values ${valuesSql}
+                ),
+                subtree ("id") as (
+                    select "id"
+                    from root_ids
+                    union all
+                    select child_folder."id"
+                    from "Folders" as child_folder
+                    inner join subtree on child_folder."parentFolderId" = subtree."id"
+                    where child_folder."ownerId" = ${userId}
+                )
+                update "Files" as file_row
+                set "deletedAt" = ${deletedAt}
+                where file_row."ownerId" = ${userId}
+                  and file_row."deletedAt" is null
+                  and file_row."parentId" in (select "id" from subtree)
             `);
 
             await tx.execute(sql`
@@ -1022,15 +1023,16 @@ export async function deleteFolderHandler(
     const subtreeFolderIds = await collectFolderSubtreeIds(this, userId, folderId);
 
     await this.db.transaction(async (tx) => {
-        await tx
-            .update(files)
-            .set({ deletedAt })
-            .where(and(eq(files.ownerId, userId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)));
-
+        // Lock folder rows before scanning files so in-flight uploads commit before the scan.
         await tx
             .update(folders)
             .set({ deletedAt })
             .where(and(eq(folders.ownerId, userId), inArray(folders.id, subtreeFolderIds), isNull(folders.deletedAt)));
+
+        await tx
+            .update(files)
+            .set({ deletedAt })
+            .where(and(eq(files.ownerId, userId), inArray(files.parentId, subtreeFolderIds), isNull(files.deletedAt)));
 
         await tx.delete(displayOrders).where(inArray(displayOrders.folderId, subtreeFolderIds));
     });
