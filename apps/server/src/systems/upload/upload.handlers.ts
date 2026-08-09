@@ -258,14 +258,12 @@ export async function uploadFileHandler(
 
         const fileData = firstPart.value;
         file = fileData.file;
-        const fileRecord = await createFileDetails(
-            this.db,
-            fileData.filename,
-            fileData.mimetype,
-            uploadContext.ownerId,
-            uploadContext.folderId,
-            uploadContext.fileAccess,
-        );
+        const fileRecord = await createPendingFile(this.db, fileData.filename, fileData.mimetype, uploadContext);
+        if (!fileRecord) {
+            fileData.file.destroy();
+            void reply.header("Connection", "close");
+            return reply.code(409).send({ message: "Upload parent folder is no longer available" });
+        }
 
         await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file, async () => {
             if (fileData.file.truncated) {
@@ -308,32 +306,44 @@ export async function uploadFileHandler(
     }
 }
 
-async function createFileDetails(
-    db: Database,
-    fileName: string,
-    fileType: string,
-    ownerId: string,
-    parentFolderId: string,
-    fileAccess: FileAccess,
-) {
-    const [fileDetails] = await db
-        .insert(files)
-        .values({
-            fileName,
-            fileType,
-            ownerId,
-            fileAccess,
-            parentId: parentFolderId,
-            storageState: "PENDING",
-            storageError: null,
-            storageVerifiedAt: null,
-        })
-        .returning({ id: files.id });
-    if (!fileDetails) {
-        throw new Error("Failed to create file details");
-    }
+async function createPendingFile(db: Database, fileName: string, fileType: string, uploadContext: UploadContext) {
+    return db.transaction(async (tx) => {
+        const [parentFolder] = await tx
+            .select({ id: folders.id })
+            .from(folders)
+            .where(
+                and(
+                    eq(folders.id, uploadContext.folderId),
+                    eq(folders.ownerId, uploadContext.ownerId),
+                    isNull(folders.deletedAt),
+                ),
+            )
+            .for("share")
+            .limit(1);
 
-    return fileDetails;
+        if (!parentFolder) {
+            return null;
+        }
+
+        const [fileDetails] = await tx
+            .insert(files)
+            .values({
+                fileName,
+                fileType,
+                ownerId: uploadContext.ownerId,
+                fileAccess: uploadContext.fileAccess,
+                parentId: parentFolder.id,
+                storageState: "PENDING",
+                storageError: null,
+                storageVerifiedAt: null,
+            })
+            .returning({ id: files.id });
+        if (!fileDetails) {
+            throw new Error("Failed to create file details");
+        }
+
+        return fileDetails;
+    });
 }
 
 async function coreUploadHandler(
