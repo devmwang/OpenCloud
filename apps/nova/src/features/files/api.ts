@@ -20,14 +20,10 @@ const fileManagementSchema = z.object({
     storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
 
-const fileDetailsSchema = fileDetailsBaseSchema.extend({
-    management: fileManagementSchema.optional(),
-});
+const ownerFileDetailsResponseSchema = fileDetailsBaseSchema.extend(fileManagementSchema.shape);
 
-const legacyFileDetailsSchema = fileDetailsBaseSchema.extend(fileManagementSchema.shape);
-
-// Keep the legacy schema first because the optional schema would strip its flat management fields.
-const fileDetailsResponseSchema = z.union([legacyFileDetailsSchema, fileDetailsSchema]);
+// Keep the owner response first because the base schema would strip its management fields.
+const fileDetailsResponseSchema = z.union([ownerFileDetailsResponseSchema, fileDetailsBaseSchema]);
 
 const mutateFileResponseSchema = z.object({
     status: z.string(),
@@ -46,7 +42,9 @@ const renameFileInputSchema = z.object({
     name: z.string().trim().min(1),
 });
 
-export type FileDetails = z.infer<typeof fileDetailsSchema>;
+export type FileDetails = z.infer<typeof fileDetailsBaseSchema> & {
+    management?: z.infer<typeof fileManagementSchema>;
+};
 
 const normalizeFileDetailsResponse = (
     response: z.infer<typeof fileDetailsResponseSchema>,
@@ -85,7 +83,7 @@ export const getFileDetails = async (
     options?: { forwardServerCookies?: boolean; sessionUserId?: string },
 ) => {
     const response = await getJson(`/v1/files/${encodeURIComponent(fileId)}`, fileDetailsResponseSchema, {
-        query: { readToken, detailsVersion: "2" },
+        query: { readToken },
         forwardServerCookies: options?.forwardServerCookies,
     });
 

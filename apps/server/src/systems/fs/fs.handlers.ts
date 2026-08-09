@@ -9,7 +9,7 @@ import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
 import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 
-import type { FileDetailsQuery, FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
+import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
 
 const getReadToken = (request: FastifyRequest<{ Querystring: FileReadQuery }>) => {
     const readToken = request.query.readToken;
@@ -129,7 +129,7 @@ const verifyStoredMimeType = async (
 
 export async function getDetailsHandler(
     this: FastifyInstance,
-    request: FastifyRequest<{ Params: FileParams; Querystring: FileDetailsQuery }>,
+    request: FastifyRequest<{ Params: FileParams; Querystring: FileReadQuery }>,
     reply: FastifyReply,
 ) {
     void reply.header("Cache-Control", "private, no-store");
@@ -180,32 +180,18 @@ export async function getDetailsHandler(
         sizeBytes: file.fileSize,
     };
 
-    if (request.query.detailsVersion !== "2") {
-        return reply.code(200).send({
-            ...details,
-            ownerId: file.ownerId,
-            folderId: file.parentId,
-            access: file.fileAccess,
-            createdAt: file.createdAt.toISOString(),
-            updatedAt: file.updatedAt.toISOString(),
-            storageState: file.storageState,
-        });
-    }
-
     if (!request.authenticated || request.user?.id !== file.ownerId) {
         return reply.code(200).send(details);
     }
 
     return reply.code(200).send({
         ...details,
-        management: {
-            ownerId: file.ownerId,
-            folderId: file.parentId,
-            access: file.fileAccess,
-            createdAt: file.createdAt.toISOString(),
-            updatedAt: file.updatedAt.toISOString(),
-            storageState: file.storageState,
-        },
+        ownerId: file.ownerId,
+        folderId: file.parentId,
+        access: file.fileAccess,
+        createdAt: file.createdAt.toISOString(),
+        updatedAt: file.updatedAt.toISOString(),
+        storageState: file.storageState,
     });
 }
 

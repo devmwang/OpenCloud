@@ -13,10 +13,6 @@ const fileReadQuerySchema = z.object({
     readToken: z.string().optional(),
 });
 
-const fileDetailsQuerySchema = fileReadQuerySchema.extend({
-    detailsVersion: z.literal("2").optional(),
-});
-
 const fileDetailsBaseSchema = z.object({
     id: z.string(),
     name: z.string(),
@@ -33,13 +29,10 @@ const fileManagementSchema = z.object({
     storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
 
-const legacyFileDetailsResponseSchema = fileDetailsBaseSchema.extend(fileManagementSchema.shape);
+const ownerFileDetailsResponseSchema = fileDetailsBaseSchema.extend(fileManagementSchema.shape);
 
-const fileDetailsV2ResponseSchema = fileDetailsBaseSchema.extend({
-    management: fileManagementSchema.optional(),
-});
-
-const fileDetailsResponseSchema = z.union([legacyFileDetailsResponseSchema, fileDetailsV2ResponseSchema]);
+// Keep the owner response first because the base schema would strip its management fields.
+const fileDetailsResponseSchema = z.union([ownerFileDetailsResponseSchema, fileDetailsBaseSchema]);
 
 const patchFileMoveBodySchema = z
     .object({
@@ -72,14 +65,12 @@ const mutateFileResponseSchema = z.object({
 });
 
 export type FileParams = z.infer<typeof fileParamsSchema>;
-export type FileDetailsQuery = z.infer<typeof fileDetailsQuerySchema>;
 export type FileReadQuery = z.infer<typeof fileReadQuerySchema>;
 export type PatchFileBody = z.infer<typeof patchFileBodySchema>;
 
 export const { schemas: fsSchemas, $ref } = buildJsonSchemas(
     {
         fileParamsSchema,
-        fileDetailsQuerySchema,
         fileReadQuerySchema,
         fileDetailsResponseSchema,
         patchFileBodySchema,
