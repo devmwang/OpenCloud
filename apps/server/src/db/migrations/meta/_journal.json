@@ -57,6 +57,13 @@
       "when": 1770613200000,
       "tag": "0007_schema_api_refactor",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786178551308,
+      "tag": "0008_preserve_file_timestamp_on_mime_repair",
+      "breakpoints": true
     }
   ]
 }
