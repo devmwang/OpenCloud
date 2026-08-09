@@ -230,6 +230,18 @@ export async function getFileHandler(
     const dispositionType =
         request.query.download === "1" || !INLINE_MIME_TYPES.has(mimeType) ? "attachment" : "inline";
 
+    if (mimeType === "application/pdf" && dispositionType === "inline") {
+        reply.helmet({
+            contentSecurityPolicy: {
+                directives: {
+                    frameAncestors: [env.OPENCLOUD_WEBUI_URL],
+                },
+            },
+            frameguard: false,
+        });
+        reply.raw.removeHeader("X-Frame-Options");
+    }
+
     void reply.header("Cache-Control", "private, no-store");
     void reply.header("Content-Type", mimeType);
     void reply.header("Content-Disposition", contentDisposition(fileDetails.fileName, { type: dispositionType }));
