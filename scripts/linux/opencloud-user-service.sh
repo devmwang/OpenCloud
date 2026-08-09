@@ -531,7 +531,7 @@ sync_system_units_from_repo() {
 require_legacy_user_units_disabled_and_stopped() {
     local service_user="$1"
     local mode="$2"
-    local operator_user user user_id user_home legacy_env runtime_dir runtime_dir_q systemctl_env unit unit_name unit_q unit_status listed_unit
+    local operator_user user user_id user_q user_home legacy_env runtime_dir runtime_dir_q systemctl_env login_shell_prefix unit unit_name unit_q unit_status listed_unit
     local load_state active_state unit_file_state manager_available unit_is_safe
     local users=("$service_user")
     local selected_units
@@ -544,6 +544,7 @@ require_legacy_user_units_disabled_and_stopped() {
 
     for user in "${users[@]}"; do
         user_id="$(id -u -- "$user")"
+        user_q="$(shell_quote "$user")"
         user_home="$(get_user_home "$user")"
         legacy_env="$user_home/.config/opencloud/opencloud-service.env"
         runtime_dir="/run/user/$user_id"
@@ -616,21 +617,22 @@ require_legacy_user_units_disabled_and_stopped() {
             err "Current states: unit-file=${unit_file_state:-unknown}, active=${active_state:-unknown}."
             err "Run the following before you retry:"
             if [[ "$manager_available" -eq 0 ]]; then
+                login_shell_prefix="sudo -H -u $user_q bash -lc"
                 if [[ "$unit_file_state" == "masked-runtime" ]]; then
-                    err "  sudo -H -u $user systemctl --user --root=/ --runtime unmask $unit_name"
+                    err "  $login_shell_prefix $(shell_quote "systemctl --user --root=/ --runtime unmask $unit_name")"
                 fi
                 if [[ "$unit_file_state" == "enabled-runtime" ]] || [[ "$unit_file_state" == "masked-runtime" ]]; then
-                    err "  sudo -H -u $user systemctl --user --root=/ --runtime disable $unit_name"
+                    err "  $login_shell_prefix $(shell_quote "systemctl --user --root=/ --runtime disable $unit_name")"
                 fi
-                err "  sudo -H -u $user systemctl --user --root=/ disable $unit_name"
+                err "  $login_shell_prefix $(shell_quote "systemctl --user --root=/ disable $unit_name")"
             else
                 if [[ "$unit_file_state" == "masked-runtime" ]]; then
-                    err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user --runtime unmask $unit_name"
+                    err "  sudo -H -u $user_q XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user --runtime unmask $unit_name"
                 fi
                 if [[ "$unit_file_state" == "enabled-runtime" ]] || [[ "$unit_file_state" == "masked-runtime" ]]; then
-                    err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user --runtime disable $unit_name"
+                    err "  sudo -H -u $user_q XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user --runtime disable $unit_name"
                 fi
-                err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now $unit_name"
+                err "  sudo -H -u $user_q XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now $unit_name"
             fi
             exit 1
         done
