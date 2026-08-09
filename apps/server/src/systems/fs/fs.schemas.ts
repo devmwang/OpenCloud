@@ -13,22 +13,33 @@ const fileReadQuerySchema = z.object({
     readToken: z.string().optional(),
 });
 
-const fileDetailsResponseSchema = z.object({
+const fileDetailsQuerySchema = fileReadQuerySchema.extend({
+    detailsVersion: z.literal("2").optional(),
+});
+
+const fileDetailsBaseSchema = z.object({
     id: z.string(),
     name: z.string(),
     mimeType: z.string(),
     sizeBytes: z.number().int().nullable(),
-    management: z
-        .object({
-            ownerId: z.string(),
-            folderId: z.string(),
-            access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
-            createdAt: z.string().datetime(),
-            updatedAt: z.string().datetime(),
-            storageState: z.enum(["PENDING", "READY", "FAILED"]),
-        })
-        .optional(),
 });
+
+const fileManagementSchema = z.object({
+    ownerId: z.string(),
+    folderId: z.string(),
+    access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    storageState: z.enum(["PENDING", "READY", "FAILED"]),
+});
+
+const legacyFileDetailsResponseSchema = fileDetailsBaseSchema.extend(fileManagementSchema.shape);
+
+const fileDetailsV2ResponseSchema = fileDetailsBaseSchema.extend({
+    management: fileManagementSchema.optional(),
+});
+
+const fileDetailsResponseSchema = z.union([legacyFileDetailsResponseSchema, fileDetailsV2ResponseSchema]);
 
 const patchFileMoveBodySchema = z
     .object({
@@ -61,12 +72,14 @@ const mutateFileResponseSchema = z.object({
 });
 
 export type FileParams = z.infer<typeof fileParamsSchema>;
+export type FileDetailsQuery = z.infer<typeof fileDetailsQuerySchema>;
 export type FileReadQuery = z.infer<typeof fileReadQuerySchema>;
 export type PatchFileBody = z.infer<typeof patchFileBodySchema>;
 
 export const { schemas: fsSchemas, $ref } = buildJsonSchemas(
     {
         fileParamsSchema,
+        fileDetailsQuerySchema,
         fileReadQuerySchema,
         fileDetailsResponseSchema,
         patchFileBodySchema,

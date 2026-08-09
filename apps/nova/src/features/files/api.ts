@@ -85,7 +85,7 @@ export const getFileDetails = async (
     options?: { forwardServerCookies?: boolean; sessionUserId?: string },
 ) => {
     const response = await getJson(`/v1/files/${encodeURIComponent(fileId)}`, fileDetailsResponseSchema, {
-        query: { readToken },
+        query: { readToken, detailsVersion: "2" },
         forwardServerCookies: options?.forwardServerCookies,
     });
 

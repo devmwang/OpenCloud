@@ -141,7 +141,12 @@ const unwrapBetterAuthData = (input: unknown) => {
     }
 
     if ("data" in input) {
-        return (input as BetterAuthResult).data;
+        const result = input as BetterAuthResult;
+        if (result.error) {
+            throw new Error(result.error.message ?? "Failed to get session");
+        }
+
+        return result.data;
     }
 
     return input;
@@ -153,12 +158,7 @@ const parseSessionPayload = (payload: unknown) => {
         return null;
     }
 
-    const parsed = authSessionSchema.safeParse(unwrapped);
-    if (!parsed.success) {
-        return null;
-    }
-
-    return parsed.data;
+    return authSessionSchema.parse(unwrapped);
 };
 
 const getServerCookieHeader = () => {

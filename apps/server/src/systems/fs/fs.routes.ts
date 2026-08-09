@@ -17,7 +17,7 @@ async function fileSystemRouter(server: FastifyInstance) {
         onRequest: [server.optionalAuthenticate],
         schema: {
             params: $ref("fileParamsSchema"),
-            querystring: $ref("fileReadQuerySchema"),
+            querystring: $ref("fileDetailsQuerySchema"),
             response: { 200: $ref("fileDetailsResponseSchema") },
         },
         handler: getDetailsHandler,
