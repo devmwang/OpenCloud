@@ -485,7 +485,7 @@ sync_system_units_from_repo() {
 
 require_legacy_user_server_disabled_and_stopped() {
     local service_user="$1"
-    local operator_user user user_id user_home legacy_env runtime_dir runtime_dir_q systemctl_env unit_status listed_unit
+    local operator_user user user_id runtime_dir runtime_dir_q systemctl_env unit_status listed_unit
     local load_state active_state unit_file_state manager_available unit_is_safe
     local users=("$service_user")
 
@@ -496,8 +496,6 @@ require_legacy_user_server_disabled_and_stopped() {
 
     for user in "${users[@]}"; do
         user_id="$(id -u -- "$user")"
-        user_home="$(get_user_home "$user")"
-        legacy_env="$user_home/.config/opencloud/opencloud-service.env"
         runtime_dir="/run/user/$user_id"
         manager_available=0
         systemctl_env=""
@@ -531,10 +529,6 @@ require_legacy_user_server_disabled_and_stopped() {
                 if [[ "$listed_unit" != "$SERVER_UNIT.service" ]] || [[ -z "$unit_file_state" ]]; then
                     die "Unable to read the persistent unit-file state for $SERVER_UNIT as '$user': $unit_status"
                 fi
-            fi
-
-            if [[ "$unit_file_state" == "not-found" ]] && [[ -f "$legacy_env" ]]; then
-                die "Unable to confirm that legacy $SERVER_UNIT is absent for '$user' while $legacy_env exists. Log in as '$user', disable and remove the legacy user unit and environment file, and retry."
             fi
         fi
 
