@@ -70,6 +70,10 @@ const authSecretSchema = z
     .string()
     .min(32, "Must be at least 32 characters")
     .refine(
+        (value) => value !== "better-auth-secret-12345678901234567890",
+        "Must not use the Better Auth default secret",
+    )
+    .refine(
         (value) => value.length * Math.log2(new Set(value).size) >= 120,
         "Must have at least 120 bits of estimated entropy",
     );
