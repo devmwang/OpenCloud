@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { fileReadTokens } from "@/db/schema/auth";
 import { files, folders } from "@/db/schema/storage";
 import { env } from "@/env/env";
+import { detectStoredMimeType, UNKNOWN_MIME_TYPE } from "@/utils/stored-mime";
 
 import type { FileParams, FileReadQuery, PatchFileBody } from "./fs.schemas";
 
@@ -104,6 +105,28 @@ const isMissingFileError = (error: unknown) => {
     return normalizedMessage.includes("input file is missing") || normalizedMessage.includes("no such file");
 };
 
+const verifyStoredMimeType = async (
+    server: FastifyInstance,
+    file: Pick<typeof files.$inferSelect, "id" | "ownerId" | "fileType">,
+) => {
+    const filePath = path.join(env.FILE_STORE_PATH, file.ownerId, file.id);
+
+    try {
+        const mimeType = await detectStoredMimeType(filePath);
+        if (mimeType !== file.fileType) {
+            await server.db.update(files).set({ fileType: mimeType }).where(eq(files.id, file.id));
+        }
+
+        return mimeType;
+    } catch (error) {
+        if (isMissingFileError(error)) {
+            return null;
+        }
+
+        throw error;
+    }
+};
+
 export async function getDetailsHandler(
     this: FastifyInstance,
     request: FastifyRequest<{ Params: FileParams; Querystring: FileReadQuery }>,
@@ -139,10 +162,19 @@ export async function getDetailsHandler(
         return reply;
     }
 
+    let mimeType = UNKNOWN_MIME_TYPE;
+    if (file.storageState === "READY") {
+        const verifiedMimeType = await verifyStoredMimeType(this, file);
+        if (!verifiedMimeType) {
+            return reply.code(404).send({ message: "File not found" });
+        }
+        mimeType = verifiedMimeType;
+    }
+
     return reply.code(200).send({
         id: file.id,
         name: file.fileName,
-        mimeType: file.fileType,
+        mimeType,
         sizeBytes: file.fileSize,
         ownerId: file.ownerId,
         folderId: file.parentId,
@@ -182,7 +214,12 @@ export async function getFileHandler(
         return reply;
     }
 
-    void reply.header("Content-Type", fileDetails.fileType);
+    const mimeType = await verifyStoredMimeType(this, fileDetails);
+    if (!mimeType) {
+        return reply.code(404).send({ message: "File not found" });
+    }
+
+    void reply.header("Content-Type", mimeType);
     void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
 
     return reply.sendFile(fileDetails.ownerId + "/" + fileDetails.id);
@@ -217,11 +254,16 @@ export async function getThumbnailHandler(
         return reply;
     }
 
-    if (!fileDetails.fileType.startsWith("image/")) {
+    const mimeType = await verifyStoredMimeType(this, fileDetails);
+    if (!mimeType) {
+        return reply.code(404).send({ message: "File not found" });
+    }
+
+    if (!mimeType.startsWith("image/")) {
         return reply.code(415).send({ message: "Unsupported media type" });
     }
 
-    void reply.header("Content-Type", fileDetails.fileType);
+    void reply.header("Content-Type", mimeType);
     void reply.header("Content-Disposition", `filename="${fileDetails.fileName}"`);
 
     const fullFilePath = path.join(env.FILE_STORE_PATH, fileDetails.ownerId, fileDetails.id);
