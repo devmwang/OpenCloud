@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { pipeline } from "stream";
-import util from "util";
+import { finished, pipeline } from "stream/promises";
 
 import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
@@ -16,7 +15,6 @@ import { env } from "@/env/env";
 
 import type { UploadFileQuerystring } from "./upload.schemas";
 
-const pump = util.promisify(pipeline);
 type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 type UploadContext = {
@@ -161,6 +159,15 @@ export async function uploadFileHandler(
         return reply.code(400).send({ message: "No file provided" });
     }
 
+    const sendUploadResponse = async (statusCode: number, payload: unknown) => {
+        if (!fileData.file.readableEnded && !fileData.file.destroyed) {
+            fileData.file.resume();
+            await finished(fileData.file);
+        }
+
+        return reply.code(statusCode).send(payload);
+    };
+
     const uploadTokenField = fileData.fields["uploadToken"];
     const uploadTokenValue =
         uploadTokenField && "value" in uploadTokenField ? (uploadTokenField.value as string) : null;
@@ -172,22 +179,22 @@ export async function uploadFileHandler(
         const message = error instanceof Error ? error.message : "UPLOAD_CONTEXT_ERROR";
         switch (message) {
             case "MISSING_FOLDER_ID":
-                return reply.code(400).send({ message: "folderId is required for authenticated uploads" });
+                return sendUploadResponse(400, { message: "folderId is required for authenticated uploads" });
             case "MISSING_UPLOAD_TOKEN":
-                return reply.code(401).send({ message: "No upload token provided" });
+                return sendUploadResponse(401, { message: "No upload token provided" });
             case "INVALID_UPLOAD_TOKEN":
-                return reply.code(401).send({ message: "Invalid upload token" });
+                return sendUploadResponse(401, { message: "Invalid upload token" });
             case "UPLOAD_TOKEN_EXPIRED":
-                return reply.code(401).send({ message: "Upload token expired" });
+                return sendUploadResponse(401, { message: "Upload token expired" });
             case "PARENT_FOLDER_NOT_FOUND":
-                return reply.code(404).send({ message: "Parent folder not found" });
+                return sendUploadResponse(404, { message: "Parent folder not found" });
             case "FORBIDDEN_FOLDER":
-                return reply.code(403).send({ message: "You do not have permission to upload to this folder" });
+                return sendUploadResponse(403, { message: "You do not have permission to upload to this folder" });
             case "ACCESS_RULE_MISMATCH":
-                return reply.code(401).send({ message: "Upload request did not satisfy access rules" });
+                return sendUploadResponse(401, { message: "Upload request did not satisfy access rules" });
             default:
                 request.log.error({ err: error }, "Failed to resolve upload context");
-                return reply.code(500).send({ message: "Upload failed" });
+                return sendUploadResponse(500, { message: "Upload failed" });
         }
     }
 
@@ -207,10 +214,10 @@ export async function uploadFileHandler(
                 .limit(1);
 
             if (!activeParent) {
-                throw new Error("PARENT_FOLDER_NOT_FOUND");
+                return null;
             }
 
-            const record = await createFileDetails(
+            return createFileDetails(
                 tx,
                 fileData.filename,
                 fileData.mimetype,
@@ -218,26 +225,26 @@ export async function uploadFileHandler(
                 uploadContext.folderId,
                 uploadContext.fileAccess,
             );
-            return record;
         });
+
+        if (!fileRecord) {
+            return sendUploadResponse(404, { message: "Parent folder not found" });
+        }
 
         await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file);
 
-        return reply.code(201).send({
+        return sendUploadResponse(201, {
             id: fileRecord.id,
             fileExtension: path.extname(fileData.filename),
             storageState: "READY",
         });
     } catch (error) {
-        if (error instanceof Error && error.message === "PARENT_FOLDER_NOT_FOUND") {
-            return reply.code(404).send({ message: "Parent folder not found" });
-        }
         if (error instanceof Error && error.message === "UPLOAD_INVALIDATED") {
-            return reply.code(409).send({ message: "Upload conflicted with a folder change" });
+            return sendUploadResponse(409, { message: "Upload conflicted with a folder change" });
         }
 
         request.log.error({ err: error }, "Upload failed");
-        return reply.code(500).send({ message: "Upload failed" });
+        return sendUploadResponse(500, { message: "Upload failed" });
     }
 }
 
@@ -275,7 +282,7 @@ async function coreUploadHandler(db: Database, ownerId: string, fileId: string, 
 
     try {
         await fs.promises.mkdir(folderPath, { recursive: true });
-        await pump(file, fs.createWriteStream(filePath));
+        await pipeline(file, fs.createWriteStream(filePath));
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
 
         const [readyFile] = await db
