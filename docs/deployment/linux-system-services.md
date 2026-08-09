@@ -150,13 +150,15 @@ corepack prepare pnpm@latest --activate
 
 ### Migrating from older user-level units
 
-If you previously installed user-level units (`systemctl --user`), disable them to avoid confusion/conflicts:
+If you previously installed user-level units (`systemctl --user`), disable them before `install`, `update`, or `rebuild`:
 
 ```bash
 systemctl --user disable --now opencloud-server opencloud-nova
 rm -f ~/.config/systemd/user/opencloud-server.service ~/.config/systemd/user/opencloud-nova.service
 systemctl --user daemon-reload
 ```
+
+Before any Server migration, the service script checks the system service user and the invoking `sudo` user. The legacy `opencloud-server` user unit must be disabled and inactive. If it is not, the script stops before migration and prints the exact `systemctl --user disable --now` command.
 
 ### Repo path changed (moved or re-cloned)
 
