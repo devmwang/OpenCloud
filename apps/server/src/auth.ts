@@ -54,6 +54,7 @@ export const createAuth = (db: Database) =>
         plugins: [usernamePlugin],
         disabledPaths: ["/sign-up/email", "/sign-in/email"],
         advanced: {
+            cookiePrefix: "opencloud",
             crossSubDomainCookies: env.COOKIE_URL
                 ? { enabled: crossSubDomainCookiesEnabled, domain: env.COOKIE_URL }
                 : { enabled: false },

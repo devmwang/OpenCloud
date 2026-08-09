@@ -33,3 +33,5 @@ Web frontend (Nova):
 - `OPENCLOUD_WEBUI_URL`: canonical public frontend origin (legacy variable name retained for compatibility) used by the Server and Nova canonical URL fallback
 
 Nova and the API origins must both use HTTP or both use HTTPS. When they use the same hostname, omit `COOKIE_URL` or set it to that exact hostname. OpenCloud uses a host-only session cookie in this mode, which supports `localhost` and IP addresses. When the hostnames differ, each one must be a direct subdomain of `COOKIE_URL`, and `COOKIE_URL` must be a valid domain that is not a public suffix. For example, use `opencloud.example.com` for `app.opencloud.example.com` and `api.opencloud.example.com`. Do not include a scheme, port, path, query, or fragment.
+
+Migration `0009_rotate_auth_session_cookie.sql` changes the Better Auth cookie namespace and deletes existing sessions. Stop the Server, apply migrations, and then start the updated Server. Each user must sign in one time after this upgrade.
