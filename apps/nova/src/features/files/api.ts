@@ -83,11 +83,13 @@ const officeMimeTypes = new Set([
     "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
 ]);
 
+const legacyOfficeFileNamePattern = /\.(?:doc|xls|ppt)$/iu;
+
 export type FilePreviewKind = "image" | "video" | "audio" | "pdf" | "office" | "unsupported";
 
 const normalizeMimeType = (mimeType: string) => mimeType.replace(/;.*$/u, "").trim().toLowerCase();
 
-export const getFilePreviewKind = (mimeType: string): FilePreviewKind => {
+export const getFilePreviewKind = (mimeType: string, fileName: string): FilePreviewKind => {
     const normalizedMimeType = normalizeMimeType(mimeType);
 
     if (previewImageMimeTypes.has(normalizedMimeType)) return "image";
@@ -95,6 +97,7 @@ export const getFilePreviewKind = (mimeType: string): FilePreviewKind => {
     if (previewAudioMimeTypes.has(normalizedMimeType)) return "audio";
     if (normalizedMimeType === "application/pdf") return "pdf";
     if (officeMimeTypes.has(normalizedMimeType)) return "office";
+    if (normalizedMimeType === "application/x-cfb" && legacyOfficeFileNamePattern.test(fileName)) return "office";
     return "unsupported";
 };
 

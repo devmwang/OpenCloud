@@ -14,7 +14,7 @@ type PreviewPaneProps = {
 };
 
 export function PreviewPane({ fileRouteId, fileName, fileType, fileAccess, readToken }: PreviewPaneProps) {
-    const previewKind = getFilePreviewKind(fileType);
+    const previewKind = getFilePreviewKind(fileType, fileName);
     const source = buildFileContentUrl(fileRouteId, readToken);
     const downloadUrl = buildFileDownloadUrl(fileRouteId, readToken);
 
