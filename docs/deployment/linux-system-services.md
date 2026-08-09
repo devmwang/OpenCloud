@@ -17,12 +17,11 @@ Services are installed under `/etc/systemd/system` and can start at boot.
 From the OpenCloud repo root (after cloning and configuring `.env`):
 
 ```bash
-# Optional: run database migrations first (server only)
-dotenvx run --convention=nextjs -- pnpm --filter server db:migrate
-
 # Install and start both server and Nova as system services
 sudo ./scripts/linux/opencloud-user-service.sh install
 ```
+
+For `server` and `both`, `install` applies all Server database migrations before it enables or starts the services. Migration failure prevents startup. `install nova` does not run Server migrations.
 
 Or clone and install in one go:
 
@@ -34,17 +33,17 @@ Then open the API at **http://localhost:8080** and Nova at **http://localhost:30
 
 ## Commands
 
-| Command     | Description                                                                                                                                                      |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `install`   | Set up repo (clone or use current dir), install dependencies, build, install systemd system units, start selected mode, and disable non-selected OpenCloud units |
-| `update`    | Pull latest from git, then run the current rebuild path (uses repo path from install)                                                                            |
-| `rebuild`   | `pnpm install`, build, stop and migrate the Server for `server` or `both`, and restart without pulling                                                           |
-| `start`     | Start the service(s)                                                                                                                                             |
-| `stop`      | Stop the service(s)                                                                                                                                              |
-| `restart`   | Restart the service(s)                                                                                                                                           |
-| `status`    | Show `systemctl status` for the service(s)                                                                                                                       |
-| `logs`      | Run `journalctl` for the service(s); pass flags like `-f` to follow                                                                                              |
-| `uninstall` | Stop, disable, and remove system units and config                                                                                                                |
+| Command     | Description                                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install`   | Set up repo, install dependencies, build, install units, migrate Server modes, then start the selected mode; migration failure prevents startup |
+| `update`    | Pull latest from git, then run the current rebuild path (uses repo path from install)                                                           |
+| `rebuild`   | `pnpm install`, build, stop and migrate the Server for `server` or `both`, and restart without pulling                                          |
+| `start`     | Start the service(s)                                                                                                                            |
+| `stop`      | Stop the service(s)                                                                                                                             |
+| `restart`   | Restart the service(s)                                                                                                                          |
+| `status`    | Show `systemctl status` for the service(s)                                                                                                      |
+| `logs`      | Run `journalctl` for the service(s); pass flags like `-f` to follow                                                                             |
+| `uninstall` | Stop, disable, and remove system units and config                                                                                               |
 
 **Mode** (optional, default `both`): `server` | `nova` | `both`
 

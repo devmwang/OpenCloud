@@ -625,6 +625,10 @@ cmd_install() {
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
 
+    if [[ "$mode" != "nova" ]]; then
+        run_server_migrations "$repo_dir" "$service_user"
+    fi
+
     # Ensure install mode is authoritative: disable units not selected.
     local other_units=()
     while IFS= read -r unit; do
