@@ -449,6 +449,7 @@ function FolderPageContent({
     onRenameFolder,
     onRenameFile,
 }: FolderPageContentProps) {
+    const { session } = Route.useRouteContext();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
     const selectionCount = useSelectionCount();
@@ -745,7 +746,12 @@ function FolderPageContent({
             </BackgroundContextMenu>
 
             {/* Item info dialog */}
-            <ItemInfoDialog open={infoOpen} onOpenChange={setInfoOpen} item={infoItem} />
+            <ItemInfoDialog
+                open={infoOpen}
+                onOpenChange={setInfoOpen}
+                item={infoItem}
+                sessionUserId={session.user.id}
+            />
 
             <RenameItemDialog
                 open={renameOpen}

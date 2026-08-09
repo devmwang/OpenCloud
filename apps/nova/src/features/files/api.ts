@@ -4,11 +4,14 @@ import { createCsrfHeaders } from "@/lib/csrf";
 import { stripFileRouteExtension } from "@/lib/file-id";
 import { buildApiUrl, getJson, patchJson } from "@/lib/http";
 
-const fileDetailsSchema = z.object({
+const fileDetailsBaseSchema = z.object({
     id: z.string(),
     name: z.string(),
     mimeType: z.string(),
     sizeBytes: z.number().int().nullable(),
+});
+
+const fileManagementSchema = z.object({
     ownerId: z.string(),
     folderId: z.string(),
     access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
@@ -16,6 +19,11 @@ const fileDetailsSchema = z.object({
     updatedAt: z.string().datetime(),
     storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
+
+const ownerFileDetailsResponseSchema = fileDetailsBaseSchema.extend(fileManagementSchema.shape);
+
+// Keep the owner response first because the base schema would strip its management fields.
+const fileDetailsResponseSchema = z.union([ownerFileDetailsResponseSchema, fileDetailsBaseSchema]);
 
 const mutateFileResponseSchema = z.object({
     status: z.string(),
@@ -34,7 +42,36 @@ const renameFileInputSchema = z.object({
     name: z.string().trim().min(1),
 });
 
-export type FileDetails = z.infer<typeof fileDetailsSchema>;
+export type FileDetails = z.infer<typeof fileDetailsBaseSchema> & {
+    management?: z.infer<typeof fileManagementSchema>;
+};
+
+const normalizeFileDetailsResponse = (
+    response: z.infer<typeof fileDetailsResponseSchema>,
+    sessionUserId?: string,
+): FileDetails => {
+    if (!("ownerId" in response)) {
+        return response;
+    }
+
+    const { ownerId, folderId, access, createdAt, updatedAt, storageState, ...file } = response;
+
+    if (ownerId !== sessionUserId) {
+        return file;
+    }
+
+    return {
+        ...file,
+        management: {
+            ownerId,
+            folderId,
+            access,
+            createdAt,
+            updatedAt,
+            storageState,
+        },
+    };
+};
 
 export const normalizeFileId = (fileRouteId: string) => {
     return stripFileRouteExtension(fileRouteId);
@@ -43,12 +80,24 @@ export const normalizeFileId = (fileRouteId: string) => {
 export const getFileDetails = async (
     fileId: string,
     readToken?: string,
-    options?: { forwardServerCookies?: boolean },
+    options?: { forwardServerCookies?: boolean; sessionUserId?: string },
 ) => {
-    return getJson(`/v1/files/${encodeURIComponent(fileId)}`, fileDetailsSchema, {
+    const response = await getJson(`/v1/files/${encodeURIComponent(fileId)}`, fileDetailsResponseSchema, {
         query: { readToken },
         forwardServerCookies: options?.forwardServerCookies,
     });
+
+    return normalizeFileDetailsResponse(response, options?.sessionUserId);
+};
+
+export const getOwnedFileDetails = async (fileId: string, sessionUserId: string) => {
+    const file = await getFileDetails(fileId, undefined, { sessionUserId });
+
+    if (!file.management) {
+        throw new Error("File details response did not include owner management data");
+    }
+
+    return { ...file, management: file.management };
 };
 
 export const buildFileContentUrl = (fileRouteId: string, readToken?: string) => {

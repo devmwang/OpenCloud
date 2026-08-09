@@ -13,11 +13,14 @@ const fileReadQuerySchema = z.object({
     readToken: z.string().optional(),
 });
 
-const fileDetailsResponseSchema = z.object({
+const fileDetailsBaseSchema = z.object({
     id: z.string(),
     name: z.string(),
     mimeType: z.string(),
     sizeBytes: z.number().int().nullable(),
+});
+
+const fileManagementSchema = z.object({
     ownerId: z.string(),
     folderId: z.string(),
     access: z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]),
@@ -25,6 +28,11 @@ const fileDetailsResponseSchema = z.object({
     updatedAt: z.string().datetime(),
     storageState: z.enum(["PENDING", "READY", "FAILED"]),
 });
+
+const ownerFileDetailsResponseSchema = fileDetailsBaseSchema.extend(fileManagementSchema.shape);
+
+// Keep the owner response first because the base schema would strip its management fields.
+const fileDetailsResponseSchema = z.union([ownerFileDetailsResponseSchema, fileDetailsBaseSchema]);
 
 const patchFileMoveBodySchema = z
     .object({

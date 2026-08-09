@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { getSessionSafe } from "@/features/auth/api";
+import { getSession } from "@/features/auth/api";
 import { buildFileContentUrl, getFileDetails, normalizeFileId, type FileDetails } from "@/features/files/api";
 import { PreviewPane } from "@/features/files/components/preview-pane";
 import { moveToRecycleBin } from "@/features/recycle-bin/api";
@@ -42,17 +42,17 @@ export const Route = createFileRoute("/file/$fileId")({
         const normalizedFileId = normalizeFileId(params.fileId);
 
         try {
+            const session = await getSession();
             const file = await getFileDetails(normalizedFileId, deps.readToken, {
                 forwardServerCookies: true,
+                sessionUserId: session?.user.id,
             });
-            const session = await getSessionSafe();
-
             return {
                 kind: "ok",
                 file,
                 fileRouteId: params.fileId,
                 normalizedFileId,
-                canDelete: session?.user.id === file.ownerId,
+                canDelete: file.management !== undefined,
                 readToken: deps.readToken,
             } satisfies FileLoaderData;
         } catch (error) {
@@ -111,10 +111,10 @@ function FilePage() {
     const deleteMutation = useMutation({
         mutationFn: () => moveToRecycleBin({ itemType: "FILE", itemId: data.normalizedFileId }),
         onSuccess: async () => {
-            if (data.kind === "ok") {
+            if (data.kind === "ok" && data.file.management) {
                 await router.navigate({
                     to: "/folder/$folderId",
-                    params: { folderId: data.file.folderId },
+                    params: { folderId: data.file.management.folderId },
                 });
             }
         },
@@ -195,7 +195,7 @@ function FilePage() {
                             fileRouteId={data.fileRouteId}
                             fileName={data.file.name}
                             fileType={data.file.mimeType}
-                            fileAccess={data.file.access}
+                            fileAccess={data.file.management?.access}
                             readToken={data.readToken}
                         />
                     </div>
