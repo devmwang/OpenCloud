@@ -1,5 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
-import { index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { users } from "./users";
 
@@ -24,6 +24,12 @@ export const sessions = pgTable(
         userIdIdx: index("Session_userId_idx").on(table.userId),
     }),
 );
+
+export const sessionCookieConfigurations = pgTable("SessionCookieConfiguration", {
+    id: text("id").primaryKey(),
+    scope: text("scope").notNull(),
+    credentialGeneration: integer("credentialGeneration").notNull(),
+});
 
 export const accounts = pgTable(
     "Account",

@@ -66,6 +66,14 @@ const cookieDomainSchema = z
         return url.hostname;
     });
 
+const authSecretSchema = z
+    .string()
+    .min(32, "Must be at least 32 characters")
+    .refine(
+        (value) => value.length * Math.log2(new Set(value).size) >= 120,
+        "Must have at least 120 bits of estimated entropy",
+    );
+
 const findEnvFile = (fileName: string) => {
     let currentDir = process.cwd();
 
@@ -101,7 +109,7 @@ const parsedEnv = createEnv({
         OPENCLOUD_WEBUI_URL: httpOriginSchema,
         NEXT_PUBLIC_OPENCLOUD_SERVER_URL: httpOriginSchema,
         COOKIE_URL: cookieDomainSchema.optional(),
-        AUTH_SECRET: z.string(),
+        AUTH_SECRET: authSecretSchema,
         DATABASE_URL: z.string().url(),
         FILE_STORE_PATH: z.string(),
         SERVER_HOST: z.string().default("0.0.0.0"),

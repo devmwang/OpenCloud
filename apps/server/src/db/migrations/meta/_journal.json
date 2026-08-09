@@ -71,6 +71,13 @@
       "when": 1786253384533,
       "tag": "0009_rotate_auth_session_cookie",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786284000000,
+      "tag": "0010_version_auth_cookie_credentials",
+      "breakpoints": true
     }
   ]
 }
