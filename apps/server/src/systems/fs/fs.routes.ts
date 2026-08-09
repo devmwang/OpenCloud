@@ -35,12 +35,6 @@ async function fileSystemRouter(server: FastifyInstance) {
                 done();
             },
         ],
-        onResponse: [
-            (request, _reply, done) => {
-                request.raw.setTimeout(0);
-                done();
-            },
-        ],
         schema: {
             params: $ref("fileParamsSchema"),
             querystring: $ref("fileReadQuerySchema"),

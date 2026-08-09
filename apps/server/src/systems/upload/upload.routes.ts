@@ -17,12 +17,6 @@ async function uploadRouter(server: FastifyInstance) {
                 done();
             },
         ],
-        onResponse: [
-            (request, _reply, done) => {
-                request.raw.setTimeout(0);
-                done();
-            },
-        ],
         preHandler: [
             async (request, reply) => {
                 const query = request.query as { folderId?: string } | undefined;
