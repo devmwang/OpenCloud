@@ -64,6 +64,20 @@
       "when": 1786178551308,
       "tag": "0008_preserve_file_timestamp_on_mime_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786253384533,
+      "tag": "0009_rotate_auth_session_cookie",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786284000000,
+      "tag": "0010_version_auth_cookie_credentials",
+      "breakpoints": true
     }
   ]
 }

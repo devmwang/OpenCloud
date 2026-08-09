@@ -97,6 +97,12 @@ const run = async () => {
         return;
     }
 
+    if (parsed.username.length < 3 || parsed.username.length > 255) {
+        console.error("Username must be between 3 and 255 characters.");
+        process.exitCode = 1;
+        return;
+    }
+
     const { db, pool } = createDatabase();
 
     try {

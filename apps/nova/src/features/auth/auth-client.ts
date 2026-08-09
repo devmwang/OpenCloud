@@ -20,7 +20,7 @@ export const authClient = createAuthClient({
         usernameClient(),
         inferAdditionalFields({
             user: {
-                rootFolderId: { type: "string", required: false },
+                rootFolderId: { type: "string", required: true },
                 firstName: { type: "string", required: false },
                 lastName: { type: "string", required: false },
             },

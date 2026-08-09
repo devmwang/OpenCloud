@@ -125,7 +125,14 @@ function AdminToolsPage() {
                         <h2 className="text-text text-base font-semibold">Create User</h2>
                     </div>
 
-                    <Input name="username" label="Username" required minLength={3} placeholder="e.g. johndoe" />
+                    <Input
+                        name="username"
+                        label="Username"
+                        required
+                        minLength={3}
+                        maxLength={255}
+                        placeholder="e.g. johndoe"
+                    />
                     <Input
                         name="password"
                         label="Password"

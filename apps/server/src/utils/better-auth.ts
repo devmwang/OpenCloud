@@ -94,7 +94,7 @@ const applyAuthResponse = async (reply: FastifyReply, response: Response) => {
 };
 
 const betterAuthPlugin: FastifyPluginAsync = fp(async (server) => {
-    const auth = createAuth(server.db);
+    const auth = await createAuth(server.db);
     server.decorate("betterAuth", auth);
 
     server.route({

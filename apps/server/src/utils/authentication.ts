@@ -52,7 +52,6 @@ const buildHeaders = (request: FastifyRequest) => {
 type SetCookieHeaderSource = Headers;
 type SessionResolvedRequest = FastifyRequest & {
     _authSessionResolved?: boolean;
-    _authConfigurationError?: boolean;
 };
 
 const extractSetCookies = (headers: SetCookieHeaderSource) => {
@@ -89,41 +88,23 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (server) => {
         }
 
         statefulRequest._authSessionResolved = true;
-        statefulRequest._authConfigurationError = false;
         request.authenticated = false;
         request.user = undefined;
 
-        if (!server.betterAuth) {
-            statefulRequest._authConfigurationError = true;
-            return;
-        }
+        const { response, headers } = await server.betterAuth.api.getSession({
+            headers: buildHeaders(request),
+            returnHeaders: true,
+        });
 
-        try {
-            const { response, headers } = await server.betterAuth.api.getSession({
-                headers: buildHeaders(request),
-                returnHeaders: true,
-            });
+        applySetCookieHeaders(reply, headers);
 
-            applySetCookieHeaders(reply, headers);
-
-            if (response?.session && response?.user) {
-                request.authenticated = true;
-                request.user = { id: response.user.id };
-                return;
-            }
-        } catch {
-            request.authenticated = false;
-            request.user = undefined;
+        if (response?.session && response.user) {
+            request.authenticated = true;
+            request.user = { id: response.user.id };
         }
     };
 
     const ensureAuthenticated = (request: FastifyRequest, reply: FastifyReply) => {
-        const statefulRequest = request as SessionResolvedRequest;
-        if (statefulRequest._authConfigurationError) {
-            reply.code(500).send({ error: "Auth not configured" });
-            return;
-        }
-
         if (!request.authenticated) {
             reply.code(401).send({ error: "Unauthorized" });
             return;

@@ -28,8 +28,8 @@ Usage: $SCRIPT_NAME <command> [options] [mode]
 
 Commands:
   install     Set up OpenCloud repo, install system units, and start selected mode
-  update      Pull latest from git, pnpm install, build, and restart (uses repo from install)
-  rebuild     pnpm install, build, and restart (no git pull; use after manual git pull)
+  update      Pull latest from git, then run the current rebuild path (uses repo from install)
+  rebuild     pnpm install, build, migrate server modes, and restart (no git pull)
   start       Start the service(s)
   stop        Stop the service(s)
   restart     Restart the service(s)
@@ -428,6 +428,22 @@ systemctl_system_units() {
     run_root systemctl "$action" "${units[@]}"
 }
 
+run_server_migrations() {
+    local repo_dir="$1"
+    local service_user="$2"
+    local repo_dir_q
+    repo_dir_q="$(shell_quote "$repo_dir")"
+
+    echo "Stopping $SERVER_UNIT for database migrations ..."
+    systemctl_system_units stop server
+    require_legacy_user_server_disabled_and_stopped "$service_user"
+
+    echo "Running server database migrations ..."
+    if ! run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm exec dotenvx run --convention=nextjs -- pnpm --filter server db:migrate"; then
+        die "Server database migration failed. $SERVER_UNIT remains stopped."
+    fi
+}
+
 # Install OpenCloud unit files from a repo and reload systemd daemon.
 sync_system_units_from_repo() {
     local repo_dir="$1"
@@ -467,17 +483,82 @@ sync_system_units_from_repo() {
     echo "Reloaded systemd daemon"
 }
 
-warn_if_legacy_user_units() {
+require_legacy_user_server_disabled_and_stopped() {
     local service_user="$1"
-    local user_home legacy_dir
+    local operator_user user user_id runtime_dir runtime_dir_q systemctl_env unit_status listed_unit
+    local load_state active_state unit_file_state manager_available unit_is_safe
+    local users=("$service_user")
 
-    user_home="$(get_user_home "$service_user")"
-    legacy_dir="$user_home/.config/systemd/user"
-
-    if [[ -f "$legacy_dir/opencloud-server.service" ]] || [[ -f "$legacy_dir/opencloud-nova.service" ]]; then
-        err "Detected legacy user-level OpenCloud units in $legacy_dir."
-        err "Disable/remove them to avoid confusion with system units."
+    operator_user="$(default_service_user)"
+    if [[ "$operator_user" != "$service_user" ]]; then
+        users+=("$operator_user")
     fi
+
+    for user in "${users[@]}"; do
+        user_id="$(id -u -- "$user")"
+        runtime_dir="/run/user/$user_id"
+        manager_available=0
+        systemctl_env=""
+
+        if [[ -d "$runtime_dir" ]]; then
+            runtime_dir_q="$(shell_quote "$runtime_dir")"
+            systemctl_env="XDG_RUNTIME_DIR=$runtime_dir_q "
+            if ! run_as_user_shell "$user" "${systemctl_env}systemctl --user show-environment >/dev/null"; then
+                die "Unable to query the systemd user manager for '$user'. Log in as '$user', disable $SERVER_UNIT, and retry."
+            fi
+            manager_available=1
+        fi
+
+        active_state="offline"
+        if [[ "$manager_available" -eq 1 ]]; then
+            if ! unit_status="$(run_as_user_shell "$user" "${systemctl_env}systemctl --user show --all --property=LoadState --property=ActiveState --property=UnitFileState $SERVER_UNIT.service")"; then
+                die "Unable to query legacy $SERVER_UNIT for '$user'. Check: sudo -H -u $user XDG_RUNTIME_DIR=$runtime_dir systemctl --user status $SERVER_UNIT"
+            fi
+            load_state="$(sed -n 's/^LoadState=//p' <<< "$unit_status")"
+            active_state="$(sed -n 's/^ActiveState=//p' <<< "$unit_status")"
+            unit_file_state="$(sed -n 's/^UnitFileState=//p' <<< "$unit_status")"
+            if [[ "$load_state" == "not-found" ]]; then
+                unit_file_state="not-found"
+            fi
+        else
+            unit_status="$(run_as_user_shell "$user" "systemctl --user --root=/ list-unit-files --no-legend --no-pager $SERVER_UNIT.service" 2>&1 || true)"
+            if [[ -z "$unit_status" ]]; then
+                unit_file_state="not-found"
+            else
+                read -r listed_unit unit_file_state _ <<< "$unit_status"
+                if [[ "$listed_unit" != "$SERVER_UNIT.service" ]] || [[ -z "$unit_file_state" ]]; then
+                    die "Unable to read the persistent unit-file state for $SERVER_UNIT as '$user': $unit_status"
+                fi
+            fi
+        fi
+
+        unit_is_safe=1
+        case "$unit_file_state" in
+            disabled|masked|not-found) ;;
+            *) unit_is_safe=0 ;;
+        esac
+        if [[ "$manager_available" -eq 1 ]]; then
+            case "$active_state" in
+                inactive|failed) ;;
+                *) unit_is_safe=0 ;;
+            esac
+        fi
+
+        if [[ "$unit_is_safe" -eq 1 ]]; then
+            continue
+        fi
+
+        err "Legacy user-level OpenCloud service '$SERVER_UNIT' must be disabled and fully stopped for user '$user'."
+        err "Current states: unit-file=${unit_file_state:-unknown}, active=${active_state:-unknown}."
+        if [[ "$unit_file_state" == "masked-runtime" ]]; then
+            err "Run these commands before you retry:"
+            err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user unmask --runtime $SERVER_UNIT"
+        else
+            err "Run this command before you retry:"
+        fi
+        err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now $SERVER_UNIT"
+        exit 1
+    done
 }
 
 # -----------------------------------------------------------------------------
@@ -610,6 +691,10 @@ cmd_install() {
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
 
+    if [[ "$mode" != "nova" ]]; then
+        run_server_migrations "$repo_dir" "$service_user"
+    fi
+
     # Ensure install mode is authoritative: disable units not selected.
     local other_units=()
     while IFS= read -r unit; do
@@ -628,8 +713,6 @@ cmd_install() {
     run_root systemctl enable "${units[@]}"
     run_root systemctl start "${units[@]}"
     echo "Enabled and started: ${units[*]}"
-
-    warn_if_legacy_user_units "$service_user"
 
     echo ""
     echo "Done. Useful commands:"
@@ -665,8 +748,7 @@ cmd_update() {
     repo_dir="$(get_installed_repo_dir)"
     service_user="$(get_installed_service_user)"
 
-    check_tools_for_user "$service_user" git node pnpm
-    check_node_version_for_user "$service_user"
+    check_tools_for_user "$service_user" git
 
     echo "Using OpenCloud repo: $repo_dir"
     echo "Service user: $service_user"
@@ -676,22 +758,8 @@ cmd_update() {
     echo "Pulling latest ..."
     run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && git pull"
 
-    echo "Installing dependencies (pnpm install) ..."
-    run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm install"
-
-    echo "Building ..."
-    case "$mode" in
-        server) run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=server" ;;
-        nova)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build --filter=nova" ;;
-        both)   run_as_user_with_nvm_shell "$service_user" "cd $repo_dir_q && pnpm run build" ;;
-    esac
-
-    write_service_env "$repo_dir" "$service_user"
-    sync_system_units_from_repo "$repo_dir" "$service_user"
-
-    echo "Restarting $mode ..."
-    systemctl_system_units restart "$mode"
-    echo "Update complete."
+    echo "Reloading the updated service script ..."
+    exec bash "$repo_dir/scripts/linux/opencloud-user-service.sh" rebuild "$mode"
 }
 
 cmd_rebuild() {
@@ -740,6 +808,10 @@ cmd_rebuild() {
 
     write_service_env "$repo_dir" "$service_user"
     sync_system_units_from_repo "$repo_dir" "$service_user"
+
+    if [[ "$mode" != "nova" ]]; then
+        run_server_migrations "$repo_dir" "$service_user"
+    fi
 
     echo "Restarting $mode ..."
     systemctl_system_units restart "$mode"

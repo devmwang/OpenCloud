@@ -17,12 +17,11 @@ Services are installed under `/etc/systemd/system` and can start at boot.
 From the OpenCloud repo root (after cloning and configuring `.env`):
 
 ```bash
-# Optional: run database migrations first (server only)
-dotenvx run --convention=nextjs -- pnpm --filter server db:migrate
-
 # Install and start both server and Nova as system services
 sudo ./scripts/linux/opencloud-user-service.sh install
 ```
+
+For `server` and `both`, `install` applies all Server database migrations before it enables or starts the services. Migration failure prevents startup. `install nova` does not run Server migrations.
 
 Or clone and install in one go:
 
@@ -34,17 +33,17 @@ Then open the API at **http://localhost:8080** and Nova at **http://localhost:30
 
 ## Commands
 
-| Command     | Description                                                                                                                                                      |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `install`   | Set up repo (clone or use current dir), install dependencies, build, install systemd system units, start selected mode, and disable non-selected OpenCloud units |
-| `update`    | Pull latest from git, `pnpm install`, build, and restart (uses repo path from install)                                                                           |
-| `rebuild`   | `pnpm install`, build, and restart without pulling (use after a manual `git pull`)                                                                               |
-| `start`     | Start the service(s)                                                                                                                                             |
-| `stop`      | Stop the service(s)                                                                                                                                              |
-| `restart`   | Restart the service(s)                                                                                                                                           |
-| `status`    | Show `systemctl status` for the service(s)                                                                                                                       |
-| `logs`      | Run `journalctl` for the service(s); pass flags like `-f` to follow                                                                                              |
-| `uninstall` | Stop, disable, and remove system units and config                                                                                                                |
+| Command     | Description                                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install`   | Set up repo, install dependencies, build, install units, migrate Server modes, then start the selected mode; migration failure prevents startup |
+| `update`    | Pull latest from git, then run the current rebuild path (uses repo path from install)                                                           |
+| `rebuild`   | `pnpm install`, build, stop and migrate the Server for `server` or `both`, and restart without pulling                                          |
+| `start`     | Start the service(s)                                                                                                                            |
+| `stop`      | Stop the service(s)                                                                                                                             |
+| `restart`   | Restart the service(s)                                                                                                                          |
+| `status`    | Show `systemctl status` for the service(s)                                                                                                      |
+| `logs`      | Run `journalctl` for the service(s); pass flags like `-f` to follow                                                                             |
+| `uninstall` | Stop, disable, and remove system units and config                                                                                               |
 
 **Mode** (optional, default `both`): `server` | `nova` | `both`
 
@@ -73,7 +72,17 @@ Option 1: script does everything.
 sudo ./scripts/linux/opencloud-user-service.sh update
 ```
 
-This pulls the latest code from git (using the repo path saved at install time), runs `pnpm install`, builds, and restarts the service(s). Add a mode to limit to one app: `update server` or `update nova`.
+This pulls the latest code from git and then loads the updated script's `rebuild` path. For `server` and `both`, the rebuild stops the Server, applies database migrations, and restarts the selected services only after migration success. Migration failure leaves the Server stopped. `update nova` does not stop or migrate the Server.
+
+For the first update from an older script that does not run migrations, load the new script before rebuilding:
+
+```bash
+cd /path/to/OpenCloud
+git pull --ff-only
+sudo ./scripts/linux/opencloud-user-service.sh rebuild both
+```
+
+Replace `both` with the installed mode when the installation runs only `server` or `nova`. Do not use the older `update` implementation for this one transition. Its running Bash process cannot load the script changes that it pulls.
 
 Option 2: pull manually, then rebuild.
 
@@ -83,7 +92,7 @@ git pull
 sudo ./scripts/linux/opencloud-user-service.sh rebuild
 ```
 
-`rebuild` uses the repo path from `/etc/opencloud/opencloud-service.env`. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component.
+`rebuild` uses the repo path from `/etc/opencloud/opencloud-service.env`. Use `rebuild server` or `rebuild nova` to rebuild and restart only that component. `rebuild server` and the default `rebuild` stop the Server, apply migrations, and restart only after migration success.
 
 ## Install options
 
@@ -141,13 +150,15 @@ corepack prepare pnpm@latest --activate
 
 ### Migrating from older user-level units
 
-If you previously installed user-level units (`systemctl --user`), disable them to avoid confusion/conflicts:
+If you previously installed user-level units (`systemctl --user`), disable them before `install`, `update`, or `rebuild`:
 
 ```bash
 systemctl --user disable --now opencloud-server opencloud-nova
 rm -f ~/.config/systemd/user/opencloud-server.service ~/.config/systemd/user/opencloud-nova.service
 systemctl --user daemon-reload
 ```
+
+Before any Server migration, the service script checks the system service user and the invoking `sudo` user. The legacy `opencloud-server` user unit must be disabled and inactive. If it is not, the script stops before migration and prints the exact `systemctl --user disable --now` command.
 
 ### Repo path changed (moved or re-cloned)
 

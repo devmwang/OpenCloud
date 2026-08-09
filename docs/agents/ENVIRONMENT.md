@@ -14,8 +14,8 @@ Working directory: repo root.
 Server:
 
 - `OPENCLOUD_WEBUI_URL`: allowed frontend origin for CORS and trusted origins (legacy variable name; set to the Nova origin)
-- `COOKIE_URL`: cookie domain
-- `AUTH_SECRET`: signing secret
+- `COOKIE_URL`: optional when Nova and the API use one hostname; otherwise, the valid non-public-suffix parent of their direct subdomains; an optional leading dot is accepted and removed
+- `AUTH_SECRET`: signing secret with at least 32 characters and 120 estimated bits of entropy; generate one with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`
 - `DATABASE_URL`: Postgres connection string
 - `FILE_STORE_PATH`: directory for stored files
 - `SERVER_HOST`: host interface for the API server (default `0.0.0.0`)
@@ -31,3 +31,7 @@ Web frontend (Nova):
 
 - `NEXT_PUBLIC_OPENCLOUD_SERVER_URL`: base URL for the API server (used by Nova and by the Server for Better Auth `baseURL`)
 - `OPENCLOUD_WEBUI_URL`: canonical public frontend origin (legacy variable name retained for compatibility) used by the Server and Nova canonical URL fallback
+
+Nova and the API origins must both use HTTP or both use HTTPS. When they use the same hostname, omit `COOKIE_URL` or set it to that exact hostname. OpenCloud uses a host-only session cookie in this mode, which supports `localhost` and IP addresses. When the hostnames differ, each one must be a direct subdomain of `COOKIE_URL`, and `COOKIE_URL` must be a valid domain that is not a public suffix. For example, use `opencloud.example.com` for `app.opencloud.example.com` and `api.opencloud.example.com`. Do not include a scheme, port, path, query, or fragment. The cookie name and Better Auth signing context use a persistent credential generation for the protocol and exact host or Domain scope. On each scope change, the Server increases the generation and deletes all sessions in one database transaction. A later rollback to an earlier scope cannot restore its old credentials. Each scope change requires every user to sign in again.
+
+Migrations `0009_rotate_auth_session_cookie.sql` and `0010_version_auth_cookie_credentials.sql` delete sessions created before versioned cookie credentials, and migration `0010` creates the session-cookie configuration table. Stop the Server, apply migrations, and then start the updated Server. The supported Linux `update` and `rebuild` commands perform this sequence for `server` and `both` modes. Each user must sign in one time after this upgrade.
