@@ -163,6 +163,8 @@ corepack prepare pnpm@10.29.3 --activate
 If you previously installed user-level units (`systemctl --user`), run these commands as the account that installed them before you run `install`, `update`, or `rebuild`:
 
 ```bash
+systemctl --user --runtime unmask opencloud-server opencloud-nova
+systemctl --user --runtime disable opencloud-server opencloud-nova
 systemctl --user disable --now opencloud-server opencloud-nova
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opencloud-server.service" "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opencloud-nova.service"
 rm -f "$HOME/.config/opencloud/opencloud-service.env"

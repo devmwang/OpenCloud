@@ -614,13 +614,24 @@ require_legacy_user_units_disabled_and_stopped() {
 
             err "Legacy user-level OpenCloud service '$unit' must be disabled and fully stopped for user '$user'."
             err "Current states: unit-file=${unit_file_state:-unknown}, active=${active_state:-unknown}."
-            if [[ "$unit_file_state" == "masked-runtime" ]]; then
-                err "Run these commands before you retry:"
-                err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user unmask --runtime $unit"
+            err "Run the following before you retry:"
+            if [[ "$manager_available" -eq 0 ]]; then
+                if [[ "$unit_file_state" == "masked-runtime" ]]; then
+                    err "  sudo -H -u $user systemctl --user --root=/ --runtime unmask $unit_name"
+                fi
+                if [[ "$unit_file_state" == "enabled-runtime" ]] || [[ "$unit_file_state" == "masked-runtime" ]]; then
+                    err "  sudo -H -u $user systemctl --user --root=/ --runtime disable $unit_name"
+                fi
+                err "  sudo -H -u $user systemctl --user --root=/ disable $unit_name"
             else
-                err "Run this command before you retry:"
+                if [[ "$unit_file_state" == "masked-runtime" ]]; then
+                    err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user --runtime unmask $unit_name"
+                fi
+                if [[ "$unit_file_state" == "enabled-runtime" ]] || [[ "$unit_file_state" == "masked-runtime" ]]; then
+                    err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user --runtime disable $unit_name"
+                fi
+                err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now $unit_name"
             fi
-            err "  sudo -H -u $user XDG_RUNTIME_DIR=/run/user/$user_id systemctl --user disable --now $unit"
             exit 1
         done
     done
