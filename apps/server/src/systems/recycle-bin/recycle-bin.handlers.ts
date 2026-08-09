@@ -6,7 +6,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { files, folders, users } from "@/db/schema";
 import { env } from "@/env/env";
-import { withOwnerHierarchyLock, type OwnerHierarchyTransaction } from "@/utils/owner-hierarchy-lock";
+import {
+    tryWithOwnerHierarchyLock,
+    withOwnerHierarchyLock,
+    type OwnerHierarchyTransaction,
+} from "@/utils/owner-hierarchy-lock";
 
 import type {
     BatchPermanentlyDeleteBody,
@@ -910,9 +914,15 @@ export async function runPurgeExpired(server: FastifyInstance, olderThanDays?: n
         let failedOwners = 0;
 
         for (const ownerId of ownerIds) {
-            const ownerSummary = await withOwnerHierarchyLock(server, ownerId, (tx) =>
+            const ownerLockResult = await tryWithOwnerHierarchyLock(server, ownerId, (tx) =>
                 purgeDeletedRowsForOwner(tx, ownerId, threshold),
             );
+            if (!ownerLockResult.locked) {
+                failedOwners += 1;
+                continue;
+            }
+
+            const ownerSummary = ownerLockResult.result;
             summary = {
                 purgedFiles: summary.purgedFiles + ownerSummary.purgedFiles,
                 purgedFolders: summary.purgedFolders + ownerSummary.purgedFolders,
@@ -1446,7 +1456,7 @@ export async function batchRestoreHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (ownerTx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (ownerTx) => {
         const folderIds = dedupeIds(request.body.folderIds);
         const fileIds = dedupeIds(request.body.fileIds);
         const destinationFolderId = request.body.destinationFolderId;
@@ -1458,11 +1468,14 @@ export async function batchRestoreHandler(
             if (!fixedDestination) {
                 const summary = buildBatchSummary(total, 0);
                 const status = resolveBatchStatus(summary);
-                return reply.code(200).send({
-                    status,
-                    message: "Destination folder not found or unavailable",
-                    summary,
-                });
+                return {
+                    statusCode: 200,
+                    body: {
+                        status,
+                        message: "Destination folder not found or unavailable",
+                        summary,
+                    },
+                };
             }
         }
 
@@ -1914,12 +1927,17 @@ export async function batchRestoreHandler(
         const summary = buildBatchSummary(total, restoredSelectedFolderCount + restoredSelectedFileCount);
         const status = resolveBatchStatus(summary);
 
-        return reply.code(200).send({
-            status,
-            message: buildBatchMessage("Batch restore", status),
-            summary,
-        });
+        return {
+            statusCode: 200,
+            body: {
+                status,
+                message: buildBatchMessage("Batch restore", status),
+                summary,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function permanentlyDeleteHandler(
@@ -1961,7 +1979,7 @@ export async function batchPermanentlyDeleteHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (ownerTx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (ownerTx) => {
         const folderIds = dedupeIds(request.body.folderIds);
         const fileIds = dedupeIds(request.body.fileIds);
         const total = folderIds.length + fileIds.length;
@@ -2140,12 +2158,17 @@ export async function batchPermanentlyDeleteHandler(
         const summary = buildBatchSummary(total, validSelectedFolders.length + selectedDeletedFiles.length);
         const status = resolveBatchStatus(summary);
 
-        return reply.code(200).send({
-            status,
-            message: buildBatchMessage("Batch permanent delete", status),
-            summary,
-        });
+        return {
+            statusCode: 200,
+            body: {
+                status,
+                message: buildBatchMessage("Batch permanent delete", status),
+                summary,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function emptyRecycleBinHandler(
@@ -2158,7 +2181,7 @@ export async function emptyRecycleBinHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (tx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (tx) => {
         const itemType = request.query.itemType;
 
         const { topLevelDeletedFiles, topLevelDeletedFolders } = await getTopLevelDeletedRowsForOwner(tx, userId, {
@@ -2184,24 +2207,30 @@ export async function emptyRecycleBinHandler(
                 purgedFolders += summary.purgedFolders;
             } catch (error) {
                 if (isActiveDescendantsError(error)) {
-                    return reply
-                        .code(409)
-                        .send({
+                    return {
+                        statusCode: 409,
+                        body: {
                             message: "Recycle bin contains folders with active descendants that cannot be purged",
-                        });
+                        },
+                    };
                 }
 
                 throw error;
             }
         }
 
-        return reply.code(200).send({
-            status: "success",
-            message: "Recycle bin emptied",
-            purgedFiles: purgedFilesFromTopLevelFiles + purgedFilesFromFolders,
-            purgedFolders,
-        });
+        return {
+            statusCode: 200,
+            body: {
+                status: "success",
+                message: "Recycle bin emptied",
+                purgedFiles: purgedFilesFromTopLevelFiles + purgedFilesFromFolders,
+                purgedFolders,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function purgeExpiredHandler(

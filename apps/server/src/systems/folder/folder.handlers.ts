@@ -414,7 +414,7 @@ export async function createFolderHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (tx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (tx) => {
         const { name, parentFolderId } = request.body;
 
         const [parentFolder] = await tx
@@ -423,10 +423,10 @@ export async function createFolderHandler(
             .where(and(eq(folders.id, parentFolderId), isNull(folders.deletedAt)))
             .limit(1);
         if (!parentFolder) {
-            return reply.code(404).send({ message: "Parent folder not found" });
+            return { statusCode: 404, body: { message: "Parent folder not found" } };
         }
         if (parentFolder.ownerId !== userId) {
-            return reply.code(403).send({ message: "You do not have permission to access this folder" });
+            return { statusCode: 403, body: { message: "You do not have permission to access this folder" } };
         }
 
         const newFolderId = createId();
@@ -443,11 +443,13 @@ export async function createFolderHandler(
             })
             .returning({ id: folders.id });
         if (!folder) {
-            return reply.code(500).send({ message: "Failed to create folder" });
+            return { statusCode: 500, body: { message: "Failed to create folder" } };
         }
 
-        return reply.code(201).send({ id: folder.id });
+        return { statusCode: 201, body: { id: folder.id } };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function batchMoveItemsHandler(
@@ -460,7 +462,7 @@ export async function batchMoveItemsHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (ownerTx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (ownerTx) => {
         const destinationFolderId = request.body.destinationFolderId;
         const folderIds = dedupeIds(request.body.folderIds);
         const fileIds = dedupeIds(request.body.fileIds);
@@ -475,13 +477,16 @@ export async function batchMoveItemsHandler(
         if (!destinationFolder || destinationFolder.ownerId !== userId) {
             const summary = buildBatchSummary(total, 0);
             const status = resolveBatchStatus(summary);
-            return reply.code(200).send({
-                status,
-                message: !destinationFolder
-                    ? "Destination folder not found"
-                    : "You do not have permission to move items to this location",
-                summary,
-            });
+            return {
+                statusCode: 200,
+                body: {
+                    status,
+                    message: !destinationFolder
+                        ? "Destination folder not found"
+                        : "You do not have permission to move items to this location",
+                    summary,
+                },
+            };
         }
 
         const requestedFolders: Array<{
@@ -675,12 +680,17 @@ export async function batchMoveItemsHandler(
         );
         const status = resolveBatchStatus(summary);
 
-        return reply.code(200).send({
-            status,
-            message: buildBatchMessage("Batch move", status),
-            summary,
-        });
+        return {
+            statusCode: 200,
+            body: {
+                status,
+                message: buildBatchMessage("Batch move", status),
+                summary,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function batchDeleteItemsHandler(
@@ -693,7 +703,7 @@ export async function batchDeleteItemsHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (ownerTx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (ownerTx) => {
         const folderIds = dedupeIds(request.body.folderIds);
         const fileIds = dedupeIds(request.body.fileIds);
         const total = folderIds.length + fileIds.length;
@@ -850,12 +860,17 @@ export async function batchDeleteItemsHandler(
         const summary = buildBatchSummary(total, deletableFolders.length + deletableFileIds.length);
         const status = resolveBatchStatus(summary);
 
-        return reply.code(200).send({
-            status,
-            message: buildBatchMessage("Batch delete", status),
-            summary,
-        });
+        return {
+            statusCode: 200,
+            body: {
+                status,
+                message: buildBatchMessage("Batch delete", status),
+                summary,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function patchFolderHandler(
@@ -868,7 +883,7 @@ export async function patchFolderHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (ownerTx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (ownerTx) => {
         const folderId = request.params.folderId;
 
         const [sourceFolder] = await ownerTx
@@ -885,41 +900,47 @@ export async function patchFolderHandler(
             .limit(1);
 
         if (!sourceFolder) {
-            return reply.code(404).send({ message: "Folder not found" });
+            return { statusCode: 404, body: { message: "Folder not found" } };
         }
 
         if (sourceFolder.ownerId !== userId) {
-            return reply.code(403).send({ message: "You do not have permission to edit this folder" });
+            return { statusCode: 403, body: { message: "You do not have permission to edit this folder" } };
         }
 
         if ("name" in request.body) {
             if (sourceFolder.type === "ROOT") {
-                return reply.code(400).send({ message: "Root folder cannot be renamed" });
+                return { statusCode: 400, body: { message: "Root folder cannot be renamed" } };
             }
 
             if (sourceFolder.folderName === request.body.name) {
-                return reply.code(200).send({
-                    status: "success",
-                    message: "Folder already has this name",
-                    id: folderId,
-                    parentFolderId: sourceFolder.parentFolderId,
-                });
+                return {
+                    statusCode: 200,
+                    body: {
+                        status: "success",
+                        message: "Folder already has this name",
+                        id: folderId,
+                        parentFolderId: sourceFolder.parentFolderId,
+                    },
+                };
             }
 
             await ownerTx.update(folders).set({ folderName: request.body.name }).where(eq(folders.id, folderId));
 
-            return reply.code(200).send({
-                status: "success",
-                message: "Folder renamed successfully",
-                id: folderId,
-                parentFolderId: sourceFolder.parentFolderId,
-            });
+            return {
+                statusCode: 200,
+                body: {
+                    status: "success",
+                    message: "Folder renamed successfully",
+                    id: folderId,
+                    parentFolderId: sourceFolder.parentFolderId,
+                },
+            };
         }
 
         const destinationFolderId = request.body.destinationFolderId;
 
         if (sourceFolder.type === "ROOT") {
-            return reply.code(400).send({ message: "Root folder cannot be moved" });
+            return { statusCode: 400, body: { message: "Root folder cannot be moved" } };
         }
 
         const [destinationFolder] = await ownerTx
@@ -929,31 +950,37 @@ export async function patchFolderHandler(
             .limit(1);
 
         if (!destinationFolder) {
-            return reply.code(404).send({ message: "Destination folder not found" });
+            return { statusCode: 404, body: { message: "Destination folder not found" } };
         }
 
         if (destinationFolder.ownerId !== userId) {
-            return reply.code(403).send({ message: "You do not have permission to move folders to this location" });
+            return {
+                statusCode: 403,
+                body: { message: "You do not have permission to move folders to this location" },
+            };
         }
 
         if (sourceFolder.parentFolderId === destinationFolderId) {
-            return reply.code(200).send({
-                status: "success",
-                message: "Folder already in destination folder",
-                id: folderId,
-                parentFolderId: destinationFolderId,
-            });
+            return {
+                statusCode: 200,
+                body: {
+                    status: "success",
+                    message: "Folder already in destination folder",
+                    id: folderId,
+                    parentFolderId: destinationFolderId,
+                },
+            };
         }
 
         if (folderId === destinationFolderId) {
-            return reply.code(400).send({ message: "Folder cannot be moved into itself" });
+            return { statusCode: 400, body: { message: "Folder cannot be moved into itself" } };
         }
 
         if (
             destinationFolder.folderPath === sourceFolder.folderPath ||
             destinationFolder.folderPath.startsWith(`${sourceFolder.folderPath}/`)
         ) {
-            return reply.code(400).send({ message: "Folder cannot be moved into its own descendant" });
+            return { statusCode: 400, body: { message: "Folder cannot be moved into its own descendant" } };
         }
 
         const newSourcePath = buildFolderPath(destinationFolder.folderPath, sourceFolder.id);
@@ -968,13 +995,18 @@ export async function patchFolderHandler(
         `);
         });
 
-        return reply.code(200).send({
-            status: "success",
-            message: "Folder moved successfully",
-            id: folderId,
-            parentFolderId: destinationFolderId,
-        });
+        return {
+            statusCode: 200,
+            body: {
+                status: "success",
+                message: "Folder moved successfully",
+                id: folderId,
+                parentFolderId: destinationFolderId,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function deleteFolderHandler(
@@ -987,7 +1019,7 @@ export async function deleteFolderHandler(
         return reply.code(401).send({ message: "Unauthorized" });
     }
 
-    return withOwnerHierarchyLock(this, userId, async (tx) => {
+    const result = await withOwnerHierarchyLock(this, userId, async (tx) => {
         const folderId = request.params.folderId;
 
         const [folder] = await tx
@@ -1003,15 +1035,15 @@ export async function deleteFolderHandler(
             .limit(1);
 
         if (!folder || folder.deletedAt !== null) {
-            return reply.code(404).send({ message: "Folder not found" });
+            return { statusCode: 404, body: { message: "Folder not found" } };
         }
 
         if (folder.ownerId !== userId) {
-            return reply.code(403).send({ message: "You do not have permission to delete this folder" });
+            return { statusCode: 403, body: { message: "You do not have permission to delete this folder" } };
         }
 
         if (folder.type === "ROOT") {
-            return reply.code(400).send({ message: "Root folder cannot be deleted" });
+            return { statusCode: 400, body: { message: "Root folder cannot be deleted" } };
         }
 
         const deletedAt = new Date();
@@ -1050,13 +1082,18 @@ export async function deleteFolderHandler(
         where display_order."folderId" in (select "id" from subtree)
     `);
 
-        return reply.code(200).send({
-            status: "success",
-            message: "Folder moved to recycle bin",
-            id: folderId,
-            parentFolderId: folder.parentFolderId,
-        });
+        return {
+            statusCode: 200,
+            body: {
+                status: "success",
+                message: "Folder moved to recycle bin",
+                id: folderId,
+                parentFolderId: folder.parentFolderId,
+            },
+        };
     });
+
+    return reply.code(result.statusCode).send(result.body);
 }
 
 export async function getDisplayPreferencesHandler(
