@@ -32,6 +32,7 @@ const FOCUSABLE_SELECTOR = [
 
 function FileModalRoute() {
     const { folderId, fileId } = Route.useParams();
+    const { session } = Route.useRouteContext();
     const router = useRouter();
     const modalRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -40,7 +41,7 @@ function FileModalRoute() {
 
     const detailsQuery = useQuery({
         queryKey: queryKeys.fileDetails(normalizedFileId),
-        queryFn: () => getOwnedFileDetails(normalizedFileId),
+        queryFn: () => getOwnedFileDetails(normalizedFileId, session.user.id),
     });
 
     const closeModal = useCallback(async () => {

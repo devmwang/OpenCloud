@@ -10,6 +10,7 @@ type ItemInfoDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     item: SelectionItem | null;
+    sessionUserId: string;
 };
 
 function formatBytes(bytes: number | null | undefined): string {
@@ -40,10 +41,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     );
 }
 
-function FileInfoContent({ fileId }: { fileId: string }) {
+function FileInfoContent({ fileId, sessionUserId }: { fileId: string; sessionUserId: string }) {
     const query = useQuery({
         queryKey: queryKeys.fileDetails(fileId),
-        queryFn: () => getOwnedFileDetails(fileId),
+        queryFn: () => getOwnedFileDetails(fileId, sessionUserId),
     });
 
     if (query.isPending) {
@@ -106,13 +107,13 @@ function LoadingSpinner() {
     );
 }
 
-export function ItemInfoDialog({ open, onOpenChange, item }: ItemInfoDialogProps) {
+export function ItemInfoDialog({ open, onOpenChange, item, sessionUserId }: ItemInfoDialogProps) {
     const title = item ? `${item.kind === "folder" ? "Folder" : "File"} Info` : "Info";
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent title={title} description={item?.name}>
-                {item?.kind === "file" ? <FileInfoContent fileId={item.id} /> : null}
+                {item?.kind === "file" ? <FileInfoContent fileId={item.id} sessionUserId={sessionUserId} /> : null}
                 {item?.kind === "folder" ? <FolderInfoContent folderId={item.id} /> : null}
             </DialogContent>
         </Dialog>
