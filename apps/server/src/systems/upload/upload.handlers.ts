@@ -5,7 +5,7 @@ import util from "util";
 
 import type { BusboyFileStream } from "@fastify/busboy";
 import type { FastifyJWT } from "@fastify/jwt";
-import type { MultipartFile } from "@fastify/multipart";
+import type { Multipart, MultipartFile } from "@fastify/multipart";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -27,6 +27,15 @@ type UploadContext = {
 };
 
 let activeUploadCount = 0;
+
+const rejectTruncatedField = (
+    part: Multipart,
+    FieldsLimitError: FastifyInstance["multipartErrors"]["FieldsLimitError"],
+) => {
+    if (part.type === "field" && part.valueTruncated) {
+        throw new FieldsLimitError();
+    }
+};
 
 const resolveAuthenticatedUploadContext = async (
     server: FastifyInstance,
@@ -165,6 +174,8 @@ export async function uploadFileHandler(
     let nextPart = await parts.next();
     while (!nextPart.done) {
         const part = nextPart.value;
+        rejectTruncatedField(part, this.multipartErrors.FieldsLimitError);
+
         if (part.type === "file") {
             fileData = part;
             break;
@@ -222,7 +233,14 @@ export async function uploadFileHandler(
             uploadContext.fileAccess,
         );
 
-        await coreUploadHandler(this.db, uploadContext.ownerId, fileRecord.id, fileData.file, parts);
+        await coreUploadHandler(
+            this.db,
+            uploadContext.ownerId,
+            fileRecord.id,
+            fileData.file,
+            parts,
+            this.multipartErrors.FieldsLimitError,
+        );
 
         return reply.code(201).send({
             id: fileRecord.id,
@@ -279,6 +297,7 @@ async function coreUploadHandler(
     fileId: string,
     file: BusboyFileStream,
     remainingParts: ReturnType<FastifyRequest["parts"]>,
+    FieldsLimitError: FastifyInstance["multipartErrors"]["FieldsLimitError"],
 ) {
     const folderPath = path.join(env.FILE_STORE_PATH, ownerId);
     const filePath = path.join(folderPath, fileId);
@@ -287,8 +306,10 @@ async function coreUploadHandler(
         await fs.promises.mkdir(folderPath, { recursive: true });
         await pump(file, fs.createWriteStream(filePath));
 
-        while (!(await remainingParts.next()).done) {
-            // Consume all permitted trailing fields before the upload becomes ready.
+        let nextPart = await remainingParts.next();
+        while (!nextPart.done) {
+            rejectTruncatedField(nextPart.value, FieldsLimitError);
+            nextPart = await remainingParts.next();
         }
 
         const sizeInBytes = (await fs.promises.stat(filePath)).size;
