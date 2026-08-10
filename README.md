@@ -6,13 +6,15 @@ OpenCloud is a free, open-source, and self-hosted cloud file server and manageme
 
 ### Ubuntu Server 24.04 LTS
 
-The supported Linux deployment runs the built Server and Nova outputs under PM2. It does not run the root Turbo start task under PM2.
+The supported Linux deployment runs the selected built Server and Nova outputs under PM2. It does not run the root Turbo start task under PM2.
 
 From a configured checkout, run:
 
 ```bash
-./scripts/linux/deploy.sh
+./scripts/linux/deploy.sh server
 ```
+
+Use `server` when Nova runs on Vercel. Use `nova` for a Nova-only host or `both` when this host runs both applications. The argument is the complete OpenCloud PM2 process set for the host.
 
 See [Deploy OpenCloud on Ubuntu Server 24.04 LTS](docs/deployment/ubuntu-pm2.md) for prerequisites, the first deployment, updates, PM2 startup persistence, migration failure behavior, and the one-time transition from old supervisors.
 
