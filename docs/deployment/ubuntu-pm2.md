@@ -122,6 +122,7 @@ The deployment script does not pull code. Confirm that the checkout has no local
 cd /path/to/OpenCloud &&
     if [[ -n "$(git status --porcelain)" ]]; then
         echo "The checkout has local changes." >&2
+        false
     else
         git pull --ff-only &&
             ./scripts/linux/deploy.sh server
