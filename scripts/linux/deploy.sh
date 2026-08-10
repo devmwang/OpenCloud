@@ -7,6 +7,16 @@ fail() {
     exit 1
 }
 
+remove_opencloud_processes() {
+    local process_name
+
+    for process_name in opencloud-server opencloud-nova; do
+        if pm2 describe "$process_name" >/dev/null 2>&1; then
+            pm2 delete "$process_name"
+        fi
+    done
+}
+
 [[ $# -eq 1 ]] || fail "Usage: ./scripts/linux/deploy.sh <server|nova|both>"
 
 deploy_mode="$1"
@@ -52,17 +62,43 @@ else
     pnpm run build --filter="$deploy_mode"
 fi
 
-for process_name in opencloud-server opencloud-nova; do
-    if pm2 describe "$process_name" >/dev/null 2>&1; then
-        pm2 delete "$process_name"
-    fi
-done
+remove_opencloud_processes
 pm2 save --force
 
 if [[ "$deploy_mode" != "nova" ]]; then
     pnpm exec dotenvx run --convention=nextjs -- pnpm --filter server db:migrate
 fi
 
-pnpm exec dotenvx run --convention=nextjs -- pm2 start ecosystem.config.js --only "$pm2_processes" --update-env
+if ! pnpm exec dotenvx run --convention=nextjs -- pm2 start ecosystem.config.js --only "$pm2_processes" --update-env; then
+    remove_opencloud_processes
+    pm2 save --force
+    fail "PM2 could not start the selected OpenCloud processes."
+fi
+
+sleep 5
+if ! PM2_SILENT=true pm2 jlist | node -e '
+const expected = new Set(process.argv[1].split(","));
+const opencloud = JSON.parse(require("node:fs").readFileSync(0, "utf8")).filter(
+    ({ name }) => name === "opencloud-server" || name === "opencloud-nova",
+);
+process.exit(
+    opencloud.length === expected.size &&
+        [...expected].every((name) =>
+            opencloud.some(
+                (process) =>
+                    process.name === name &&
+                    process.pm2_env.status === "online" &&
+                    process.pm2_env.restart_time === 0,
+            ),
+        )
+        ? 0
+        : 1,
+);
+' "$pm2_processes"; then
+    remove_opencloud_processes
+    pm2 save --force
+    fail "The selected OpenCloud processes did not stay online."
+fi
+
 pm2 save
 pm2 status
