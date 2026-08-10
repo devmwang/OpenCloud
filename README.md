@@ -4,27 +4,17 @@ OpenCloud is a free, open-source, and self-hosted cloud file server and manageme
 
 ## Hosting
 
-### Linux: Run as a system service (systemd)
+### Ubuntu Server 24.04 LTS
 
-On Linux you can install OpenCloud as a **systemd system service** so it starts automatically on boot and runs in the background. Choose server only, Nova only, or both.
+The supported Linux deployment runs the built Server and Nova outputs under PM2. It does not run the root Turbo start task under PM2.
 
-From the repo root (after [configuring `.env`](docs/agents/ENVIRONMENT.md) and running DB migrations if using the server):
+From a configured checkout, run:
 
 ```bash
-sudo ./scripts/linux/opencloud-user-service.sh install
+./scripts/linux/deploy.sh
 ```
 
-Or clone and install in one go: `sudo ./scripts/linux/opencloud-user-service.sh install --clone=https://github.com/devmwang/OpenCloud.git`
-
-See [Linux system services (systemd)](docs/deployment/linux-system-services.md) for full commands, install options (`--repo`, `--clone`, `--service-user`), and troubleshooting.
-
-### Server and Nova on the Same Server
-
-Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Run the database migrations with `pnpm --filter server db:migrate`. Then, run the server and Nova using `pnpm run start`. You can also use a process manager like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run both services in the background (for example: `pm2 start "pnpm run start"`). The server will be available at `localhost:8080`. Nova will be available at `localhost:3000`.
-
-### Server Only
-
-Clone the repository and install dependencies. Copy the `.env.example` file to `.env` and fill in the required values. Run the database migrations with `pnpm --filter server db:migrate`. Then, run the server using `pnpm run start --filter server`. You can also use a command line tool like [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/) to run the server in the background (with `pm2 start "pnpm run start --filter server"`). The server will be available at `localhost:8080`.
+See [Deploy OpenCloud on Ubuntu Server 24.04 LTS](docs/deployment/ubuntu-pm2.md) for prerequisites, the first deployment, updates, PM2 startup persistence, migration failure behavior, and the one-time transition from old supervisors.
 
 ### Nova Client
 
@@ -43,9 +33,9 @@ Also configure the backend server so Nova can authenticate successfully:
 - `OPENCLOUD_WEBUI_URL` must include your deployed Nova origin for CORS and trusted origins.
 - `COOKIE_URL` must match your cookie domain strategy.
 
-#### Option 2: Local Self-Hosting
+#### Option 2: Local Development and Preview
 
-For local development, run `pnpm run dev --filter=nova` (Vite default `localhost:5173`). For production preview, run `pnpm run build --filter=nova` then `pnpm run start --filter=nova`.
+These commands do not replace the supported Ubuntu PM2 deployment. For local development, run `pnpm run dev --filter=nova` (Vite default `localhost:5173`). To preview the production output locally, run `pnpm run build --filter=nova` and then `pnpm run start --filter=nova`.
 
 ## OpenCloud System Architecture
 
